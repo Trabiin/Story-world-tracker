@@ -63,6 +63,17 @@ export interface Character extends RecordBase {
   icon: string;
   importance: Importance;
   archived: boolean;
+  /** CH-3: time-bound attributes such as title, allegiance or health. */
+  attributes?: CharacterAttribute[];
+}
+
+export const ATTRIBUTE_KEYS = ['title', 'allegiance', 'faction', 'culture', 'religion', 'health', 'possession'] as const;
+
+/** CH-3: e.g. title = "Captain of the Guard", 1040–1043. */
+export interface CharacterAttribute extends TimeSpan {
+  id: Id;
+  key: string;
+  value: string;
 }
 
 export type PlaceKind =
@@ -138,6 +149,75 @@ export interface MapImage extends RecordBase {
   visible: boolean;
 }
 
+/** ST-1: series → books → chapters → scenes. */
+export interface Book extends RecordBase {
+  title: string;
+  order: number;
+  notes: string;
+}
+
+export interface Chapter extends RecordBase {
+  bookId: Id;
+  title: string;
+  order: number;
+  povCharacterId?: Id; // ST-2
+  notes: string;
+}
+
+export interface Scene extends RecordBase {
+  chapterId: Id;
+  title: string;
+  order: number;
+  povCharacterId?: Id; // ST-2; falls back to the chapter's POV
+  start?: FuzzyDate; // in-world date or range
+  end?: FuzzyDate;
+  /** Stored only when it overrides the POV character's stay on the scene date (ST-1). */
+  placeId?: Id;
+  characterIds: Id[];
+  summary: string;
+}
+
+/** ST-8: a Word file read (never written). Its text is cached so links and the reader work offline. */
+export interface Manuscript extends RecordBase {
+  name: string;
+  /** Desktop: absolute path to the .docx on disk. */
+  path?: string;
+  bookId?: Id;
+  paragraphs: Paragraph[];
+  /** Fingerprint of the last text read, to notice edits. */
+  textHash: string;
+  loadedAt: string;
+}
+
+export interface Paragraph {
+  text: string;
+  /** Heading level 1–6 when the paragraph is a heading. */
+  heading?: number;
+}
+
+/** ST-11: enough context to find a passage again after the manuscript is edited. */
+export interface PassageAnchor {
+  paraIndex: number;
+  start: number; // character offsets within the paragraph
+  end: number;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  heading: string; // nearest heading above the passage
+}
+
+export type LinkTargetKind = 'character' | 'place' | 'group' | 'stay' | 'journey' | 'book' | 'chapter' | 'scene';
+
+/** ST-9: a passage linked to a record. */
+export interface ManuscriptLink extends RecordBase {
+  manuscriptId: Id;
+  anchor: PassageAnchor;
+  target: { kind: LinkTargetKind; id: Id };
+  note: string;
+  /** Result of the last re-anchoring: found as-is, moved, found approximately, or lost. */
+  state: 'ok' | 'moved' | 'fuzzy' | 'lost';
+}
+
 /** CC-7: a warning marked intentional, with a note (D-9). */
 export interface WarningDismissal {
   key: string; // stable warning key
@@ -155,4 +235,9 @@ export interface World {
   journeys: Journey[];
   mapImages: MapImage[];
   dismissals: WarningDismissal[];
+  books: Book[];
+  chapters: Chapter[];
+  scenes: Scene[];
+  manuscripts: Manuscript[];
+  links: ManuscriptLink[];
 }

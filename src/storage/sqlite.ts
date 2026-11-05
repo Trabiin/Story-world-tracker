@@ -5,10 +5,12 @@
  */
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import type { World } from '../core';
+import { normalizeWorld } from './newWorld';
+import type { Snapshot } from './snapshots';
 
 export const SCHEMA_VERSION = 1;
 
-export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals'] as const;
+export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals', 'books', 'chapters', 'scenes', 'manuscripts', 'links'] as const;
 export type CollectionName = (typeof COLLECTIONS)[number];
 
 const TABLE: Record<CollectionName, string> = {
@@ -20,6 +22,11 @@ const TABLE: Record<CollectionName, string> = {
   journeys: 'journeys',
   mapImages: 'map_images',
   dismissals: 'dismissals',
+  books: 'books',
+  chapters: 'chapters',
+  scenes: 'scenes',
+  manuscripts: 'manuscripts',
+  links: 'manuscript_links',
 };
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
@@ -37,9 +44,10 @@ function createSchema(db: Database) {
     db.run(`CREATE TABLE IF NOT EXISTS ${t} (id TEXT PRIMARY KEY, scenario_id TEXT NOT NULL DEFAULT 'canon', data TEXT NOT NULL)`);
     db.run(`CREATE INDEX IF NOT EXISTS ${t}_scenario ON ${t}(scenario_id)`);
   }
+  db.run(`CREATE TABLE IF NOT EXISTS snapshots (id TEXT PRIMARY KEY, at TEXT NOT NULL, label TEXT NOT NULL, summary TEXT NOT NULL, data BLOB NOT NULL)`);
 }
 
-export async function worldToBytes(world: World): Promise<Uint8Array> {
+export async function worldToBytes(world: World, snapshots: Snapshot[] = []): Promise<Uint8Array> {
   const SQL = await initSql();
   const db = new SQL.Database();
   try {
@@ -57,6 +65,9 @@ export async function worldToBytes(world: World): Promise<Uint8Array> {
       }
       st.free();
     }
+    const snap = db.prepare('INSERT INTO snapshots (id, at, label, summary, data) VALUES (?, ?, ?, ?, ?)');
+    for (const sn of snapshots) snap.run([sn.id, sn.at, sn.label, sn.summary, sn.data]);
+    snap.free();
     db.run('COMMIT');
     return db.export();
   } finally {
@@ -65,6 +76,11 @@ export async function worldToBytes(world: World): Promise<Uint8Array> {
 }
 
 export async function bytesToWorld(bytes: Uint8Array): Promise<World> {
+  return (await loadWorldFile(bytes)).world;
+}
+
+/** Open a world file: the world plus its version history. */
+export async function loadWorldFile(bytes: Uint8Array): Promise<{ world: World; snapshots: Snapshot[] }> {
   const SQL = await initSql();
   const db = new SQL.Database(bytes);
   try {
@@ -82,7 +98,15 @@ export async function bytesToWorld(bytes: Uint8Array): Promise<World> {
       }
       (world as unknown as Record<string, unknown[]>)[c] = rows;
     }
-    return world;
+    let snapshots: Snapshot[] = [];
+    try {
+      snapshots = (db.exec('SELECT id, at, label, summary, data FROM snapshots ORDER BY at DESC')[0]?.values ?? []).map((r) => ({
+        id: String(r[0]), at: String(r[1]), label: String(r[2]), summary: String(r[3]), data: r[4] as Uint8Array,
+      }));
+    } catch {
+      snapshots = []; // older file without version history
+    }
+    return { world: normalizeWorld(world), snapshots };
   } finally {
     db.close();
   }

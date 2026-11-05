@@ -1,6 +1,7 @@
 /** Stay (WH-1..WH-3) and journey (WH-5, WH-7, WH-8) editors. */
 import { useMemo, useState } from 'react';
 import { ask } from './Dialogs';
+import { Backlinks } from './Backlinks';
 import { FuzzyDate, Journey, Stay, Subject, WorldIndex, formatDayNumber, formatFuzzy, fromDay } from '../../core';
 import { recordBase } from '../../storage';
 import { useApp } from '../context';
@@ -75,6 +76,7 @@ export function StayEditor({ id, preset, onClose }: { id?: string; preset?: Part
         <Field label="Doing what" hint="Purpose and activities (WH-2)"><input value={s.purpose} onChange={(e) => set({ purpose: e.target.value })} placeholder="e.g. recovering from wounds, negotiating the treaty" /></Field>
         <Field label="Notes"><textarea rows={3} value={s.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
         <StatusToggle value={s.status} onChange={(status) => set({ status })} />
+        {existing && <Backlinks kind="stay" id={s.id} title="Linked passages" />}
       </div>
     </Modal>
   );
@@ -167,6 +169,7 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
         <Field label="Purpose"><input value={j.purpose} onChange={(e) => set({ purpose: e.target.value })} /></Field>
         <Field label="Notes"><textarea rows={3} value={j.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
         <StatusToggle value={j.status} onChange={(status) => set({ status })} />
+        {existing && <Backlinks kind="journey" id={j.id} title="Linked passages" />}
       </div>
     </Modal>
   );

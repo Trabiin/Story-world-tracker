@@ -3,6 +3,9 @@ import { Id, WorldIndex, checkWorld } from '../core';
 import { CommandBar } from './components/CommandBar';
 import { JourneyEditor, StayEditor } from './components/EntryEditors';
 import { MomentBar } from './components/MomentBar';
+import { QuickAdd } from './components/QuickAdd';
+import { Manuscripts } from './views/Manuscripts';
+import { Story } from './views/Story';
 import { Ctx, EditorTarget, View } from './context';
 import { MapView } from './map/MapView';
 import type { Platform } from './platform';
@@ -20,11 +23,13 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'who', label: 'Who is where', key: '1' },
   { view: 'timeline', label: 'Timeline', key: '2' },
   { view: 'map', label: 'Map', key: '3' },
-  { view: 'characters', label: 'Characters', key: '4' },
-  { view: 'places', label: 'Places', key: '5' },
-  { view: 'groups', label: 'Groups', key: '6' },
-  { view: 'warnings', label: 'Warnings', key: '7' },
-  { view: 'settings', label: 'Settings', key: '8' },
+  { view: 'story', label: 'Books & scenes', key: '4' },
+  { view: 'manuscripts', label: 'Manuscripts', key: '5' },
+  { view: 'characters', label: 'Characters', key: '6' },
+  { view: 'places', label: 'Places', key: '7' },
+  { view: 'groups', label: 'Groups', key: '8' },
+  { view: 'warnings', label: 'Warnings', key: '9' },
+  { view: 'settings', label: 'Settings', key: '0' },
 ];
 
 export function App({ store, platform, onClose }: { store: WorldStore; platform: Platform; onClose: () => void }) {
@@ -39,6 +44,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [command, setCommand] = useState(false);
   const [pickFor, setPickFor] = useState<Id | undefined>();
+  const [quick, setQuick] = useState(false);
+  const [focusLink, setFocusLink] = useState<Id | undefined>();
 
   const go = useCallback((v: View, id?: Id) => {
     setView(v);
@@ -56,10 +63,11 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
       const mod = e.ctrlKey || e.metaKey;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
       if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); setCommand(true); }
+      else if (mod && e.key.toLowerCase() === 'j') { e.preventDefault(); setQuick(true); }
       else if (mod && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); if (e.shiftKey) store.redo(); else store.undo(); }
       else if (mod && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); store.redo(); }
       else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); void store.saveNow(); }
-      else if (e.altKey && /^[1-8]$/.test(e.key)) { e.preventDefault(); go(NAV[Number(e.key) - 1].view); }
+      else if (e.altKey && /^[0-9]$/.test(e.key)) { e.preventDefault(); go(NAV.find((n) => n.key === e.key)!.view); }
     };
     window.addEventListener('keydown', k);
     const beforeUnload = (e: BeforeUnloadEvent) => { if (store.hasPendingSave) { void store.saveNow(); e.preventDefault(); } };
@@ -76,6 +84,12 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
     closeWorld,
     pickFor,
     startPick: setPickFor,
+    focusLink,
+    openPassage: (manuscriptId: Id, linkId?: Id) => {
+      setFocusLink(linkId);
+      setView('manuscripts');
+      setSelectedByView((s) => ({ ...s, manuscripts: manuscriptId }));
+    },
   };
   const saveLabel = { saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved changes', error: 'Save failed' }[store.saveState];
 
@@ -89,7 +103,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
             <button className="icon" disabled={!store.canUndo} onClick={() => store.undo()} title="Undo (Ctrl+Z)">↶</button>
             <button className="icon" disabled={!store.canRedo} onClick={() => store.redo()} title="Redo (Ctrl+Shift+Z)">↷</button>
             <span className={`save-state ${store.saveState}`} title={store.saveError}>{saveLabel}</span>
-            <button onClick={() => setCommand(true)} title="Ctrl+K">Search ⌘K</button>
+            <button onClick={() => setQuick(true)} title="Ctrl+J">Quick add</button>
+            <button onClick={() => setCommand(true)} title="Ctrl+K">Search</button>
           </div>
         </header>
         <nav className="sidebar">
@@ -108,6 +123,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'who' && <WhoIsWhere />}
           {view === 'timeline' && <Timeline />}
           {view === 'map' && <MapView />}
+          {view === 'story' && <Story />}
+          {view === 'manuscripts' && <Manuscripts />}
           {view === 'characters' && <Characters />}
           {view === 'places' && <Places />}
           {view === 'groups' && <Groups />}
@@ -117,6 +134,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
         {editor?.kind === 'stay' && <StayEditor key={editor.id ?? 'new'} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
         {editor?.kind === 'journey' && <JourneyEditor key={editor.id ?? 'new'} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
         {command && <CommandBar onClose={() => setCommand(false)} />}
+        {quick && <QuickAdd onClose={() => setQuick(false)} />}
       </div>
     </Ctx.Provider>
   );

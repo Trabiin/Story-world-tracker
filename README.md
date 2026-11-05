@@ -17,7 +17,18 @@ The full requirements live in the project's `spec/requirements.md`; the approved
 - **Map**: equirectangular globe that wraps east–west, uploaded sketches pinned by their edges or calibrated with two known points, tiled rendering for big images, character markers moving along journeys, measuring tool.
 - **Warnings** (never blocks): two places at once, gaps, impossible travel, moving without a journey (with a one-click draft journey), open-ended stays, unknown places. Mark any warning intentional with a note, or switch rules off.
 - **Saving**: autosave, undo/redo, timed backups to a folder you choose, export as `.world` (SQLite), JSON or GeoJSON, import from JSON. Several worlds.
-- Command bar: `Ctrl/Cmd+K`. Views: `Alt+1`…`Alt+8`.
+- Command bar: `Ctrl/Cmd+K`. Views: `Alt+1`…`Alt+0`.
+
+## Phase 1b: story links
+
+- **Books → chapters → scenes**, each scene with an in-world date or range, a POV character (or the chapter's), and a place that follows from where the POV character is unless you override it.
+- **Manuscripts**: connect Word `.docx` files (read, never changed), read them in the app, select a passage and link it to a character, place, group, stay, journey, book, chapter or scene. **Open in Word** on desktop.
+- **Links survive edits**: when the file changes, every linked passage is found again by its text, surrounding words and heading; moved passages follow, lightly reworded ones are found approximately (marked to check), and lost ones are listed to re-link.
+- **Mentioned in**: every character, place, group, stay, journey and scene lists the passages, scenes and records that refer to it.
+- **Time-bound attributes** per character (title, allegiance, faction, culture, religion, health, possessions…), with today's values shown.
+- **Quick add** (`Ctrl/Cmd+J`): type "Kaela rides to Thornwick, leaves 3 May" or "The Party stays at Varn Keep from 3 May for 2 weeks" and confirm the filled-in form.
+- **Version history**: a copy of the world every 10 minutes inside the world file (last 60), restorable from Settings.
+- Checked at 1,000 characters, 2,000 places and 20,000 stays and journeys: all warnings in about 0.05 s.
 
 ## Development
 

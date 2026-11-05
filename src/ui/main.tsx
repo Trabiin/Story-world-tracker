@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-import { bytesToWorld, initSql } from '../storage';
+import { initSql, loadWorldFile } from '../storage';
 import { App } from './App';
 import { DialogHost } from './components/Dialogs';
 import { getPlatform, Platform, WorldHandle } from './platform';
@@ -30,8 +30,8 @@ function Root() {
 
   const open = async (p: Platform, h: WorldHandle) => {
     try {
-      const world = await bytesToWorld(await p.load(h));
-      setStore(new WorldStore(world, h, p));
+      const { world, snapshots } = await loadWorldFile(await p.load(h));
+      setStore(new WorldStore(world, h, p, snapshots));
       try { localStorage.setItem(LAST_KEY, JSON.stringify(h)); } catch { /* ignore */ }
       setError('');
     } catch (e) {

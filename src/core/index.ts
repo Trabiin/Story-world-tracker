@@ -3,3 +3,6 @@ export * from './globe';
 export * from './model';
 export * from './whereabouts';
 export * from './warnings';
+export * from './manuscript';
+export * from './quickadd';
+export * from './story';

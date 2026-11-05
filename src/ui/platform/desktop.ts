@@ -1,6 +1,7 @@
 /** Desktop platform (Tauri): each world is a .world SQLite file the user picks. */
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { exists, mkdir, readDir, readFile, remove, rename, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { exists, mkdir, readDir, readFile, remove, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { Platform, WorldHandle, backupFileName } from './types';
 
 const RECENT_KEY = 'swt.recentWorlds';
@@ -95,6 +96,20 @@ export const desktopPlatform: Platform = {
   async pickFile(accept) {
     const path = await open({ multiple: false, filters: [{ name: 'File', extensions: accept.map((a) => a.replace(/^\./, '')) }] });
     if (!path || Array.isArray(path)) return null;
-    return { name: path.split(/[\\/]/).pop()!, bytes: await readFile(path) };
+    return { name: path.split(/[\\/]/).pop()!, bytes: await readFile(path), path };
+  },
+  readPath(path) {
+    return readFile(path);
+  },
+  async modifiedAt(path) {
+    try {
+      const s = await stat(path);
+      return s.mtime ? new Date(s.mtime).getTime() : null;
+    } catch {
+      return null;
+    }
+  },
+  async openExternally(path) {
+    await openPath(path);
   },
 };

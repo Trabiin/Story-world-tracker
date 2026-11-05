@@ -23,7 +23,14 @@ export interface Platform {
   backup(h: WorldHandle, bytes: Uint8Array, folder?: string): Promise<string | null>;
   saveTextFile(suggestedName: string, text: string, mime: string): Promise<boolean>;
   saveBinaryFile(suggestedName: string, bytes: Uint8Array): Promise<boolean>;
-  pickFile(accept: string[]): Promise<{ name: string; bytes: Uint8Array } | null>;
+  /** Desktop also returns the file's path, so it can be read again later (manuscripts). */
+  pickFile(accept: string[]): Promise<{ name: string; bytes: Uint8Array; path?: string } | null>;
+  /** Desktop: read a file again by path (manuscript refresh). */
+  readPath?(path: string): Promise<Uint8Array>;
+  /** Desktop: when the file was last changed (ms), to notice manuscript edits. */
+  modifiedAt?(path: string): Promise<number | null>;
+  /** Desktop: open a file in its usual program (e.g. Word). */
+  openExternally?(path: string): Promise<void>;
 }
 
 export function backupFileName(name: string, d = new Date()): string {

@@ -1,5 +1,7 @@
 /** World settings, travel speeds (WH-7), backups (EU-17) and open exports (PL-4). */
+import { useState } from 'react';
 import { TravelMode } from '../../core';
+import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
@@ -61,10 +63,12 @@ export function Settings() {
         <span className="muted">{store.lastBackupInfo}</span>
       </div>
 
+      <VersionHistory />
+
       <h2>Export</h2>
       <p>Open formats, so your world is never locked in.</p>
       <div className="row wrap">
-        <button onClick={async () => platform.saveBinaryFile(`${safe}.world`, await worldToBytes(world))}>World file (.world, SQLite)</button>
+        <button onClick={async () => platform.saveBinaryFile(`${safe}.world`, await worldToBytes(world, store.snapshots))}>World file (.world, SQLite)</button>
         <button onClick={() => platform.saveTextFile(`${safe}.json`, worldToJson(world), 'application/json')}>Everything as JSON</button>
         <button onClick={() => platform.saveTextFile(`${safe}-places.geojson`, placesToGeoJson(world), 'application/geo+json')}>Places as GeoJSON</button>
       </div>
@@ -72,5 +76,49 @@ export function Settings() {
       <h2>World</h2>
       <button onClick={closeWorld}>Close world and switch</button>
     </div>
+  );
+}
+
+/** PL-3: restore the world as it was at an earlier time. */
+function VersionHistory() {
+  const { store } = useApp();
+  const [busy, setBusy] = useState(false);
+  const list = store.snapshots;
+  return (
+    <>
+      <h2>Version history</h2>
+      <p>A copy of the world is kept every 10 minutes while you work (the last 60), inside the world file itself. Restoring is undoable, and the current state is kept as a version first.</p>
+      <div className="row">
+        <button disabled={busy} onClick={async () => {
+          const label = await ask.prompt('Name this version (optional)', '');
+          if (label === null) return;
+          setBusy(true);
+          await store.snapshotNow(label || 'Saved by hand');
+          setBusy(false);
+        }}>Save a version now</button>
+      </div>
+      {list.length === 0 ? <p className="muted">No earlier versions yet.</p> : (
+        <table className="table">
+          <thead><tr><th>When</th><th>Name</th><th>Contents</th><th></th></tr></thead>
+          <tbody>
+            {list.map((s) => (
+              <tr key={s.id}>
+                <td>{new Date(s.at).toLocaleString()}</td>
+                <td>{s.label}</td>
+                <td className="muted">{s.summary}</td>
+                <td className="actions">
+                  <button className="small" disabled={busy} onClick={async () => {
+                    if (!(await ask.confirm(`Restore the world as it was on ${new Date(s.at).toLocaleString()}?`, { okLabel: 'Restore' }))) return;
+                    setBusy(true);
+                    await store.restore(s.id);
+                    setBusy(false);
+                  }}>Restore</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
   );
 }

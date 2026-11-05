@@ -22,6 +22,7 @@ export function world(): World {
     journeys: [],
     mapImages: [],
     dismissals: [],
+    books: [], chapters: [], scenes: [], manuscripts: [], links: [],
   };
 }
 

@@ -5,7 +5,7 @@
  */
 import { DayWindow, FuzzyDate, Hemisphere, midpoint, toWindow } from '../dates';
 import { DEFAULT_DETOUR_FACTOR, LatLng, greatCircleKm, interpolateGreatCircle, travelDays } from '../globe';
-import type { Character, Id, Journey, Place, Stay, World } from '../model';
+import type { Character, Id, Journey, Membership, Place, Stay, World } from '../model';
 
 export const OPEN_END = Number.MAX_SAFE_INTEGER;
 
@@ -28,9 +28,27 @@ export interface Segment {
 export class WorldIndex {
   readonly places = new Map<Id, Place>();
   readonly characters = new Map<Id, Character>();
+  private staysBySubject = new Map<string, Stay[]>();
+  private journeysBySubject = new Map<string, Journey[]>();
+  private membershipsByCharacter = new Map<Id, Membership[]>();
+  private segmentCache = new Map<Id, Segment[]>();
   constructor(readonly world: World) {
     for (const p of world.places) this.places.set(p.id, p);
     for (const c of world.characters) this.characters.set(c.id, c);
+    const add = <T>(m: Map<string, T[]>, k: string, v: T) => {
+      const l = m.get(k);
+      if (l) l.push(v); else m.set(k, [v]);
+    };
+    for (const s of world.stays) add(this.staysBySubject, `${s.subject.kind}:${s.subject.id}`, s);
+    for (const j of world.journeys) add(this.journeysBySubject, `${j.subject.kind}:${j.subject.id}`, j);
+    for (const m of world.memberships) add(this.membershipsByCharacter, m.characterId, m);
+  }
+
+  staysOf(kind: 'character' | 'group', id: Id): Stay[] {
+    return this.staysBySubject.get(`${kind}:${id}`) ?? [];
+  }
+  journeysOf(kind: 'character' | 'group', id: Id): Journey[] {
+    return this.journeysBySubject.get(`${kind}:${id}`) ?? [];
   }
 
   get hemisphere(): Hemisphere {
@@ -125,33 +143,35 @@ export class WorldIndex {
   }
 
 
-  /** All segments for one character: own entries plus group entries during membership. */
+  stayBase(s: Stay): Omit<Segment, 'characterId' | 'viaGroupId'> {
+    const { end, open } = this.stayEnd(s);
+    return { kind: 'stay', recordId: s.id, start: this.win(s.arrival), end, openEnded: open, placeId: s.placeId };
+  }
+
+  journeyBase(j: Journey): Omit<Segment, 'characterId' | 'viaGroupId'> {
+    const { end, suggested } = this.journeyEnd(j);
+    return { kind: 'journey', recordId: j.id, start: this.win(j.departure), end, openEnded: false, placeId: j.originId, destinationId: j.destinationId, arrivalSuggested: suggested };
+  }
+
+  /** All segments for one character: own entries plus group entries during membership (cached). */
   segmentsFor(characterId: Id): Segment[] {
+    const cached = this.segmentCache.get(characterId);
+    if (cached) return cached;
     const out: Segment[] = [];
-    const push = (base: Omit<Segment, 'characterId' | 'viaGroupId'>, subjectKind: 'character' | 'group', subjectId: Id) => {
-      if (subjectKind === 'character') {
-        if (subjectId === characterId) out.push({ ...base, characterId });
-        return;
+    for (const s of this.staysOf('character', characterId)) out.push({ ...this.stayBase(s), characterId });
+    for (const j of this.journeysOf('character', characterId)) out.push({ ...this.journeyBase(j), characterId });
+    for (const m of this.membershipsByCharacter.get(characterId) ?? []) {
+      const from = m.start ? this.win(m.start) : null;
+      const to = m.end ? this.win(m.end) : null;
+      const bases = [...this.staysOf('group', m.groupId).map((s) => this.stayBase(s)), ...this.journeysOf('group', m.groupId).map((j) => this.journeyBase(j))];
+      for (const base of bases) {
+        const clipped = clip(base, from, to);
+        if (clipped) out.push({ ...clipped, characterId, viaGroupId: m.groupId });
       }
-      for (const m of this.membersOf(subjectId)) {
-        if (m.characterId !== characterId) continue;
-        const clipped = clip(base, m.from, m.to);
-        if (clipped) out.push({ ...clipped, characterId, viaGroupId: subjectId });
-      }
-    };
-    for (const s of this.world.stays) {
-      const { end, open } = this.stayEnd(s);
-      push({ kind: 'stay', recordId: s.id, start: this.win(s.arrival), end, openEnded: open, placeId: s.placeId }, s.subject.kind, s.subject.id);
     }
-    for (const j of this.world.journeys) {
-      const { end, suggested } = this.journeyEnd(j);
-      push(
-        { kind: 'journey', recordId: j.id, start: this.win(j.departure), end, openEnded: false, placeId: j.originId, destinationId: j.destinationId, arrivalSuggested: suggested },
-        j.subject.kind,
-        j.subject.id,
-      );
-    }
-    return out.sort((a, b) => nominalStart(a) - nominalStart(b) || nominalEnd(a) - nominalEnd(b));
+    out.sort((a, b) => nominalStart(a) - nominalStart(b) || nominalEnd(a) - nominalEnd(b));
+    this.segmentCache.set(characterId, out);
+    return out;
   }
 }
 

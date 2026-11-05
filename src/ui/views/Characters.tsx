@@ -1,7 +1,8 @@
 /** CH-1, CH-2, CH-6, EU-9: characters list and profile, with their whereabouts chain. */
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
-import { Character, Importance, ageOn, formatDayNumber, formatFuzzy, fromDayNumber, nominalStart } from '../../core';
+import { ATTRIBUTE_KEYS, Character, CharacterAttribute, Importance, ageOn, attributesOn, formatDayNumber, formatFuzzy, fromDayNumber, nominalStart } from '../../core';
+import { Backlinks } from '../components/Backlinks';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
@@ -117,6 +118,7 @@ function CharacterDetail({ c }: { c: Character }) {
               {ICONS.map((i) => <button key={i} className={`icon-pick ${c.icon === i ? 'on' : ''}`} style={{ color: c.color }} onClick={() => set({ icon: i })}>{i}</button>)}
             </div>
           </Field>
+          <Attributes c={c} set={set} />
           <Field label="Short description"><textarea rows={2} value={c.description} onChange={(e) => set({ description: e.target.value })} /></Field>
           <Field label="Notes"><textarea rows={5} value={c.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
           <Field label="Portrait">
@@ -162,6 +164,7 @@ function CharacterDetail({ c }: { c: Character }) {
               })}
             </ol>
           )}
+          <Backlinks kind="character" id={c.id} />
           {mine.length > 0 && (
             <>
               <h2>Warnings</h2>
@@ -202,4 +205,34 @@ export function fileToDataUrl(file: File, maxSize?: number): Promise<string> {
     r.onerror = reject;
     r.readAsDataURL(file);
   });
+}
+
+/** CH-3: time-bound attributes, e.g. "Captain of the Guard, 1040–1043". */
+function Attributes({ c, set }: { c: Character; set: (p: Partial<Character>) => void }) {
+  const { ix, moment } = useApp();
+  const list = c.attributes ?? [];
+  const now = attributesOn(ix, c.id, moment);
+  const setA = (a: CharacterAttribute, p: Partial<CharacterAttribute>) => set({ attributes: list.map((x) => (x.id === a.id ? { ...x, ...p } : x)) });
+  return (
+    <Field label="Attributes over time" hint={Object.keys(now).length ? `On ${formatDayNumber(moment)}: ${Object.entries(now).map(([k, v]) => `${k} ${v}`).join(' · ')}` : 'Title, allegiance, faction, culture, religion, health, possessions…'}>
+      <datalist id="attr-keys">{ATTRIBUTE_KEYS.map((k) => <option key={k} value={k} />)}</datalist>
+      {list.length > 0 && (
+        <table className="table attr-table">
+          <thead><tr><th>Attribute</th><th>Value</th><th>From</th><th>Until</th><th></th></tr></thead>
+          <tbody>
+            {list.map((a) => (
+              <tr key={a.id}>
+                <td><input list="attr-keys" value={a.key} onChange={(e) => setA(a, { key: e.target.value })} /></td>
+                <td><input value={a.value} onChange={(e) => setA(a, { value: e.target.value })} /></td>
+                <td><DateInput value={a.start} placeholder="always" onChange={(start) => setA(a, { start })} /></td>
+                <td><DateInput value={a.end} placeholder="still" onChange={(end) => setA(a, { end })} /></td>
+                <td><button className="icon" onClick={() => set({ attributes: list.filter((x) => x.id !== a.id) })}>×</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div><button className="small" onClick={() => set({ attributes: [...list, { id: crypto.randomUUID(), key: 'title', value: '' }] })}>+ Add attribute</button></div>
+    </Field>
+  );
 }
