@@ -1,9 +1,10 @@
 name: Desktop installers
 
-# Builds Windows and macOS installers. Run it from the Actions tab ("Run workflow"),
-# or push a tag like v0.1.0 to publish a draft release with the installers attached.
+# Builds Windows and macOS installers. Runs on pull requests (installers attached to the run),
+# from the Actions tab ("Run workflow"), or on a tag like v0.1.0 (draft release with installers).
 on:
   workflow_dispatch:
+  pull_request:
   push:
     tags: ['v*']
 
