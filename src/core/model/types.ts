@@ -86,7 +86,9 @@ export interface CharacterAttribute extends TimeSpan {
 export type PlaceKind =
   | 'unknown' // WH-12 placeholder
   | 'city' | 'town' | 'village' | 'castle' | 'ruin' | 'temple' | 'port' | 'battle-site'
-  | 'building' | 'room' | 'region' | 'landmark' | 'other';
+  | 'building' | 'room' | 'region' | 'landmark' | 'other'
+  | 'capital' // MK-10 settlement sizes: village, town, city, capital
+  | 'river' | 'lake' | 'road' | 'area'; // MP-8: map features are places too
 
 /** DM-2: places nest physically only. Realms are layer regions (Phase 3), not places. */
 export interface Place extends RecordBase, TimeSpan {
@@ -164,6 +166,36 @@ export interface MapSymbol extends RecordBase {
   location: LatLng;
   /** Size multiplier, 1 = normal. */
   size: number;
+}
+
+/** MP-6: line features. */
+export type LineKind = 'river' | 'road' | 'trade-route' | 'sea-lane' | 'wall';
+/** MP-7: area features. */
+export type AreaKind = 'lake' | 'sea' | 'mountains' | 'forest' | 'desert' | 'swamp' | 'other';
+
+/** MP-6..MP-9, MK-8..MK-10: a drawn line or area on the map. Each one is also a place (MP-8). */
+export interface MapFeature extends RecordBase, TimeSpan {
+  shape: 'line' | 'area';
+  kind: LineKind | AreaKind;
+  name: string;
+  /** Lines: in drawing order (rivers from source to mouth). Areas: the outline. */
+  points: LatLng[];
+  /** MP-8: the place record that stands for this feature. */
+  placeId?: Id;
+  /** Roads (MK-10): the place each vertex was snapped to, if any. */
+  stops?: (Id | null)[];
+  /** Rivers: the river this one flows into (MK-8 tributary). */
+  joinsId?: Id;
+  /** Rivers (RC-2): ends in a marked inland basin. */
+  endsInBasin?: boolean;
+  /** Rivers (RC-3): starts by splitting off another river, as a delta or on purpose. */
+  fork?: 'delta' | 'intentional';
+  /** Rivers (MK-19): traced downhill by the app. */
+  auto?: boolean;
+  /** Lakes (MK-9): salt lake with no outlet, and the outlet river. */
+  salt?: boolean;
+  outletId?: Id;
+  notes: string;
 }
 
 /** ST-1: series → books → chapters → scenes. */
@@ -259,6 +291,8 @@ export interface World {
   links: ManuscriptLink[];
   /** MK-13: hand-placed map symbols. */
   mapSymbols: MapSymbol[];
+  /** MP-6, MP-7: drawn rivers, roads, lakes and other features. */
+  mapFeatures: MapFeature[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

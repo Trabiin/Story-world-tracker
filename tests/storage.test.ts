@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sampleWorld } from '../src/ui/sample';
 import { bytesToWorld, createEmptyWorld, placesToGeoJson, worldFromJson, worldToBytes, worldToJson } from '../src/storage';
 import { d, stay, world } from './fixtures';
 
@@ -21,6 +22,20 @@ describe('storage', () => {
     const hall = gj.features.find((f: { id: string }) => f.id === 'hall');
     expect(hall.properties.positionInherited).toBe(true);
     expect(gj.features.find((f: { id: string }) => f.id === 'nowhere')).toBeUndefined();
+  });
+  it('round-trips map features and exports them as lines and polygons', async () => {
+    const w = sampleWorld();
+    expect(w.mapFeatures.length).toBeGreaterThan(5);
+    const back = await bytesToWorld(await worldToBytes(w));
+    expect(back.mapFeatures).toEqual(w.mapFeatures);
+    const gj = JSON.parse(placesToGeoJson(w));
+    const sallow = gj.features.find((f: { properties: { name: string } }) => f.properties.name === 'The Sallow');
+    expect(sallow.geometry.type).toBe('LineString');
+    const mere = gj.features.find((f: { properties: { name: string } }) => f.properties.name === 'Glass Mere');
+    expect(mere.geometry.type).toBe('Polygon');
+    expect(mere.geometry.coordinates[0][0]).toEqual(mere.geometry.coordinates[0].at(-1));
+    // the river's place is not also exported as a point
+    expect(gj.features.filter((f: { properties: { name: string } }) => f.properties.name === 'The Sallow')).toHaveLength(1);
   });
   it('new worlds include the unknown-place placeholder', () => {
     const w = createEmptyWorld('Series');

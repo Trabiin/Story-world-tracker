@@ -11,8 +11,8 @@ import { CommaInput } from './Characters';
 import { Backlinks } from '../components/Backlinks';
 import { subjectName } from '../util';
 
-export const PLACE_KINDS: PlaceKind[] = ['city', 'town', 'village', 'castle', 'port', 'temple', 'ruin', 'battle-site', 'building', 'room', 'region', 'landmark', 'other', 'unknown'];
-export const PLACE_ICON: Record<PlaceKind, string> = { city: '◉', town: '●', village: '•', castle: '♜', port: '⚓', temple: '⛩', ruin: '⌂', 'battle-site': '⚔', building: '▪', room: '▫', region: '◌', landmark: '▲', other: '◆', unknown: '?' };
+export const PLACE_KINDS: PlaceKind[] = ['capital', 'city', 'town', 'village', 'castle', 'port', 'temple', 'ruin', 'battle-site', 'building', 'room', 'region', 'landmark', 'river', 'lake', 'road', 'area', 'other', 'unknown'];
+export const PLACE_ICON: Record<PlaceKind, string> = { city: '◉', town: '●', village: '•', castle: '♜', port: '⚓', temple: '⛩', ruin: '⌂', 'battle-site': '⚔', building: '▪', room: '▫', region: '◌', landmark: '▲', other: '◆', unknown: '?', capital: '✪', river: '〰', lake: '◍', road: '═', area: '▧' };
 
 export function Places() {
   const { world, store, selected, select } = useApp();

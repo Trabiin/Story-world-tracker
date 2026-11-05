@@ -7,9 +7,10 @@ import { formatDayNumber } from '../dates';
 import type { LatLng } from '../globe';
 import type { Id, Journey, World } from '../model';
 import { describeClash, findBiomeClashes, hasTerrain } from '../terrain';
+import { checkRivers } from '../features';
 import { OPEN_END, Segment, WorldIndex, nominalEnd, nominalStart } from '../whereabouts';
 
-export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate';
+export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate' | 'river-uphill' | 'river-dead-end' | 'river-split';
 
 export const RULES: Record<RuleId, { name: string; requirement: string; severity: 'warning' | 'info' }> = {
   'two-places': { name: 'In two places at once', requirement: 'CC-1', severity: 'warning' },
@@ -19,10 +20,13 @@ export const RULES: Record<RuleId, { name: string; requirement: string; severity
   'open-stay': { name: 'Open-ended stay', requirement: 'WH-3', severity: 'info' },
   placeholder: { name: 'Unknown place to resolve', requirement: 'WH-12', severity: 'info' },
   'biome-climate': { name: 'Terrain that clashes with its climate', requirement: 'RC-8', severity: 'warning' },
+  'river-uphill': { name: 'River flows uphill', requirement: 'RC-1', severity: 'warning' },
+  'river-dead-end': { name: 'River ends nowhere', requirement: 'RC-2', severity: 'warning' },
+  'river-split': { name: 'River splits in two', requirement: 'RC-3', severity: 'warning' },
 };
 
 export interface RecordRef {
-  kind: 'stay' | 'journey' | 'character' | 'place' | 'group';
+  kind: 'stay' | 'journey' | 'character' | 'place' | 'group' | 'feature';
   id: Id;
 }
 
@@ -176,6 +180,7 @@ export function checkWorld(world: World): Warning[] {
     }
   }
   out.push(...checkTerrain(world));
+  for (const r of checkRivers(world)) out.push({ key: r.key, rule: r.rule, severity: 'warning', message: r.message, refs: [{ kind: 'feature', id: r.featureId }], at: r.at });
   const disabled = new Set(world.settings.disabledRules);
   const dismissed = new Map(world.dismissals.map((d) => [d.key, d]));
   // De-duplicate (group conflicts show once per member, which is intended; identical keys collapse).
