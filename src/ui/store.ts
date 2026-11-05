@@ -3,12 +3,13 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { World } from '../core';
-import { COLLECTIONS, CollectionName, nowIso, worldToBytes } from '../storage';
+import { COLLECTIONS, CollectionName, Snapshot, makeSnapshot, nowIso, pruneSnapshots, restoreSnapshot, worldToBytes } from '../storage';
 import type { Platform, WorldHandle } from './platform';
 
 const AUTOSAVE_MS = 800;
 const BACKUP_EVERY_MS = 10 * 60 * 1000;
 const MAX_UNDO = 200;
+const SNAPSHOT_EVERY_MS = 10 * 60 * 1000;
 
 type Rec<C extends CollectionName> = World[C][number];
 
@@ -24,9 +25,34 @@ export class WorldStore {
   saveError = '';
   lastBackupInfo = '';
   version = 0;
+  private lastSnapshotAt = 0;
+  private snapshotWorld: World | null = null;
 
-  constructor(public world: World, public handle: WorldHandle, private platform: Platform) {
-    if (world.settings.currentMoment === undefined) world.settings.currentMoment = undefined;
+  constructor(public world: World, public handle: WorldHandle, private platform: Platform, public snapshots: Snapshot[] = []) {
+    this.snapshotWorld = world;
+    this.lastSnapshotAt = snapshots[0] ? Date.parse(snapshots[0].at) : 0;
+  }
+
+  /** PL-3: keep a compressed copy of the world now and then, inside the world file. */
+  private async maybeSnapshot() {
+    if (this.world === this.snapshotWorld || Date.now() - this.lastSnapshotAt < SNAPSHOT_EVERY_MS) return;
+    await this.snapshotNow('Automatic');
+  }
+
+  async snapshotNow(label: string) {
+    const s = await makeSnapshot(this.world, label);
+    this.snapshots = pruneSnapshots([s, ...this.snapshots]);
+    this.lastSnapshotAt = Date.now();
+    this.snapshotWorld = this.world;
+    this.emit();
+  }
+
+  async restore(id: string) {
+    const s = this.snapshots.find((x) => x.id === id);
+    if (!s) return;
+    await this.snapshotNow(`Before restoring ${new Date(s.at).toLocaleString()}`);
+    const restored = await restoreSnapshot(s, this.world);
+    this.update(() => restored);
   }
 
   subscribe = (fn: () => void) => {
@@ -118,7 +144,8 @@ export class WorldStore {
     this.saveState = 'saving';
     this.emit();
     try {
-      const bytes = await worldToBytes(this.world);
+      await this.maybeSnapshot();
+      const bytes = await worldToBytes(this.world, this.snapshots);
       const h = { ...this.handle, name: this.world.settings.name };
       await this.platform.save(h, bytes);
       this.handle = h;
@@ -132,7 +159,7 @@ export class WorldStore {
   }
 
   async backupNow(bytes?: Uint8Array) {
-    const b = bytes ?? (await worldToBytes(this.world));
+    const b = bytes ?? (await worldToBytes(this.world, this.snapshots));
     try {
       const where = await this.platform.backup(this.handle, b, this.world.settings.backupFolder);
       this.lastBackup = Date.now();

@@ -1,6 +1,6 @@
 /** VW-5: every character's location and activity on the current moment. */
 import { useMemo, useState } from 'react';
-import { Id, ageOn, formatDayNumber, fromDayNumber, whereIs } from '../../core';
+import { Id, ageOn, attributesOn, formatDayNumber, fromDayNumber, whereIs } from '../../core';
 import { useApp } from '../context';
 import { placePath } from '../util';
 
@@ -36,7 +36,8 @@ export function WhoIsWhere() {
           placeKey = `~${w.kind}`;
         }
         const via = (w.kind === 'stay' || w.kind === 'journey') && w.segment.viaGroupId ? world.groups.find((g) => g.id === w.segment.viaGroupId)?.name : undefined;
-        return { c, where, doing, placeKey, via, age, recordKind, recordId, unknown: w.kind === 'unknown' };
+        const title = attributesOn(ix, c.id, moment).title;
+        return { c, where, doing, placeKey, via, age, recordKind, recordId, title, unknown: w.kind === 'unknown' };
       })
       .sort((a, b) => (groupByPlace ? a.where.localeCompare(b.where) : 0) || (['main', 'secondary', 'minor'].indexOf(a.c.importance) - ['main', 'secondary', 'minor'].indexOf(b.c.importance)) || a.c.name.localeCompare(b.c.name));
   }, [world, ix, moment, groupByPlace, filter]);
@@ -72,6 +73,7 @@ export function WhoIsWhere() {
                   <button className="link" onClick={() => go('characters', r.c.id)}>
                     <span className="swatch" style={{ color: r.c.color }}>{r.c.icon}</span> {r.c.name}
                   </button>
+                  {r.title && <div className="muted small">{r.title}</div>}
                 </td>
                 <td>{r.age !== undefined && r.age >= 0 ? r.age : ''}</td>
                 <td className={r.unknown ? 'muted' : ''}>

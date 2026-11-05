@@ -1,5 +1,6 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
-import { Character, Journey, Place, Stay, World, exactDate as d, toDayNumber } from '../core';
+import { Character, Journey, ManuscriptLink, Paragraph, Place, Stay, World, exactDate as d, makeAnchor, textHash, toDayNumber } from '../core';
+import { nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
 
 export function sampleWorld(): World {
@@ -57,6 +58,44 @@ export function sampleWorld(): World {
   journey(tamsin, varn, ember, d(1042, 5, 4), d(1042, 5, 6), 'horse', 'urgent message');
   stay(tamsin, ember, d(1042, 5, 6), d(1042, 5, 10));
   stay(tamsin, saltmere, d(1042, 5, 18), d(1042, 5, 25));
+
+  oren.attributes = [
+    { id: crypto.randomUUID(), key: 'title', value: 'Caravan master', start: { year: 1038, precision: 'year' } },
+    { id: crypto.randomUUID(), key: 'allegiance', value: 'Salt Guild' },
+  ];
+
+  // Story structure (ST-1, ST-2)
+  const book = { ...recordBase(), title: 'The Salt Roads', order: 1, notes: '' };
+  w.books.push(book);
+  const ch1 = { ...recordBase(), bookId: book.id, title: 'Chapter 1: The Sealed Letter', order: 1, povCharacterId: kaela.id, notes: '' };
+  const ch2 = { ...recordBase(), bookId: book.id, title: 'Chapter 2: Market Days', order: 2, povCharacterId: oren.id, notes: '' };
+  w.chapters.push(ch1, ch2);
+  w.scenes.push(
+    { ...recordBase(), chapterId: ch1.id, title: 'The regent’s errand', order: 1, start: d(1042, 4, 27), characterIds: [], summary: 'Kaela is handed the sealed letter in the Hall of Lamps.' },
+    { ...recordBase(), chapterId: ch1.id, title: 'Riding south', order: 2, start: d(1042, 4, 30), characterIds: [], summary: 'On the road to Thornwick.' },
+    { ...recordBase(), chapterId: ch2.id, title: 'Carts at the gate', order: 1, start: d(1042, 5, 7), characterIds: [kaela.id, mira.id], summary: 'Oren meets Kaela at the Thornwick market.' },
+  );
+
+  // A short sample manuscript, as if read from a Word file (ST-8..ST-10)
+  const paragraphs: Paragraph[] = [
+    { text: 'Chapter 1: The Sealed Letter', heading: 1 },
+    { text: 'The lamps in the Hall of Lamps were never allowed to go out, and so Kaela Venn had learned to read faces by their light. The regent’s face that morning told her nothing at all.' },
+    { text: '“Thornwick,” he said, and pressed the letter into her hand. “Before the market closes. Give it to no one but Oren Hask.”' },
+    { text: 'She left Varn on the twenty-eighth, with the seal against her ribs and the gates closing behind her.' },
+    { text: 'Chapter 2: Market Days', heading: 1 },
+    { text: 'Oren Hask counted carts the way other men counted debts. Forty-one had come down the southern road from Ashford, and every one of them was late.' },
+    { text: 'Mira Solt found him at the gate, already arguing with the toll-keeper about the price of salt.' },
+  ];
+  const ms = { ...recordBase(), name: 'Salt Roads – draft 1', paragraphs, textHash: textHash(paragraphs), loadedAt: nowIso() };
+  w.manuscripts.push(ms);
+  const link = (pi: number, quote: string, target: ManuscriptLink['target']) => {
+    const k = paragraphs[pi].text.indexOf(quote);
+    w.links.push({ ...recordBase(), manuscriptId: ms.id, anchor: makeAnchor(paragraphs, pi, k, k + quote.length), target, note: '', state: 'ok' });
+  };
+  link(1, 'Hall of Lamps', { kind: 'place', id: hall.id });
+  link(3, 'She left Varn on the twenty-eighth', { kind: 'journey', id: w.journeys[0].id });
+  link(5, 'Oren Hask counted carts', { kind: 'character', id: oren.id });
+  link(6, 'Mira Solt found him at the gate', { kind: 'scene', id: w.scenes[2].id });
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

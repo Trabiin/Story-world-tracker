@@ -1,5 +1,6 @@
 /** PL-4: open export formats. JSON for everything, GeoJSON (lat/long) for map features. */
 import { World, WorldIndex } from '../core';
+import { normalizeWorld } from './newWorld';
 
 export const JSON_FORMAT = 'story-world-tracker';
 export const JSON_FORMAT_VERSION = 1;
@@ -12,7 +13,7 @@ export function worldFromJson(text: string): World {
   const parsed = JSON.parse(text);
   if (parsed?.format !== JSON_FORMAT || !parsed.world) throw new Error('This is not a Story World Tracker JSON export.');
   if (parsed.version > JSON_FORMAT_VERSION) throw new Error('This export is from a newer version of the app.');
-  return parsed.world as World;
+  return normalizeWorld(parsed.world as World);
 }
 
 /** GeoJSON FeatureCollection of places (RFC 7946: coordinates are [longitude, latitude]). */

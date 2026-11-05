@@ -8,6 +8,7 @@ import { Field } from '../components/Modal';
 import { PlaceSelect, placeOptions } from '../components/Pickers';
 import { useApp } from '../context';
 import { CommaInput } from './Characters';
+import { Backlinks } from '../components/Backlinks';
 import { subjectName } from '../util';
 
 export const PLACE_KINDS: PlaceKind[] = ['city', 'town', 'village', 'castle', 'port', 'temple', 'ruin', 'battle-site', 'building', 'room', 'region', 'landmark', 'other', 'unknown'];
@@ -133,6 +134,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
               ))}
             </ul>
           )}
+          <Backlinks kind="place" id={p.id} title="Manuscript and scenes" only={['passage', 'scene']} />
           {journeys.length > 0 && (
             <>
               <h2>Journeys</h2>

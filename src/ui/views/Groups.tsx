@@ -3,6 +3,7 @@ import { Group, Membership, formatFuzzy } from '../../core';
 import { ask } from '../components/Dialogs';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
+import { Backlinks } from '../components/Backlinks';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
 import { PALETTE, placeName, sortByName } from '../util';
@@ -95,6 +96,7 @@ function GroupDetail({ g }: { g: Group }) {
             {journeys.map((j) => <li key={j.id}><button className="link" onClick={() => edit({ kind: 'journey', id: j.id })}>{formatFuzzy(j.departure)}: {placeName(world, j.originId)} → {placeName(world, j.destinationId)}</button></li>)}
           </ul>
           {stays.length + journeys.length === 0 && <p className="muted">None yet.</p>}
+          <Backlinks kind="group" id={g.id} />
         </div>
       </div>
     </div>

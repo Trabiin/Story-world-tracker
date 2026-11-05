@@ -27,3 +27,20 @@ describe('storage', () => {
     expect(w.places[0].isPlaceholder).toBe(true);
   });
 });
+
+import { loadWorldFile, makeSnapshot, restoreSnapshot } from '../src/storage';
+describe('version history', () => {
+  it('keeps snapshots inside the world file and restores them', async () => {
+    const w = world();
+    w.mapImages.push({ id: 'img', scenarioId: 'canon', status: 'canon', createdAt: '', updatedAt: '', name: 'Sketch', dataUrl: 'data:image/png;base64,AAAA', widthPx: 1, heightPx: 1, north: 1, south: 0, west: 0, east: 1, opacity: 1, locked: false, visible: true });
+    const snap = await makeSnapshot(w, 'Before the war');
+    const changed = { ...w, characters: [] };
+    const { world: loaded, snapshots } = await loadWorldFile(await worldToBytes(changed, [snap]));
+    expect(loaded.characters).toHaveLength(0);
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0].label).toBe('Before the war');
+    const restored = await restoreSnapshot(snapshots[0], loaded);
+    expect(restored.characters.map((c) => c.name)).toEqual(['Kaela', 'Bren']);
+    expect(restored.mapImages[0].dataUrl).toBe('data:image/png;base64,AAAA');
+  });
+});

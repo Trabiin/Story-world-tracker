@@ -43,5 +43,20 @@ export function createEmptyWorld(name: string): World {
     journeys: [],
     mapImages: [],
     dismissals: [],
+    books: [],
+    chapters: [],
+    scenes: [],
+    manuscripts: [],
+    links: [],
   };
+}
+
+/** Fill in collections that older files or exports do not have yet. */
+export function normalizeWorld(w: World): World {
+  const empty = createEmptyWorld(w.settings?.name ?? 'World');
+  const out = { ...empty, ...w, settings: { ...empty.settings, ...w.settings } } as World;
+  for (const k of Object.keys(empty) as (keyof World)[]) {
+    if (k !== 'settings' && !Array.isArray(out[k])) (out as unknown as Record<string, unknown>)[k] = [];
+  }
+  return out;
 }
