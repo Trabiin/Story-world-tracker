@@ -1,5 +1,6 @@
 /** Places (WH-4, MP-5, DM-2): nest physically, positioned in lat/long on the globe. */
 import { useMemo, useState } from 'react';
+import { ask } from '../components/Dialogs';
 import { Place, PlaceKind, formatFuzzy, wrapLng, clampLat } from '../../core';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
@@ -58,13 +59,13 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
   const children = world.places.filter((x) => x.parentId === p.id);
   const stays = world.stays.filter((s) => s.placeId === p.id || ix.ancestors(s.placeId).includes(p.id));
   const journeys = world.journeys.filter((j) => j.originId === p.id || j.destinationId === p.id || j.waypointIds.includes(p.id));
-  const remove = () => {
+  const remove = async () => {
     const direct = world.stays.filter((s) => s.placeId === p.id).length + journeys.length;
     if (direct > 0) {
-      alert(`${p.name} is used by ${direct} stay(s) or journey(s). Move those to another place first.`);
+      void ask.alert(`${p.name} is used by ${direct} stay(s) or journey(s). Move those to another place first.`);
       return;
     }
-    if (!confirm(`Delete ${p.name}?${children.length ? ` Its ${children.length} sub-place(s) will move up one level.` : ''}`)) return;
+    if (!(await ask.confirm(`Delete ${p.name}?${children.length ? ` Its ${children.length} sub-place(s) will move up one level.` : ''}`, { okLabel: 'Delete', danger: true }))) return;
     store.update((w) => ({ ...w, places: w.places.filter((x) => x.id !== p.id).map((x) => (x.parentId === p.id ? { ...x, parentId: p.parentId } : x)) }));
     select(undefined);
   };
@@ -89,7 +90,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
           </Field>
           <Field label="Inside" hint="Physical nesting only: room → castle → city. Kingdoms come later as map layers.">
             <PlaceSelect world={world} value={p.parentId} exclude={p.id} allowNone="(top level)" onChange={(parentId) => {
-              if (parentId && (parentId === p.id || ix.ancestors(parentId).includes(p.id))) return alert('A place cannot be inside itself.');
+              if (parentId && (parentId === p.id || ix.ancestors(parentId).includes(p.id))) return void ask.alert('A place cannot be inside itself.');
               set({ parentId });
             }} />
           </Field>

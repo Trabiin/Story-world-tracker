@@ -1,5 +1,6 @@
 /** CC-7: one panel for every warning. Warn, never block (D-9). */
 import { useState } from 'react';
+import { ask } from '../components/Dialogs';
 import { RULES, RuleId, Warning, formatDayNumber, fromDayNumber } from '../../core';
 import { nowIso } from '../../storage';
 import { useApp } from '../context';
@@ -11,8 +12,8 @@ export function Warnings() {
   const visible = warnings.filter((w) => (showDismissed || !w.dismissed) && (showInfo || w.severity === 'warning'));
   const byRule = new Map<RuleId, Warning[]>();
   for (const w of visible) byRule.set(w.rule, [...(byRule.get(w.rule) ?? []), w]);
-  const dismiss = (w: Warning) => {
-    const note = prompt('Why is this intentional? (optional note)', '');
+  const dismiss = async (w: Warning) => {
+    const note = await ask.prompt('Why is this intentional? (optional note)', '');
     if (note === null) return;
     store.upsert('dismissals', { key: w.key, note, at: nowIso() });
   };

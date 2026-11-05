@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { bytesToWorld, initSql } from '../storage';
 import { App } from './App';
+import { DialogHost } from './components/Dialogs';
 import { getPlatform, Platform, WorldHandle } from './platform';
 import { WorldStore } from './store';
 import { WorldsScreen } from './WorldsScreen';
@@ -44,4 +45,4 @@ function Root() {
   return <App key={store.handle.id} store={store} platform={platform} onClose={() => { try { localStorage.removeItem(LAST_KEY); } catch { /* ignore */ } setStore(null); }} />;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><Root /></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><Root /><DialogHost /></StrictMode>);

@@ -1,5 +1,6 @@
 /** CH-1, CH-2, CH-6, EU-9: characters list and profile, with their whereabouts chain. */
 import { useMemo, useState } from 'react';
+import { ask } from '../components/Dialogs';
 import { Character, Importance, ageOn, formatDayNumber, formatFuzzy, fromDayNumber, nominalStart } from '../../core';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
@@ -77,11 +78,11 @@ function CharacterDetail({ c }: { c: Character }) {
     const d = fromDayNumber(lastEnd.end.earliest);
     return { subject: { kind: 'character' as const, id: c.id }, departure: { ...d, precision: 'day' as const }, arrival: { ...d, precision: 'day' as const }, originId: lastEnd.destinationId ?? lastEnd.placeId };
   };
-  const remove = () => {
+  const remove = async () => {
     const stays = world.stays.filter((s) => s.subject.kind === 'character' && s.subject.id === c.id);
     const journeys = world.journeys.filter((j) => j.subject.kind === 'character' && j.subject.id === c.id);
     const mem = world.memberships.filter((m) => m.characterId === c.id);
-    if (!confirm(`Delete ${c.name}? This also deletes ${stays.length} stay(s), ${journeys.length} journey(s) and ${mem.length} group membership(s). Consider archiving instead.`)) return;
+    if (!(await ask.confirm(`Delete ${c.name}? This also deletes ${stays.length} stay(s), ${journeys.length} journey(s) and ${mem.length} group membership(s). Consider archiving instead.`, { okLabel: 'Delete', danger: true }))) return;
     store.removeMany([{ c: 'characters', id: c.id }, ...stays.map((s) => ({ c: 'stays' as const, id: s.id })), ...journeys.map((j) => ({ c: 'journeys' as const, id: j.id })), ...mem.map((m) => ({ c: 'memberships' as const, id: m.id }))]);
     select(undefined);
   };

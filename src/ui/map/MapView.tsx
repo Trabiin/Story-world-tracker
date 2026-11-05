@@ -3,6 +3,7 @@
  * Equirectangular, wraps east–west, renders pinned sketch images as tiles.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ask } from '../components/Dialogs';
 import { Id, LatLng, MapImage, Place, clampLat, formatDayNumber, greatCircleKm, interpolateGreatCircle, pathLengthKm, whereIs, wrapLng } from '../../core';
 import { recordBase } from '../../storage';
 import { fileToDataUrl } from '../views/Characters';
@@ -377,7 +378,7 @@ export function MapView() {
     if (Math.abs(x - d.x) + Math.abs(y - d.y) > 3) d.moved = true;
     if (d.moved) setView(clampView({ ...d.v, centerLng: d.v.centerLng - (x - d.x) / d.v.scale, centerLat: d.v.centerLat + (y - d.y) / d.v.scale }));
   };
-  const onUp = (e: React.PointerEvent) => {
+  const onUp = async (e: React.PointerEvent) => {
     const d = drag.current;
     drag.current = null;
     if (!d || d.moved) return;
@@ -392,7 +393,7 @@ export function MapView() {
       return;
     }
     if (mode === 'add-place') {
-      const name = prompt('Name of the new place?');
+      const name = await ask.prompt('Name of the new place?');
       if (name) {
         const p: Place = { ...recordBase(), name, aliases: [], kind: 'city', location: ll, notes: '', isPlaceholder: false };
         store.upsert('places', p);
@@ -414,14 +415,14 @@ export function MapView() {
       while (lng > img.west + 360) lng -= 360;
       const px = ((lng - img.west) / (east - img.west)) * t.width;
       const py = ((img.north - raw.lat) / (img.north - img.south)) * t.height;
-      const ans = prompt(`Real latitude, longitude of this spot on the sketch (e.g. 52.5, 13.4):`);
+      const ans = await ask.prompt(`Real latitude, longitude of this spot on the sketch (e.g. 52.5, 13.4):`);
       if (!ans) return;
       const [la, ln] = ans.split(/[ ,;]+/).map(Number);
-      if (!Number.isFinite(la) || !Number.isFinite(ln)) return alert('Please enter two numbers: latitude, longitude.');
+      if (!Number.isFinite(la) || !Number.isFinite(ln)) return void ask.alert('Please enter two numbers: latitude, longitude.');
       const points = [...calib.points, { px, py, lat: la, lng: ln }];
       if (points.length < 2) return setCalib({ ...calib, points });
       const b = boundsFromTwoPoints(points[0], points[1], t.width, t.height);
-      if (!b) { alert('The two points must differ both left–right and up–down. Try again.'); return setCalib({ ...calib, points: [] }); }
+      if (!b) { void ask.alert('The two points must differ both left–right and up–down. Try again.'); return setCalib({ ...calib, points: [] }); }
       store.upsert('mapImages', { ...img, ...b });
       setCalib(null);
       setMode('browse');
@@ -556,7 +557,7 @@ export function MapView() {
                 const east = img.east < img.west ? img.east + 360 : img.east;
                 setView(clampView({ centerLat: (img.north + img.south) / 2, centerLng: (img.west + east) / 2, scale: Math.min(size.w / (east - img.west), size.h / (img.north - img.south)) * 0.9 }));
               }}>Zoom to</button>
-              <button className="small danger" onClick={() => confirm(`Remove ${img.name}?`) && store.removeMany([{ c: 'mapImages', id: img.id }])}>Remove</button>
+              <button className="small danger" onClick={async () => (await ask.confirm(`Remove ${img.name}?`, { okLabel: 'Remove', danger: true })) && store.removeMany([{ c: 'mapImages', id: img.id }])}>Remove</button>
             </div>
           </div>
         ))}

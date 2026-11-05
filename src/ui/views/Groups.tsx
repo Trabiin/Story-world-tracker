@@ -1,5 +1,6 @@
 /** CH-5, DM-5: groups that travel together; time-bound membership. */
 import { Group, Membership, formatFuzzy } from '../../core';
+import { ask } from '../components/Dialogs';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
@@ -38,8 +39,8 @@ function GroupDetail({ g }: { g: Group }) {
   const setM = (m: Membership, p: Partial<Membership>) => store.upsert('memberships', { ...m, ...p });
   const stays = world.stays.filter((s) => s.subject.kind === 'group' && s.subject.id === g.id);
   const journeys = world.journeys.filter((j) => j.subject.kind === 'group' && j.subject.id === g.id);
-  const remove = () => {
-    if (!confirm(`Delete ${g.name}, its ${members.length} membership(s), ${stays.length} stay(s) and ${journeys.length} journey(s)?`)) return;
+  const remove = async () => {
+    if (!(await ask.confirm(`Delete ${g.name}, its ${members.length} membership(s), ${stays.length} stay(s) and ${journeys.length} journey(s)?`, { okLabel: 'Delete', danger: true }))) return;
     store.removeMany([{ c: 'groups', id: g.id }, ...members.map((m) => ({ c: 'memberships' as const, id: m.id })), ...stays.map((s) => ({ c: 'stays' as const, id: s.id })), ...journeys.map((j) => ({ c: 'journeys' as const, id: j.id }))]);
     select(undefined);
   };

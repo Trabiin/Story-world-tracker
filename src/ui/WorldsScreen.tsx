@@ -1,5 +1,6 @@
 /** PL-2: several separate worlds, one per series. */
 import { useEffect, useState } from 'react';
+import { ask } from './components/Dialogs';
 import { bytesToWorld, createEmptyWorld, worldFromJson, worldToBytes } from '../storage';
 import { Platform, WorldHandle } from './platform';
 import { sampleWorld } from './sample';
@@ -32,7 +33,7 @@ export function WorldsScreen({ platform, onOpen }: { platform: Platform; onOpen:
       <div className="worlds-card">
         <h1>Story World Tracker</h1>
         <p className="muted">Where is everyone, what are they doing, and how did they get there?</p>
-        {platform.kind === 'browser' && <p className="note">Browser preview: worlds are stored in this browser only. Use Settings → Export to keep a copy.</p>}
+        {platform.kind === 'browser' && <p className="note">Browser preview: worlds are saved in this browser only, and file exports may not download here. The desktop app saves real .world files.</p>}
         {error && <p className="error">{error}</p>}
         <h2>Your worlds</h2>
         {worlds === null ? <p className="muted">Loading…</p> : worlds.length === 0 ? <p className="muted">No worlds yet.</p> : (
@@ -42,7 +43,7 @@ export function WorldsScreen({ platform, onOpen }: { platform: Platform; onOpen:
                 <button className="link big" onClick={() => onOpen(w)}>{w.name}</button>
                 <small className="muted">{w.path ?? (w.updatedAt ? `edited ${new Date(w.updatedAt).toLocaleString()}` : '')}</small>
                 <button className="small" onClick={async () => {
-                  if (!confirm(platform.kind === 'browser' ? `Delete ${w.name} from this browser? This cannot be undone.` : `Remove ${w.name} from this list? The file stays on disk.`)) return;
+                  if (!(await ask.confirm(platform.kind === 'browser' ? `Delete ${w.name} from this browser? This cannot be undone.` : `Remove ${w.name} from this list? The file stays on disk.`, { okLabel: platform.kind === 'browser' ? 'Delete' : 'Remove', danger: true }))) return;
                   await platform.forget(w);
                   void refresh();
                 }}>{platform.kind === 'browser' ? 'Delete' : 'Remove'}</button>

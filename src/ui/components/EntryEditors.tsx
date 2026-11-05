@@ -1,5 +1,6 @@
 /** Stay (WH-1..WH-3) and journey (WH-5, WH-7, WH-8) editors. */
 import { useMemo, useState } from 'react';
+import { ask } from './Dialogs';
 import { FuzzyDate, Journey, Stay, Subject, WorldIndex, formatDayNumber, formatFuzzy, fromDay } from '../../core';
 import { recordBase } from '../../storage';
 import { useApp } from '../context';
@@ -19,7 +20,7 @@ function StatusToggle({ value, onChange }: { value: Draftable['status']; onChang
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
   return (
-    <button className="danger" onClick={() => confirm('Delete this entry?') && onDelete()}>
+    <button className="danger" onClick={async () => (await ask.confirm('Delete this entry?', { okLabel: 'Delete', danger: true })) && onDelete()}>
       Delete
     </button>
   );
