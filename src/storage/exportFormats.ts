@@ -1,19 +1,25 @@
 /** PL-4: open export formats. JSON for everything, GeoJSON (lat/long) for map features. */
 import { World, WorldIndex } from '../core';
 import { normalizeWorld } from './newWorld';
+import { TerrainJson, terrainFromJson, terrainToJson } from './terrainCodec';
 
 export const JSON_FORMAT = 'story-world-tracker';
-export const JSON_FORMAT_VERSION = 1;
+/** 2: terrain is included (base64 tiles, see TerrainJson). */
+export const JSON_FORMAT_VERSION = 2;
 
 export function worldToJson(world: World): string {
-  return JSON.stringify({ format: JSON_FORMAT, version: JSON_FORMAT_VERSION, exportedAt: new Date().toISOString(), world }, null, 2);
+  const out = { ...world, terrain: terrainToJson(world.terrain) };
+  return JSON.stringify({ format: JSON_FORMAT, version: JSON_FORMAT_VERSION, exportedAt: new Date().toISOString(), world: out }, null, 2);
 }
 
 export function worldFromJson(text: string): World {
   const parsed = JSON.parse(text);
   if (parsed?.format !== JSON_FORMAT || !parsed.world) throw new Error('This is not a Story World Tracker JSON export.');
   if (parsed.version > JSON_FORMAT_VERSION) throw new Error('This export is from a newer version of the app.');
-  return normalizeWorld(parsed.world as World);
+  const terrainJson = parsed.world.terrain as TerrainJson | undefined;
+  const w = normalizeWorld({ ...parsed.world, terrain: undefined } as World);
+  w.terrain = terrainFromJson(terrainJson);
+  return w;
 }
 
 /** GeoJSON FeatureCollection of places (RFC 7946: coordinates are [longitude, latitude]). */

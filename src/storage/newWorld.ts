@@ -1,4 +1,4 @@
-import { CANON, DEFAULT_TRAVEL_MODES, Place, World } from '../core';
+import { CANON, DEFAULT_BIOMES, DEFAULT_TRAVEL_MODES, EARTH_TILT, Place, World, emptyTerrain } from '../core';
 
 export const UNKNOWN_PLACE_ID = 'unknown-place';
 
@@ -34,6 +34,8 @@ export function createEmptyWorld(name: string): World {
       defaultDetourFactor: 1.3,
       travelModes: DEFAULT_TRAVEL_MODES.map((m) => ({ ...m })),
       disabledRules: [],
+      axialTiltDeg: EARTH_TILT,
+      biomes: DEFAULT_BIOMES.map((b) => ({ ...b, bands: [...b.bands] })),
     },
     characters: [],
     places: [unknown],
@@ -48,6 +50,8 @@ export function createEmptyWorld(name: string): World {
     scenes: [],
     manuscripts: [],
     links: [],
+    mapSymbols: [],
+    terrain: emptyTerrain(),
   };
 }
 
@@ -56,7 +60,8 @@ export function normalizeWorld(w: World): World {
   const empty = createEmptyWorld(w.settings?.name ?? 'World');
   const out = { ...empty, ...w, settings: { ...empty.settings, ...w.settings } } as World;
   for (const k of Object.keys(empty) as (keyof World)[]) {
-    if (k !== 'settings' && !Array.isArray(out[k])) (out as unknown as Record<string, unknown>)[k] = [];
+    if (k !== 'settings' && k !== 'terrain' && !Array.isArray(out[k])) (out as unknown as Record<string, unknown>)[k] = [];
   }
+  if (!out.terrain || typeof out.terrain !== 'object' || !out.terrain.tiles) out.terrain = emptyTerrain();
   return out;
 }

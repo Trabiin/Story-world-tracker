@@ -4,6 +4,7 @@
  */
 import type { FuzzyDate, Hemisphere } from '../dates';
 import type { LatLng } from '../globe';
+import type { Biome, Terrain } from '../terrain';
 
 export type Id = string;
 export const CANON: Id = 'canon';
@@ -31,6 +32,12 @@ export interface WorldSettings {
   disabledRules: string[]; // CC-7
   backupFolder?: string; // EU-17
   currentMoment?: number; // TL-7 day number
+  /** MK-2: axial tilt in degrees; drives season strength and climate band edges (RC-7). */
+  axialTiltDeg: number;
+  /** MK-2: the part of the globe the main map frames. Absent = the whole globe. */
+  mainMap?: { north: number; south: number; west: number; east: number };
+  /** MK-7: editable terrain types. */
+  biomes: Biome[];
 }
 
 export interface TravelMode {
@@ -149,6 +156,16 @@ export interface MapImage extends RecordBase {
   visible: boolean;
 }
 
+/** MK-6, MK-24: a symbol stamped on the map by hand (peaks, trees, …). */
+export type MapSymbolKind = 'peak' | 'hill' | 'volcano' | 'conifer' | 'tree' | 'palm' | 'reeds' | 'dunes' | 'rocks';
+
+export interface MapSymbol extends RecordBase {
+  kind: MapSymbolKind;
+  location: LatLng;
+  /** Size multiplier, 1 = normal. */
+  size: number;
+}
+
 /** ST-1: series → books → chapters → scenes. */
 export interface Book extends RecordBase {
   title: string;
@@ -240,4 +257,8 @@ export interface World {
   scenes: Scene[];
   manuscripts: Manuscript[];
   links: ManuscriptLink[];
+  /** MK-13: hand-placed map symbols. */
+  mapSymbols: MapSymbol[];
+  /** MK-4..MK-7: painted land, height and terrain types. */
+  terrain: Terrain;
 }

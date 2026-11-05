@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest';
-import { CANON, DEFAULT_TRAVEL_MODES, World, WorldIndex, checkWorld, fromDay, toDayNumber, whereIs } from '../src/core';
+import { CANON, DEFAULT_BIOMES, DEFAULT_TRAVEL_MODES, World, emptyTerrain, WorldIndex, checkWorld, fromDay, toDayNumber, whereIs } from '../src/core';
 import { worldToBytes, bytesToWorld } from '../src/storage';
 
 /** PL-8: 1,000 characters, 2,000 places, 20,000 stays and journeys. */
 export function bigWorld(): World {
   const base = { scenarioId: CANON, status: 'canon' as const, createdAt: '', updatedAt: '' };
   const w: World = {
-    settings: { name: 'Big', radiusKm: 6371, hemisphereForSeasons: 'north', defaultDetourFactor: 1.3, travelModes: DEFAULT_TRAVEL_MODES, disabledRules: [] },
-    characters: [], places: [], groups: [], memberships: [], stays: [], journeys: [], mapImages: [], dismissals: [], books: [], chapters: [], scenes: [], manuscripts: [], links: [],
+    settings: { name: 'Big', radiusKm: 6371, hemisphereForSeasons: 'north', defaultDetourFactor: 1.3, travelModes: DEFAULT_TRAVEL_MODES, disabledRules: [], axialTiltDeg: 23.44, biomes: DEFAULT_BIOMES },
+    characters: [], places: [], groups: [], memberships: [], stays: [], journeys: [], mapImages: [], dismissals: [], books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], terrain: emptyTerrain(),
   } as World;
   let seed = 1;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
