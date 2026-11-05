@@ -30,6 +30,20 @@ The full requirements live in the project's `spec/requirements.md`; the approved
 - **Version history**: a copy of the world every 10 minutes inside the world file (last 60), restorable from Settings.
 - Checked at 1,000 characters, 2,000 places and 20,000 stays and journeys: all warnings in about 0.05 s.
 
+## Phase 2a: draw the land
+
+Open the **Map** and press **✎ Draw map**. Every stroke stores real data (land, height in metres, terrain type) on a latitude/longitude grid of the globe, so the realism checks can use it.
+
+- **Land and water**: brush (`L`, `W`; hold Alt to swap), **Shape** tool (`P`) to click out a polygon and fill it with land, water or a terrain type, **Smooth** (`S`) and **Roughen** (`R`) for natural coastlines.
+- **Height**: **Raise** (`U`), **Lower** (`D`), **Exact height** (`E`), **Plateau** (`F`), and smart brushes **Mountain range** (`M`) and **Hills** (`H`). Shown as hillshading, contour lines (every 250 m) or both.
+- **Terrain types** (`T`): grassland, forest, rainforest, pine forest, farmland, desert, swamp, tundra, ice, bare rock. The list is editable in Settings, with the climates each type suits.
+- **Symbols**: mountain and hill symbols appear by themselves where the ground is high; a small library (mountain, hill, volcano, trees, palms, reeds, dunes, rocks) can be stamped by hand (`Y`, Shift-click removes).
+- Brush sizes are in km on the globe, so brushes near the poles stretch the way the flat map does. `[` and `]` change the size, Space-drag moves the map, pen pressure changes strength. Each stroke is one undo step.
+- **Climate zones**: a switchable overlay of tropical → polar bands from latitude, height and the planet's axial tilt. Terrain that clashes with its zone (rainforest near a pole, glaciers at sea level in the tropics) shows in Warnings, with **Show on map**.
+- **Globe**: the world as a sphere, drag to turn it, click to jump the flat map there.
+- **World settings**: planet radius or circumference, axial tilt (season strength), the part of the globe the main map frames, and map detail (about 11, 6 or 3 km per cell on an Earth-sized globe).
+- The painted map is saved inside the `.world` file (each tile stored once, shared with version history), included in the JSON export, and part of version history.
+
 ## Development
 
 ```bash
@@ -42,7 +56,7 @@ npm run desktop:dev # desktop app (needs Rust and the Tauri prerequisites)
 Code layout:
 
 ```
-src/core      pure logic: dates, globe math, data model, whereabouts, warnings
+src/core      pure logic: dates, globe math, data model, whereabouts, warnings, terrain (grid, brushes, climate)
 src/storage   SQLite world file, JSON/GeoJSON export, new world
 src/ui        React screens, map and timeline renderers, platform adapters (desktop / browser)
 src-tauri     desktop shell (Tauri 2)

@@ -2,6 +2,7 @@
 import { Character, Journey, ManuscriptLink, Paragraph, Place, Stay, World, exactDate as d, makeAnchor, textHash, toDayNumber } from '../core';
 import { nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
+import { sampleTerrain } from './sampleTerrain';
 
 export function sampleWorld(): World {
   const w = createEmptyWorld('Sample: The Salt Roads');
@@ -96,6 +97,15 @@ export function sampleWorld(): World {
   link(3, 'She left Varn on the twenty-eighth', { kind: 'journey', id: w.journeys[0].id });
   link(5, 'Oren Hask counted carts', { kind: 'character', id: oren.id });
   link(6, 'Mira Solt found him at the gate', { kind: 'scene', id: w.scenes[2].id });
+
+  // A painted continent (Phase 2), with a few hand-placed symbols.
+  w.terrain = sampleTerrain();
+  w.mapSymbols.push(
+    { ...recordBase(), kind: 'volcano', location: { lat: 45.2, lng: 18.6 }, size: 1.3 },
+    { ...recordBase(), kind: 'dunes', location: { lat: 44.9, lng: 15.3 }, size: 1 },
+    { ...recordBase(), kind: 'reeds', location: { lat: 45.95, lng: 11.1 }, size: 0.8 },
+  );
+  w.settings.mainMap = { north: 54, south: 40, west: 3, east: 24 };
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

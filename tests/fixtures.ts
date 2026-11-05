@@ -1,10 +1,10 @@
-import { CANON, DEFAULT_TRAVEL_MODES, FuzzyDate, Journey, Place, Stay, World, exactDate } from '../src/core';
+import { CANON, DEFAULT_BIOMES, DEFAULT_TRAVEL_MODES, emptyTerrain, FuzzyDate, Journey, Place, Stay, World, exactDate } from '../src/core';
 
 const base = { scenarioId: CANON, status: 'canon' as const, createdAt: '', updatedAt: '' };
 
 export function world(): World {
   return {
-    settings: { name: 'Test', radiusKm: 6371, hemisphereForSeasons: 'north', defaultDetourFactor: 1.3, travelModes: DEFAULT_TRAVEL_MODES, disabledRules: [] },
+    settings: { name: 'Test', radiusKm: 6371, hemisphereForSeasons: 'north', defaultDetourFactor: 1.3, travelModes: DEFAULT_TRAVEL_MODES, disabledRules: [], axialTiltDeg: 23.44, biomes: DEFAULT_BIOMES },
     characters: [
       { ...base, id: 'kaela', name: 'Kaela', aliases: [], description: '', notes: '', tags: [], color: '#c33', icon: 'person', importance: 'main', archived: false },
       { ...base, id: 'bren', name: 'Bren', aliases: [], description: '', notes: '', tags: [], color: '#33c', icon: 'person', importance: 'main', archived: false },
@@ -22,7 +22,7 @@ export function world(): World {
     journeys: [],
     mapImages: [],
     dismissals: [],
-    books: [], chapters: [], scenes: [], manuscripts: [], links: [],
+    books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], terrain: emptyTerrain(),
   };
 }
 
