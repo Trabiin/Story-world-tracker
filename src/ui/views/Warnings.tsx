@@ -6,7 +6,7 @@ import { nowIso } from '../../storage';
 import { useApp } from '../context';
 
 export function Warnings() {
-  const { world, store, warnings, edit, selected } = useApp();
+  const { world, store, warnings, edit, selected, showOnMap } = useApp();
   const [showDismissed, setShowDismissed] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   const visible = warnings.filter((w) => (showDismissed || !w.dismissed) && (showInfo || w.severity === 'warning'));
@@ -47,6 +47,7 @@ export function Warnings() {
                 {w.dismissed && <div className="muted">Intentional{w.dismissed.note && `: ${w.dismissed.note}`}</div>}
                 <div className="row wrap">
                   {w.day !== undefined && <button className="small" onClick={() => store.setMoment(w.day!)}>Go to {formatDayNumber(w.day)}</button>}
+                  {w.at && <button className="small" onClick={() => showOnMap(w.at!)}>Show on map</button>}
                   {w.refs.filter((r) => r.kind === 'stay' || r.kind === 'journey').map((r, i) => (
                     <button key={i} className="small" onClick={() => openRef(r)}>Open {r.kind}</button>
                   ))}

@@ -6,3 +6,4 @@ export * from './warnings';
 export * from './manuscript';
 export * from './quickadd';
 export * from './story';
+export * from './terrain';

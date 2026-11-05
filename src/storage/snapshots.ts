@@ -4,6 +4,7 @@
  */
 import type { World } from '../core';
 import { normalizeWorld } from './newWorld';
+import { TerrainManifest, decodeTerrain, encodeTerrain, gunzip, gzip, manifestHashes } from './terrainCodec';
 
 export interface Snapshot {
   id: string;
@@ -11,14 +12,11 @@ export interface Snapshot {
   label: string;
   summary: string; // "12 characters · 40 places · 210 stays and journeys"
   data: Uint8Array; // gzip of the world JSON, without map image pixels
+  /** Terrain tiles (by hash) this version uses; stored once in the world file. */
+  terrainRefs?: string[];
 }
 
 export const MAX_SNAPSHOTS = 60;
-
-async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
-  const out = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(stream));
-  return new Uint8Array(await out.arrayBuffer());
-}
 
 export function summarize(w: World): string {
   return `${w.characters.length} characters · ${w.places.length} places · ${w.stays.length + w.journeys.length} stays and journeys`;
@@ -26,15 +24,20 @@ export function summarize(w: World): string {
 
 export async function makeSnapshot(world: World, label: string): Promise<Snapshot> {
   // Map images are large and rarely change; keep their settings but not their pixels.
-  const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })) };
+  // Terrain is kept as references to tiles stored once in the world file.
+  const terrain = await encodeTerrain(world.terrain);
+  const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })), terrain };
   const json = new TextEncoder().encode(JSON.stringify(lean));
-  return { id: crypto.randomUUID(), at: new Date().toISOString(), label, summary: summarize(world), data: await pipe(json, new CompressionStream('gzip')) };
+  return { id: crypto.randomUUID(), at: new Date().toISOString(), label, summary: summarize(world), data: await gzip(json), terrainRefs: manifestHashes(terrain) };
 }
 
 /** Rebuild the world from a snapshot, reusing current map image pixels where the image still exists. */
 export async function restoreSnapshot(s: Snapshot, current: World): Promise<World> {
-  const json = new TextDecoder().decode(await pipe(s.data, new DecompressionStream('gzip')));
-  const w = normalizeWorld(JSON.parse(json) as World);
+  const json = new TextDecoder().decode(await gunzip(s.data));
+  const parsed = JSON.parse(json) as World & { terrain?: TerrainManifest };
+  const manifest = parsed.terrain as unknown as TerrainManifest | undefined;
+  const w = normalizeWorld(parsed);
+  w.terrain = manifest ? await decodeTerrain(manifest) : current.terrain;
   w.mapImages = w.mapImages
     .map((m) => ({ ...m, dataUrl: current.mapImages.find((c) => c.id === m.id)?.dataUrl ?? '' }))
     .filter((m) => m.dataUrl);

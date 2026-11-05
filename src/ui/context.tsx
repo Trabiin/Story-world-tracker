@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Id, Warning, World, WorldIndex } from '../core';
+import type { Id, LatLng, Warning, World, WorldIndex } from '../core';
 import type { Platform } from './platform';
 import type { WorldStore } from './store';
 
@@ -29,6 +29,9 @@ export interface AppCtx {
   openPassage: (manuscriptId: Id, linkId?: Id) => void;
   /** Passage to scroll to when the reader opens. */
   focusLink: Id | undefined;
+  /** Open the map centred on a spot (n changes each time, so the same spot can be shown again). */
+  showOnMap: (at: LatLng) => void;
+  mapFocus: { at: LatLng; n: number } | undefined;
 }
 
 export const Ctx = createContext<AppCtx>(null as unknown as AppCtx);

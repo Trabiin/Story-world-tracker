@@ -4,10 +4,12 @@
  * WH-13 missing journey between stays, WH-3 open-ended stays, WH-12 unresolved placeholders.
  */
 import { formatDayNumber } from '../dates';
+import type { LatLng } from '../globe';
 import type { Id, Journey, World } from '../model';
+import { describeClash, findBiomeClashes, hasTerrain } from '../terrain';
 import { OPEN_END, Segment, WorldIndex, nominalEnd, nominalStart } from '../whereabouts';
 
-export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder';
+export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate';
 
 export const RULES: Record<RuleId, { name: string; requirement: string; severity: 'warning' | 'info' }> = {
   'two-places': { name: 'In two places at once', requirement: 'CC-1', severity: 'warning' },
@@ -16,6 +18,7 @@ export const RULES: Record<RuleId, { name: string; requirement: string; severity
   'missing-journey': { name: 'Moved without a journey', requirement: 'WH-13', severity: 'warning' },
   'open-stay': { name: 'Open-ended stay', requirement: 'WH-3', severity: 'info' },
   placeholder: { name: 'Unknown place to resolve', requirement: 'WH-12', severity: 'info' },
+  'biome-climate': { name: 'Terrain that clashes with its climate', requirement: 'RC-8', severity: 'warning' },
 };
 
 export interface RecordRef {
@@ -38,6 +41,7 @@ export interface Warning {
   message: string;
   refs: RecordRef[];
   day?: number; // where on the timeline to jump to
+  at?: LatLng; // where on the map to look (realism checks)
   fix?: { kind: 'create-journey'; journey: SuggestedJourney };
   dismissed?: { note: string; at: string };
 }
@@ -171,6 +175,7 @@ export function checkWorld(world: World): Warning[] {
       out.push({ key: `placeholder:${s.id}`, rule: 'placeholder', severity: 'info', message: `${subj} is somewhere unknown (${name(ix, 'place', s.placeId)}) from ${formatDayNumber(ix.win(s.arrival).earliest)}.`, refs: [{ kind: 'stay', id: s.id }], day: ix.win(s.arrival).earliest });
     }
   }
+  out.push(...checkTerrain(world));
   const disabled = new Set(world.settings.disabledRules);
   const dismissed = new Map(world.dismissals.map((d) => [d.key, d]));
   // De-duplicate (group conflicts show once per member, which is intended; identical keys collapse).
@@ -181,4 +186,18 @@ export function checkWorld(world: World): Warning[] {
       const d = dismissed.get(w.key);
       return d ? { ...w, dismissed: { note: d.note, at: d.at } } : w;
     });
+}
+
+/** RC-8 over the painted terrain. */
+export function checkTerrain(world: World): Warning[] {
+  if (!hasTerrain(world.terrain)) return [];
+  const { biomes, axialTiltDeg, radiusKm } = world.settings;
+  return findBiomeClashes(world.terrain, biomes, axialTiltDeg, radiusKm).map((c) => ({
+    key: c.key,
+    rule: 'biome-climate' as const,
+    severity: 'warning' as const,
+    message: describeClash(c, biomes),
+    refs: [],
+    at: c.center,
+  }));
 }
