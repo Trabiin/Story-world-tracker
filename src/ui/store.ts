@@ -2,7 +2,7 @@
  * World state for the UI: immutable updates, undo/redo, debounced autosave, periodic backups.
  */
 import { useSyncExternalStore } from 'react';
-import { World, resolveRelativeDates } from '../core';
+import { CANON, Id, World, applyScenarioEdit, resolveRelativeDates, scenarioView } from '../core';
 import { COLLECTIONS, CollectionName, Snapshot, makeSnapshot, nowIso, pruneSnapshots, restoreSnapshot, worldToBytes } from '../storage';
 import type { Platform, WorldHandle } from './platform';
 
@@ -27,6 +27,8 @@ export class WorldStore {
   version = 0;
   /** EU-8: while the reader's view is on, the world shown is filtered, so edits are blocked. */
   readOnly = false;
+  /** ST-7: the scenario being viewed and edited. Edits made in a scenario are kept apart from canon. */
+  scenarioId: Id = CANON;
   onBlocked: (() => void) | null = null;
   private lastSnapshotAt = 0;
   private snapshotWorld: World | null = null;
@@ -55,7 +57,7 @@ export class WorldStore {
     if (!s) return;
     await this.snapshotNow(`Before restoring ${new Date(s.at).toLocaleString()}`);
     const restored = await restoreSnapshot(s, this.world);
-    this.update(() => restored);
+    this.update(() => restored, true, true);
   }
 
   subscribe = (fn: () => void) => {
@@ -74,14 +76,25 @@ export class WorldStore {
     return this.future.length > 0;
   }
 
-  /** Apply a change. undoable=false for view state like the current moment. */
-  update(fn: (w: World) => World, undoable = true) {
+  /**
+   * Apply a change. undoable=false for view state like the current moment. The change is made on the
+   * active scenario's view of the world (ST-7) and written back into canon or the scenario.
+   * raw=true replaces the stored world as a whole (version restore, scenario management).
+   */
+  update(fn: (w: World) => World, undoable = true, raw = false) {
     if (undoable && this.readOnly) {
       this.onBlocked?.();
       return;
     }
-    // TL-4: dates tied to an event, chapter or scene follow it when it moves.
-    const next = undoable ? resolveRelativeDates(fn(this.world)) : fn(this.world);
+    let next: World;
+    if (raw) next = fn(this.world);
+    else {
+      const before = scenarioView(this.world, this.scenarioId);
+      const edited = fn(before);
+      if (edited === before) return;
+      // TL-4: dates tied to an event, chapter or scene follow it when it moves.
+      next = applyScenarioEdit(this.world, this.scenarioId, before, undoable ? resolveRelativeDates(edited) : edited);
+    }
     if (next === this.world) return;
     if (undoable) {
       this.past.push(this.world);

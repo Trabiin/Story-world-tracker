@@ -11,3 +11,5 @@ export * from './features';
 export * from './layers';
 export * from './events';
 export * from './people';
+export * from './structure';
+export * from './travel';

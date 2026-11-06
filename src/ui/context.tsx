@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { FixKind, Id, LatLng, Warning, World, WorldIndex } from '../core';
+import type { FixKind, Id, LatLng, ViewFilter, Warning, World, WorldIndex } from '../core';
 import type { Platform } from './platform';
 import type { WorldStore } from './store';
 
@@ -41,6 +41,14 @@ export interface AppCtx {
   /** MK-23: a one-click fix shown on the map before it is applied. */
   fixPreview: FixPreview | undefined;
   previewFix: (p: FixPreview | undefined) => void;
+  /** ST-7: the active scenario ('canon' or a what-if). */
+  scenarioId: Id;
+  setScenario: (id: Id) => void;
+  /** VW-7: the filter every view applies. */
+  filter: ViewFilter;
+  setFilter: (f: ViewFilter) => void;
+  /** The world before the VW-7 filter (scenario, drafts and reader's view applied). */
+  unfiltered: World;
 }
 
 export interface FixPreview {

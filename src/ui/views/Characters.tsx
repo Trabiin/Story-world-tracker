@@ -10,6 +10,7 @@ import { Field } from '../components/Modal';
 import { useApp } from '../context';
 import { ICONS, PALETTE, blankCharacter, placeName, splitList } from '../util';
 import { Knowledge, Relationships, StatusBadge } from './CharacterExtras';
+import { Plans } from './CharacterPlans';
 
 const IMPORTANCE: Importance[] = ['main', 'secondary', 'minor'];
 
@@ -183,6 +184,7 @@ function CharacterDetail({ c }: { c: Character }) {
             </ol>
           )}
           <Relationships c={c} />
+          <Plans c={c} />
           <Knowledge c={c} />
           <Backlinks kind="character" id={c.id} />
           {world.regions.some((r) => r.ties.some((t) => t.characterId === c.id)) && (

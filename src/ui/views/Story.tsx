@@ -1,5 +1,5 @@
 /** ST-1, ST-2: series → books → chapters → scenes, with POV and in-world dates. */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Book, Chapter, Id, Scene, formatFuzzy, outline, scenePlace, scenePov } from '../../core';
 import { recordBase } from '../../storage';
 import { Backlinks } from '../components/Backlinks';
@@ -9,10 +9,19 @@ import { Field } from '../components/Modal';
 import { PlaceSelect } from '../components/Pickers';
 import { useApp } from '../context';
 import { placePath, sortByName } from '../util';
+import { ChapterOverviewPanel, OrderList, SceneThreads, ThreadDetail, ThreadList, ThreadMap } from './StoryStructure';
+
+type Mode = 'outline' | 'order' | 'threads';
+const saved = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const keep = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
 export function Story() {
   const { world, store, selected, select } = useApp();
   const tree = useMemo(() => outline(world), [world]);
+  const [mode, setModeState] = useState<Mode>(() => (world.threads.some((t) => t.id === selected) ? 'threads' : (saved('swt.storyMode', 'outline') as Mode)));
+  const [chrono, setChronoState] = useState(() => saved('swt.storyChrono', '0') === '1');
+  const setMode = (m: Mode) => { setModeState(m); keep('swt.storyMode', m); };
+  const setChrono = (v: boolean) => { setChronoState(v); keep('swt.storyChrono', v ? '1' : '0'); };
   const nextOrder = (list: { order: number }[]) => (list.length ? Math.max(...list.map((x) => x.order)) + 1 : 1);
   const addBook = () => {
     const b: Book = { ...recordBase(), title: `Book ${world.books.length + 1}`, order: nextOrder(world.books), notes: '' };
@@ -34,11 +43,21 @@ export function Story() {
   const book = world.books.find((b) => b.id === selected);
   const chapter = world.chapters.find((c) => c.id === selected);
   const scene = world.scenes.find((s) => s.id === selected);
+  const thread = world.threads.find((t) => t.id === selected);
   return (
     <div className="master-detail">
       <aside className="master">
-        <div className="master-tools"><button className="primary" onClick={addBook}>+ New book</button></div>
-        <ul className="list outline">
+        <div className="master-tools">
+          <div className="seg">
+            <button className={mode === 'outline' ? 'on' : ''} onClick={() => setMode('outline')}>Outline</button>
+            <button className={mode === 'order' ? 'on' : ''} onClick={() => setMode('order')}>In order</button>
+            <button className={mode === 'threads' ? 'on' : ''} onClick={() => setMode('threads')}>Threads</button>
+          </div>
+        </div>
+        {mode === 'order' && <OrderList chrono={chrono} onChrono={setChrono} />}
+        {mode === 'threads' && <ThreadList />}
+        {mode === 'outline' && <div className="master-tools"><button className="primary" onClick={addBook}>+ New book</button></div>}
+        {mode === 'outline' && <ul className="list outline">
           {tree.map(({ book: b, chapters }) => (
             <li key={b.id} className="outline-group">
               <div className={`outline-item book ${b.id === selected ? 'active' : ''}`} onClick={() => select(b.id)}>{b.title}</div>
@@ -56,13 +75,16 @@ export function Story() {
               <button className="link add-line chapter" onClick={() => addChapter(b.id)}>+ chapter</button>
             </li>
           ))}
-        </ul>
+        </ul>}
       </aside>
       <section className="detail">
         {book && <BookDetail key={book.id} b={book} />}
         {chapter && <ChapterDetail key={chapter.id} c={chapter} />}
         {scene && <SceneDetail key={scene.id} s={scene} />}
-        {!book && !chapter && !scene && <div className="empty">Add a book, then its chapters and scenes. Give each scene an in-world date and a POV character, and its place follows from where that character is.</div>}
+        {thread && <ThreadDetail key={thread.id} t={thread} />}
+        {!book && !chapter && !scene && !thread && mode === 'threads' && <div className="page"><div className="page-head"><h1>Thread map</h1></div><ThreadMap /></div>}
+        {!book && !chapter && !scene && !thread && mode === 'order' && <div className="empty">{chrono ? 'Scenes in the order they happen in the world. The number is where each one comes in the book.' : 'Scenes in the order the reader meets them. Flashbacks happen before something already read; parallel scenes happen at the same time from another point of view.'}</div>}
+        {!book && !chapter && !scene && !thread && mode === 'outline' && <div className="empty">Add a book, then its chapters and scenes. Give each scene an in-world date and a POV character, and its place follows from where that character is.</div>}
       </section>
     </div>
   );
@@ -150,6 +172,7 @@ function ChapterDetail({ c }: { c: Chapter }) {
           <ul className="plain">{scenes.map((s) => <li key={s.id}><button className="link" onClick={() => select(s.id)}>{s.title}</button>{s.start && <span className="muted"> · {formatFuzzy(s.start)}</span>}</li>)}</ul>
         </>
       )}
+      <ChapterOverviewPanel chapterId={c.id} />
       <Backlinks kind="chapter" id={c.id} title="Linked" />
     </div>
   );
@@ -203,6 +226,7 @@ function SceneDetail({ s }: { s: Scene }) {
             </select>
           </div>
         </Field>
+        <SceneThreads s={s} />
         <Field label="Summary"><textarea rows={5} value={s.summary} onChange={(e) => set({ summary: e.target.value })} /></Field>
         <label className="checkbox"><input type="checkbox" checked={s.status === 'draft'} onChange={(e) => set({ status: e.target.checked ? 'draft' : 'canon' })} /> Draft (not yet canon)</label>
       </div>

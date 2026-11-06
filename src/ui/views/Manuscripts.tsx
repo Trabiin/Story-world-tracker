@@ -3,7 +3,7 @@
  * records, and find those passages again after the manuscript is edited.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Id, LinkTargetKind, Manuscript, ManuscriptLink, formatFuzzy, makeAnchor, readDocx, reanchor, textHash } from '../../core';
+import { Id, LinkTargetKind, Manuscript, ManuscriptLink, Suggestion, formatFuzzy, fromDay, makeAnchor, nameSuggestions, readDocx, reanchor, textHash } from '../../core';
 import { nowIso, recordBase } from '../../storage';
 import { ask } from '../components/Dialogs';
 import { Field, Modal } from '../components/Modal';
@@ -255,6 +255,7 @@ function Reader({ m }: { m: Manuscript }) {
         </div>
       </div>
       <aside className="reader-side">
+        <NameSpotting m={m} onShow={(pi) => textRef.current?.querySelector(`[data-pi="${pi}"]`)?.scrollIntoView({ block: 'center' })} />
         {active.length > 0 && (
           <div className="card">
             <h3>This passage</h3>
@@ -290,6 +291,61 @@ function Reader({ m }: { m: Manuscript }) {
         </ul>
       </aside>
       {linking && <LinkDialog m={m} sel={linking} onClose={() => { setLinking(null); window.getSelection()?.removeAllRanges(); }} />}
+    </div>
+  );
+}
+
+/** ST-12: names found in the manuscript, with one-click suggestions. Dismissed ones stay dismissed for this manuscript. */
+function NameSpotting({ m, onShow }: { m: Manuscript; onShow: (paraIndex: number) => void }) {
+  const { world, store, edit } = useApp();
+  const key = `swt.spotDismissed.${m.id}`;
+  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { return []; } });
+  const dismiss = (k: string) => {
+    const next = [...dismissed, k];
+    setDismissed(next);
+    try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  const { sections, suggestions } = useMemo(() => (open ? nameSuggestions(world, m) : { sections: [], suggestions: [] as Suggestion[] }), [open, world, m]);
+  const shown = suggestions.filter((x) => !dismissed.includes(x.key));
+  const accept = (x: Suggestion) => {
+    if (x.kind === 'cast') {
+      const first = world.scenes.filter((s) => s.chapterId === x.chapterId).sort((a, b) => a.order - b.order)[0];
+      if (first) store.upsert('scenes', { ...first, characterIds: [...first.characterIds, x.characterId] });
+    } else if (x.kind === 'stay') {
+      edit({ kind: 'stay', preset: { subject: { kind: 'character', id: x.characterId }, placeId: x.placeId, arrival: fromDay(x.range.earliest), departure: x.range.latest > x.range.earliest ? fromDay(x.range.latest) : undefined, status: 'draft', notes: 'Suggested from the manuscript.' } });
+    } else {
+      const link: ManuscriptLink = { ...recordBase(), manuscriptId: m.id, anchor: makeAnchor(m.paragraphs, x.paraIndex, x.start, x.end), target: { kind: x.targetKind, id: x.targetId }, note: '', state: 'ok' };
+      store.upsert('links', link);
+    }
+    dismiss(x.key);
+  };
+  const names = sections.reduce((n, s) => n + s.mentions.length, 0);
+  const matched = sections.filter((s) => s.chapterId).length;
+  return (
+    <div className="card spotting">
+      <div className="row"><h3>Names in the text</h3><span className="spacer" /><button className="small" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Find names'}</button></div>
+      {!open && <p className="muted small">Looks for character and place names, chapter by chapter, and suggests links, cast members and stays.</p>}
+      {open && (
+        <>
+          <p className="muted small">{names} {names === 1 ? 'name' : 'names'} found in {sections.length} {sections.length === 1 ? 'part' : 'parts'}; {matched} matched to chapters by heading.</p>
+          {shown.length === 0 ? <p className="muted small">Nothing new to suggest.</p> : (
+            <ul className="plain suggestions">
+              {shown.slice(0, 12).map((x) => (
+                <li key={x.key}>
+                  <span className="small">{x.text}</span>
+                  <span className="row">
+                    <button className="small primary" onClick={() => accept(x)}>{x.kind === 'cast' ? 'Add to scene' : x.kind === 'stay' ? 'Create stay…' : 'Link'}</button>
+                    {x.kind === 'link' && <button className="small" onClick={() => onShow(x.paraIndex)}>Show</button>}
+                    <button className="small" onClick={() => dismiss(x.key)}>Not now</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {shown.length > 12 && <p className="muted small">{shown.length - 12} more after these.</p>}
+        </>
+      )}
     </div>
   );
 }
