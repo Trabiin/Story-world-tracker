@@ -68,6 +68,18 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **First-map guide**: opens by itself on an empty world in ✎ Draw map. Seven steps (sketch, globe, coastline, mountains, rivers, terrain, settlements); any step can be skipped and revisited.
 - **Everything stays editable**: automatic rivers re-trace themselves when you paint the land under them (in the same undo step), unless you reshaped them by hand; **Trace again** re-runs one. Climate zones and checks always follow the current map.
 
+## Phase 3a: realms, cultures and borders over time
+
+- **▦ Layers** on the map: region layers, starting with Political, Cultures, Religions, Languages and Trade. Add more (population, resources, spheres of influence, military, danger, magic, known world, history, plagues and disasters, author notes).
+- **Draw a region** with the **Shape** tool (corners snap to existing borders, rivers, roads and coastlines) or the **Brush**. Alt swaps between adding and removing land. Political regions never overlap: new land either **stops at the neighbour's border** or **takes it** (a conquest).
+- **Borders change over time**: choose "From a date" (and optionally "until", for an occupation) before drawing. That records a border change on the date for every realm involved. Move the timeline and the map, every place's realm and every check follow.
+- **Realm hierarchy**: duchies are part of kingdoms, kingdoms can be vassals of empires, and both can change hands on dates (Realms & layers page). Political fills can use the top realm's colour.
+- **Overlapping layers**: cultures, religions and languages may overlap; hatching and intensity (e.g. "70% Sun Faith") show it.
+- **Layer controls**: show, hide, lock, reorder, opacity, fill, border style, labels, "stop at the coastline", and saved presets such as "politics + religion".
+- **What is here**: click any spot to see every region covering it on the current date; the status bar shows it while hovering.
+- **Realms & layers** page: each region's encyclopedia entry, rulers and other characters tied to it with dates, overlords and vassals over time, border history and the places inside it. A **place** page shows its realm history ("Kingdom of Varn 1001–1044, Empire of Ash 1044–"); a character page shows the realms they are tied to.
+- Places as GeoJSON exports every border version as a MultiPolygon with its dates.
+
 ## Development
 
 ```bash

@@ -328,3 +328,24 @@ blockquote.quote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--ac
 .wizard-steps li.on { font-weight: 600; }
 .wizard-steps li.done button { color: var(--muted); }
 .wizard-nav { margin-top: 8px; }
+
+/* Region layers (Phase 3) */
+.grow { flex: 1; min-width: 0; }
+.sw.big { width: 18px; height: 18px; vertical-align: -2px; }
+.layer-block { border-radius: 6px; padding: 0 4px; }
+.layer-block.on { background: var(--bg); box-shadow: inset 0 0 0 1px var(--accent); }
+.layer-block .layer-row > .sw { flex: none; }
+.layer-block .layer-row > .grow { flex: 1; }
+.layer-style > .stack { padding: 4px 0 8px 20px; }
+.region-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.region-list .map-row { display: flex; align-items: center; gap: 6px; text-align: left; }
+.span-box { border: 1px dashed var(--line); border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+.border-history { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+.border-history li { margin: 2px 0; }
+.border-history li.on { font-weight: 600; }
+.card.tight { padding: 6px 8px; gap: 4px; margin-bottom: 6px; }
+.list-group { padding: 0 !important; cursor: default !important; white-space: normal !important; }
+.list-group:hover { background: none !important; }
+.list-group .list-heading { padding: 0 12px; }
+.list .sw { vertical-align: -1px; margin-right: 4px; }
+.realm-history li { margin: 3px 0; }

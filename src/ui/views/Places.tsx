@@ -1,7 +1,7 @@
 /** Places (WH-4, MP-5, DM-2): nest physically, positioned in lat/long on the globe. */
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
-import { Place, PlaceKind, formatFuzzy, wrapLng, clampLat } from '../../core';
+import { LayerIndex, Place, PlaceKind, formatFuzzy, wrapLng, clampLat } from '../../core';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
@@ -115,6 +115,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
           <Field label="Notes"><textarea rows={6} value={p.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
         </div>
         <div>
+          <RealmHistory p={p} />
           {children.length > 0 && (
             <>
               <h2>Inside {p.name}</h2>
@@ -148,5 +149,42 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** LY-12, LY-9: a place's realm over time, worked out from the Political layer, and every region covering it now. */
+function RealmHistory({ p }: { p: Place }) {
+  const { world, ix, moment, go } = useApp();
+  const lix = useMemo(() => new LayerIndex(world), [world]);
+  const loc = ix.locationOf(p.id);
+  const history = useMemo(() => (loc ? lix.realmHistory(loc) : []), [lix, loc]);
+  const here = useMemo(() => (loc ? lix.regionsAt(loc, moment) : []), [lix, loc, moment]);
+  if (!loc || p.isPlaceholder || (!history.length && !here.length)) return null;
+  const name = (chain: { region: { id: string; name: string } }[]) => (
+    <>
+      <button className="link" onClick={() => go('layers', chain[chain.length - 1].region.id)}>{chain[chain.length - 1].region.name}</button>
+      {chain.length > 1 && <span className="muted"> ({chain.slice(0, -1).map((c) => c.region.name).join(', ')})</span>}
+    </>
+  );
+  return (
+    <>
+      <h2>Realm</h2>
+      {history.length === 0 ? <p className="muted">Not inside any realm on the Political layer.</p> : (
+        <ul className="plain realm-history">
+          {history.map((h) => (
+            <li key={h.key + (h.startDay ?? '')}>
+              {name(h.chain)}
+              <span className="muted"> · {h.startLabel ?? 'from the beginning'} – {h.endLabel ?? 'now'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {here.length > 0 && (
+        <p className="small">
+          <span className="muted">On this date: </span>
+          {here.map((x, i) => <span key={x.layer.id}>{i > 0 && ' · '}{x.hits.map((h) => `${h.region.name}${h.intensity < 100 ? ` ${h.intensity}%` : ''}`).join(' + ')}</span>)}
+        </p>
+      )}
+    </>
   );
 }

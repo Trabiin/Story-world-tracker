@@ -9,10 +9,10 @@ import { normalizeWorld } from './newWorld';
 import type { Snapshot } from './snapshots';
 import { blobStore, decodeTerrain, encodeTerrain, manifestHashes } from './terrainCodec';
 
-/** 2: painted terrain (terrain_blobs table, "terrain" meta entry) and map symbols. 3: map features. */
-export const SCHEMA_VERSION = 4;
+/** 2: painted terrain (terrain_blobs table, "terrain" meta entry) and map symbols. 3: map features. 4: detail maps, drawing layers. 5: region layers and regions. */
+export const SCHEMA_VERSION = 5;
 
-export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'mapLayers', 'detailMaps'] as const;
+export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'mapLayers', 'detailMaps', 'regionLayers', 'regions'] as const;
 export type CollectionName = (typeof COLLECTIONS)[number];
 
 const TABLE: Record<CollectionName, string> = {
@@ -33,6 +33,8 @@ const TABLE: Record<CollectionName, string> = {
   mapFeatures: 'map_features',
   mapLayers: 'map_layers',
   detailMaps: 'detail_maps',
+  regionLayers: 'region_layers',
+  regions: 'regions',
 };
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
@@ -124,13 +126,13 @@ export async function loadWorldFile(bytes: Uint8Array): Promise<{ world: World; 
       for (const r of db.exec('SELECT hash, data FROM terrain_blobs')[0]?.values ?? []) blobStore.set(String(r[0]), r[1] as Uint8Array);
     } catch { /* older file without terrain */ }
     for (const c of COLLECTIONS) {
-      let rows: unknown[] = [];
+      let rows: unknown[] | undefined;
       try {
         rows = (db.exec(`SELECT data FROM ${TABLE[c]}`)[0]?.values ?? []).map((r) => JSON.parse(String(r[0])));
       } catch {
-        rows = []; // table missing in an older file
+        rows = undefined; // table missing in an older file: normalizeWorld fills in the defaults
       }
-      (world as unknown as Record<string, unknown[]>)[c] = rows;
+      if (rows) (world as unknown as Record<string, unknown[]>)[c] = rows;
     }
     let snapshots: Snapshot[] = [];
     const hasRefs = version >= 2;

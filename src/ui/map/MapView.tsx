@@ -8,9 +8,9 @@ import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
   MapFeature, refreshAutoRivers, traceRiver, routeAlongFeatures, networkFor, fromDay, existsOn, featureAnchor, insideArea, nearestOnPolyline, riverFlows, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
-  meanTemperatureC, pathLengthKm, whereIs, wrapLng,
+  meanTemperatureC, pathLengthKm, whereIs, wrapLng, LayerIndex, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon,
 } from '../../core';
-import { recordBase } from '../../storage';
+import { newId, recordBase } from '../../storage';
 import { fileToDataUrl } from '../views/Characters';
 import { PLACE_ICON } from '../views/Places';
 import { useApp } from '../context';
@@ -25,6 +25,8 @@ import { FeatureCard } from './FeatureCard';
 import { RouteCard } from './RouteCard';
 import { MapWizard } from './MapWizard';
 import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
+import { drawRegionLayers } from './regionRender';
+import { DEFAULT_REGION_TOOLS, REGION_TOOL_KEYS, RegionCard, RegionLayerList, RegionList, RegionToolState, WhatsHere, hereLine, sortedLayers } from './RegionsPanel';
 
 /** A path with long legs broken into great-circle pieces, so it curves correctly on the flat map. */
 function densify(pts: LatLng[], R: number): LatLng[] {
@@ -41,14 +43,14 @@ function densify(pts: LatLng[], R: number): LatLng[] {
 const FEATURE_PLACE_KINDS = new Set(['river', 'lake', 'road', 'area']);
 const SETTLEMENT_SIZE: Record<string, number> = { capital: 18, city: 16, town: 13, village: 11 };
 
-type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw' | 'route';
+type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw' | 'route' | 'layers';
 const DRAW_KEY = 'swt.draw';
 const LAYERS_KEY = 'swt.mapLayers';
-const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, places: true, characters: true, routes: true, labels: true };
+const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, regions: true, places: true, characters: true, routes: true, labels: true };
 type Layers = typeof DEFAULT_LAYERS;
 const LAYER_NAMES: Record<keyof Layers, string> = {
   grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols', features: 'Rivers, lakes, roads and areas', maps: 'Detail map frames',
-  climate: 'Climate zones', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels',
+  climate: 'Climate zones', regions: 'Realms, cultures and other layers', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels',
 };
 
 function loadJson<T>(key: string, fallback: T): T {
@@ -153,6 +155,20 @@ export function MapView() {
   const [calib, setCalib] = useState<{ imageId: Id; points: { px: number; py: number; lat: number; lng: number }[] } | null>(null);
   const markers = useRef<Marker[]>([]);
   const tiled = useRef(new Map<Id, { src: string; t: TiledImage }>());
+  // ---- region layers (LY-1..LY-9) ----
+  const lix = useMemo(() => new LayerIndex(world), [world.regionLayers, world.regions, world.settings.hemisphereForSeasons]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [regionTools, setRegionTools] = useState<RegionToolState>(() => ({ ...loadJson('swt.regionTools', DEFAULT_REGION_TOOLS), from: undefined, until: undefined, note: '', span: 'always' as const }));
+  useEffect(() => { try { localStorage.setItem('swt.regionTools', JSON.stringify({ tool: regionTools.tool, op: regionTools.op, brushKm: regionTools.brushKm, snap: regionTools.snap, neighbours: regionTools.neighbours })); } catch { /* ignore */ } }, [regionTools]);
+  const [regionLayerPick, setRegionLayerPick] = useState<Id | undefined>(() => localStorage.getItem(`swt.regionLayer.${store.handle.id}`) ?? undefined);
+  const regionLayer = lix.layer(regionLayerPick ?? '') ?? sortedLayers(world.regionLayers)[0];
+  useEffect(() => { try { if (regionLayer) localStorage.setItem(`swt.regionLayer.${store.handle.id}`, regionLayer.id); } catch { /* ignore */ } }, [regionLayer, store.handle.id]);
+  const [regionSel, setRegionSel] = useState<Id | undefined>();
+  const selRegion = regionSel ? lix.regions.get(regionSel) : undefined;
+  const [regionDraft, setRegionDraft] = useState<LatLng[]>([]);
+  const regionStroke = useRef<{ pts: LatLng[]; alt: boolean } | null>(null);
+  const [strokePreview, setStrokePreview] = useState<LatLng[]>([]);
+  const [whatsHere, setWhatsHere] = useState<LatLng | null>(null);
+  const regionEditable = !!selRegion && !lix.layer(selRegion.layerId)?.locked;
 
   useEffect(() => setMode(pickFor ? 'pick' : 'browse'), [pickFor]);
   const routeJourney = routeFor ? world.journeys.find((j) => j.id === routeFor) : undefined;
@@ -333,6 +349,15 @@ export function MapView() {
         }
       }
       g.globalAlpha = 1;
+    }
+
+    // region layers: realms, cultures, religions … on the current date (LY-3, LY-6, LY-7)
+    if (layers.regions && world.regions.length) {
+      drawRegionLayers(g, {
+        ix: lix, day: moment, offsets, project: (p, o) => toScreen(view, w, h, p, o), scale: view.scale, w, h,
+        reader: showTerrain ? reader : undefined, labels: layers.labels, selected: mode === 'layers' ? regionSel : undefined,
+        activeLayer: mode === 'layers' ? regionLayer?.id : undefined, fg: cssVar('--fg'), bg: cssVar('--bg'),
+      });
     }
 
     // graticule (MK-3)
@@ -584,7 +609,7 @@ export function MapView() {
     }
 
     markers.current = ms;
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap]);
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -633,6 +658,40 @@ export function MapView() {
       g.fillStyle = c?.color ?? '#888';
       g.beginPath(); g.arc(charDragAt.x, charDragAt.y, 9, 0, Math.PI * 2); g.fill();
       g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+    }
+    if (mode === 'layers') {
+      const col = selRegion?.color ?? '#b5562c';
+      if (hover && regionTools.tool === 'brush' && regionEditable) {
+        const kmPerDeg = (Math.PI * world.settings.radiusKm) / 180;
+        const ry = (regionTools.brushKm / kmPerDeg) * view.scale;
+        const rx = Math.min(w * 2, ry / Math.max(0.02, Math.cos((hover.lat * Math.PI) / 180)));
+        const s0 = toScreen(view, w, h, hover);
+        g.strokeStyle = '#fff'; g.lineWidth = 3;
+        g.beginPath(); g.ellipse(s0.x, s0.y, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+        g.strokeStyle = regionTools.op === 'remove' ? '#d62828' : '#222'; g.lineWidth = 1.2;
+        g.beginPath(); g.ellipse(s0.x, s0.y, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+      }
+      if (strokePreview.length) {
+        const kmPerDeg = (Math.PI * world.settings.radiusKm) / 180;
+        const ry = (regionTools.brushKm / kmPerDeg) * view.scale;
+        g.strokeStyle = regionStroke.current?.alt !== (regionTools.op === 'remove') ? 'rgba(214,40,40,0.45)' : `${col}88`;
+        g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = ry * 2;
+        for (const o of offsets) {
+          const sp = projectLine(strokePreview, (p, oo) => toScreen(view, w, h, p, oo), o);
+          g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); if (sp.length === 1) g.lineTo(sp[0].x + 0.1, sp[0].y); g.stroke();
+        }
+      }
+      if (regionDraft.length) {
+        const pts = hover ? [...regionDraft, { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }] : regionDraft;
+        for (const o of offsets) {
+          const sp = projectLine([...pts, pts[0]], (p, oo) => toScreen(view, w, h, p, oo), o);
+          g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+          g.fillStyle = regionTools.op === 'remove' ? 'rgba(214,40,40,0.18)' : `${col}44`; g.fill();
+          g.strokeStyle = regionTools.op === 'remove' ? '#d62828' : '#b5562c'; g.lineWidth = 2; g.stroke();
+          for (const p of sp.slice(0, regionDraft.length)) { g.fillStyle = '#fff'; g.fillRect(p.x - 3.5, p.y - 3.5, 7, 7); g.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7); }
+        }
+      }
+      return;
     }
     if (mode !== 'draw') return;
     if (hover && isBrush(draw.tool)) {
@@ -707,7 +766,7 @@ export function MapView() {
         }
       }
     }
-  }, [hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix]);
+  }, [hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix, regionDraft, strokePreview, regionTools, selRegion, regionEditable]);
 
   // ---- interaction ----
   const drag = useRef<{ x: number; y: number; moved: boolean; v: ViewState } | null>(null);
@@ -873,6 +932,79 @@ export function MapView() {
   };
   useEffect(() => { if (!isDrawnFeature(draw.tool)) setDraft({ pts: [], stops: [] }); }, [draw.tool]);
 
+  // ---- region layers: shapes and the brush (LY-5, LY-6) ----
+  const commitRegion = (area: GeoMultiPolygon, swap = false) => {
+    if (!selRegion || !regionEditable || !area.length) return;
+    const op = swap ? (regionTools.op === 'add' ? 'remove' : 'add') : regionTools.op;
+    const dated = regionTools.span === 'from' && regionTools.from;
+    const before = store.world.regions.find((r) => r.id === selRegion.id);
+    store.update((w) => editRegionArea(w, {
+      regionId: selRegion.id, area, op,
+      from: dated ? regionTools.from : undefined, until: dated ? regionTools.until : undefined,
+      neighbours: regionTools.neighbours, note: dated && regionTools.note.trim() ? regionTools.note.trim() : undefined, newId,
+    }));
+    const after = store.world.regions.find((r) => r.id === selRegion.id);
+    if (op === 'add' && regionTools.neighbours === 'stop' && before && after && JSON.stringify(before.versions.map((v) => v.area)) === JSON.stringify(after.versions.map((v) => v.area))) {
+      const owners = areaOwners(lix, selRegion.layerId, area, moment).filter((r) => r.id !== selRegion.id).map((r) => r.name);
+      void ask.alert(`That land already belongs to ${owners?.length ? owners.join(' and ') : 'a neighbour'}, so nothing was added. To conquer it, choose "Take the land from them".`);
+    }
+  };
+  const finishRegionShape = (pts = regionDraft) => {
+    if (pts.length >= 3) commitRegion(polygonFromPoints(pts));
+    setRegionDraft([]);
+  };
+  /** LY-5: snap a corner to a nearby border, river, road or coastline. */
+  const snapRegion = (x: number, y: number): LatLng => {
+    const raw = llAt(x, y);
+    if (!regionTools.snap) return raw;
+    const proj = (p: LatLng, o: number) => toScreen(view, size.w, size.h, p, o);
+    const lines: LatLng[][] = [];
+    for (const r of world.regions) {
+      if (!lix.layer(r.layerId)?.visible) continue;
+      const v = lix.versionAt(r, moment);
+      for (const poly of v?.area ?? []) for (const ring of poly) lines.push(ring.map(([lng, lat]) => ({ lat, lng })));
+    }
+    for (const f of world.mapFeatures) {
+      if (!layerOn(f.layerId) || f.points.length < 2) continue;
+      lines.push(f.shape === 'area' ? [...f.points, f.points[0]] : f.points);
+    }
+    let vBest: LatLng | null = null, vD = 10 ** 2, eBest: LatLng | null = null, eD = 12 ** 2;
+    const offs = [...new Set([-360, ...wrapOffsets(view, size.w), 360])];
+    for (const line of lines) {
+      for (const o of offs) {
+        let prev: { x: number; y: number } | null = null;
+        line.forEach((p, i) => {
+          const sp = proj(p, o);
+          const dv = (sp.x - x) ** 2 + (sp.y - y) ** 2;
+          if (dv < vD) { vD = dv; vBest = { lat: p.lat, lng: wrapLng(p.lng) }; }
+          if (prev && i > 0) {
+            const dx = sp.x - prev.x, dy = sp.y - prev.y, len = dx * dx + dy * dy;
+            const t = len ? Math.max(0, Math.min(1, ((x - prev.x) * dx + (y - prev.y) * dy) / len)) : 0;
+            const de = (prev.x + t * dx - x) ** 2 + (prev.y + t * dy - y) ** 2;
+            if (de < eD) { const a = line[i - 1]; eD = de; eBest = { lat: a.lat + (p.lat - a.lat) * t, lng: wrapLng(a.lng + (p.lng - a.lng) * t) }; }
+          }
+          prev = sp;
+        });
+      }
+    }
+    if (vBest) return vBest;
+    if (eBest) return eBest;
+    // the coastline: the nearest spot within 12 px where land meets sea
+    if (showTerrain) {
+      const land = reader.isLand(raw);
+      let best: LatLng | null = null, bd = Infinity;
+      for (let a = 0; a < 16; a++) {
+        const ang = (a / 16) * Math.PI * 2;
+        for (let r = 1.5; r <= 12; r += 1.5) {
+          const q = llAt(x + Math.cos(ang) * r, y + Math.sin(ang) * r);
+          if (reader.isLand(q) !== land) { if (r < bd) { bd = r; best = q; } break; }
+        }
+      }
+      if (best) return best;
+    }
+    return raw;
+  };
+
   // Route drawing keys: Enter finishes, Esc cancels, Backspace takes back the last click.
   useEffect(() => {
     if (mode !== 'route') return;
@@ -884,6 +1016,26 @@ export function MapView() {
     };
     window.addEventListener('keydown', down);
     return () => window.removeEventListener('keydown', down);
+  });
+
+  // Region keys: V/P/B tools, Enter finishes a shape, Esc cancels, Backspace removes a corner, [ ] brush size.
+  useEffect(() => {
+    if (mode !== 'layers') return;
+    const down = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === ' ') { space.current = true; e.preventDefault(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); finishRegionShape(); return; }
+      if (e.key === 'Escape') { setRegionDraft([]); return; }
+      if (e.key === 'Backspace' && regionDraft.length) { e.preventDefault(); setRegionDraft((d) => d.slice(0, -1)); return; }
+      if (e.key === '[' || e.key === ']') { setRegionTools((t) => ({ ...t, brushKm: Math.max(2, Math.min(2000, Math.round(t.brushKm * (e.key === ']' ? 1.25 : 0.8)))) })); return; }
+      const tool = REGION_TOOL_KEYS[e.key.toUpperCase()];
+      if (tool) { setRegionTools((t) => ({ ...t, tool })); setRegionDraft([]); e.preventDefault(); }
+    };
+    const up = (e: KeyboardEvent) => { if (e.key === ' ') space.current = false; };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   });
 
   // MK-26: keyboard shortcuts for every drawing tool.
@@ -986,6 +1138,12 @@ export function MapView() {
       startStroke(e, llAt(x, y));
       return;
     }
+    if (mode === 'layers' && e.button === 0 && !space.current && regionTools.tool === 'brush' && regionEditable) {
+      const ll = llAt(x, y);
+      regionStroke.current = { pts: [ll], alt: e.altKey };
+      setStrokePreview([ll]);
+      return;
+    }
     if (mode === 'browse' && e.button === 0 && !space.current) {
       const m = hit(x, y);
       if (m?.kind === 'character') { charDrag.current = { id: m.id, x: m.x, y: m.y }; drag.current = { x, y, moved: false, v: view }; return; }
@@ -1000,6 +1158,12 @@ export function MapView() {
     const { x, y } = local(e);
     setHover(toLatLng(view, size.w, size.h, x, y));
     if (stroke.current) { continueStroke(e, llAt(x, y)); return; }
+    const rs = regionStroke.current;
+    if (rs) {
+      const ll = llAt(x, y);
+      if (greatCircleKm(rs.pts[rs.pts.length - 1], ll, world.settings.radiusKm) > regionTools.brushKm * 0.3) { rs.pts.push(ll); setStrokePreview([...rs.pts]); }
+      return;
+    }
     const vd = vdrag.current;
     if (vd) {
       const f = world.mapFeatures.find((q) => q.id === vd.id);
@@ -1030,6 +1194,13 @@ export function MapView() {
   };
   const onUp = async (e: React.PointerEvent) => {
     if (stroke.current) { endStroke(); return; }
+    const rs = regionStroke.current;
+    if (rs) {
+      regionStroke.current = null;
+      setStrokePreview([]);
+      commitRegion(strokeArea(rs.pts, regionTools.brushKm, world.settings.radiusKm), rs.alt);
+      return;
+    }
     if (vdrag.current) {
       const f = world.mapFeatures.find((q) => q.id === vdrag.current!.id);
       vdrag.current = null;
@@ -1075,6 +1246,15 @@ export function MapView() {
           store.upsert('mapSymbols', { ...recordBase(), kind: draw.symbol, location: ll, size: 1, layerId: drawLayer });
         }
       }
+      return;
+    }
+    if (mode === 'layers') {
+      if (regionTools.tool === 'shape' && regionEditable) { setRegionDraft((d) => [...d, snapRegion(x, y)]); return; }
+      // LY-9: pick the region here, on the layer being edited first, and say what covers this spot
+      const onActive = regionLayer ? lix.regionsAt(ll, moment, regionLayer.id)[0]?.hits[0] : undefined;
+      const hitR = onActive ?? lix.regionsAt(ll, moment).filter((h) => h.layer.visible).pop()?.hits[0];
+      if (hitR) { setRegionSel(hitR.region.id); setRegionLayerPick(hitR.region.layerId); }
+      setWhatsHere(ll);
       return;
     }
     if (mode === 'pick' && pickFor) {
@@ -1131,8 +1311,14 @@ export function MapView() {
     const hf = m ? null : hitFeature(shapes.current, x, y);
     const f = hf && layerFree(world.mapFeatures.find((q) => q.id === hf)?.layerId) ? hf : null;
     setSelected(m ? { kind: m.kind, id: m.id } : f ? { kind: 'feature', id: f } : null);
+    setWhatsHere(!m && !f && layers.regions && world.regions.length ? ll : null);
   };
   const onDouble = (e: React.MouseEvent) => {
+    if (mode === 'layers') {
+      // the double-click's second click added a duplicate corner; leave it out
+      if (regionTools.tool === 'shape') finishRegionShape(regionDraft.slice(0, -1));
+      return;
+    }
     if (mode === 'draw') {
       if (draw.tool === 'polygon') {
         // the double-click's second click added a duplicate corner; leave it out
@@ -1191,6 +1377,8 @@ export function MapView() {
     return ` · ${e.toLocaleString()} m · ${band}, ~${Math.round(meanTemperatureC(p.lat, e))}°C${b ? ` · ${b.name}` : ''}`;
   }, [hover, reader, showTerrain, world.settings.biomes, world.settings.axialTiltDeg]);
 
+  const hoverRegions = useMemo(() => (hover && layers.regions && world.regions.length ? hereLine(lix, { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }, moment) : ''), [hover, lix, moment, layers.regions, world.regions.length]);
+
   const mainMap = world.settings.mainMap;
   const frame = (b: { north: number; south: number; west: number; east: number }) => {
     const east = b.east < b.west ? b.east + 360 : b.east;
@@ -1217,7 +1405,7 @@ export function MapView() {
       <div className="map-canvas" ref={wrapRef}>
         <canvas
           ref={canvasRef}
-          style={{ width: size.w, height: size.h, cursor: mode === 'browse' || (mode === 'draw' && draw.tool === 'pan') ? 'grab' : mode === 'draw' && isBrush(draw.tool) ? 'none' : 'crosshair' }}
+          style={{ width: size.w, height: size.h, cursor: mode === 'browse' || (mode === 'draw' && draw.tool === 'pan') || (mode === 'layers' && regionTools.tool === 'select') ? 'grab' : (mode === 'draw' && isBrush(draw.tool)) || (mode === 'layers' && regionTools.tool === 'brush' && regionEditable) ? 'none' : 'crosshair' }}
           onWheel={onWheel}
           onPointerDown={onDown}
           onPointerMove={onMove}
@@ -1229,10 +1417,10 @@ export function MapView() {
         />
         <canvas ref={overlayRef} className="map-overlay" style={{ width: size.w, height: size.h }} />
         <div className="map-toolbar">
-          {(['browse', 'add-place', 'measure', 'draw'] as Mode[]).map((m) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); if (m !== 'measure') setMeasure([]); setPoly([]); startPick(undefined); if (routeFor) startRoute(undefined); }}
-              title={m === 'draw' ? 'Draw the world: land, heights, terrain and symbols' : undefined}>
-              {m === 'browse' ? 'Move' : m === 'add-place' ? '+ Place' : m === 'measure' ? 'Measure' : '✎ Draw map'}
+          {(['browse', 'add-place', 'measure', 'draw', 'layers'] as Mode[]).map((m) => (
+            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); if (m !== 'measure') setMeasure([]); setPoly([]); setRegionDraft([]); startPick(undefined); if (routeFor) startRoute(undefined); }}
+              title={m === 'draw' ? 'Draw the world: land, heights, terrain and symbols' : m === 'layers' ? 'Realms, cultures, religions and other layers, and how their borders change over time' : undefined}>
+              {m === 'browse' ? 'Move' : m === 'add-place' ? '+ Place' : m === 'measure' ? 'Measure' : m === 'draw' ? '✎ Draw map' : '▦ Layers'}
             </button>
           ))}
           <button onClick={() => setView(fitPlaces(world.places, size.w, size.h))}>Fit places</button>
@@ -1263,6 +1451,9 @@ export function MapView() {
           {shownMap && <span className="map-crumb"><button className="link" onClick={() => openMap(undefined)}>World</button> › <b>{shownMap.name}</b> · </span>}
           {mode === 'route' && <b>Click along the way; Enter finishes at the destination. </b>}
           {mode === 'browse' && charDragAt && <b>Drop on a place to start a journey there. </b>}
+          {mode === 'layers' && !selRegion && <b>Pick a region on the map or in the list, or add one. </b>}
+          {mode === 'layers' && selRegion && regionTools.tool === 'shape' && regionEditable && <b>{regionDraft.length === 0 ? `Click the first corner to ${regionTools.op === 'add' ? 'add land to' : 'cut land from'} ${selRegion.name}. ` : `${regionDraft.length} corner(s): double-click or Enter to finish. `}</b>}
+          {mode === 'layers' && selRegion && regionTools.tool === 'brush' && regionEditable && <b>Paint to {regionTools.op === 'add' ? 'add land to' : 'cut land from'} {selRegion.name}; Alt swaps. </b>}
           {mode === 'calibrate' && calib && <b>Calibrating: click known spot {calib.points.length + 1} of 2 on the sketch. </b>}
           {mode === 'draw' && draw.tool === 'polygon' && <b>{poly.length === 0 ? 'Click the first corner. ' : `${poly.length} corner(s): double-click or Enter to fill. `}</b>}
           {mode === 'measure' && (
@@ -1274,7 +1465,7 @@ export function MapView() {
               </label>
             </b>
           )}
-          {hover && <span>{Math.abs(hover.lat).toFixed(2)}°{hover.lat >= 0 ? 'N' : 'S'}, {Math.abs(wrapLng(hover.lng)).toFixed(2)}°{wrapLng(hover.lng) >= 0 ? 'E' : 'W'}{hoverInfo}</span>}
+          {hover && <span>{Math.abs(hover.lat).toFixed(2)}°{hover.lat >= 0 ? 'N' : 'S'}, {Math.abs(wrapLng(hover.lng)).toFixed(2)}°{wrapLng(hover.lng) >= 0 ? 'E' : 'W'}{hoverInfo}{hoverRegions && ` · ${hoverRegions}`}</span>}
           <span className="muted"> · {formatDayNumber(moment)}</span>
         </div>
       </div>
@@ -1298,6 +1489,24 @@ export function MapView() {
         )}
         {mode === 'draw' && <LayersCard active={drawLayer} setActive={setActiveLayer} />}
         {mode === 'draw' && !wizardOpen && <button className="small" onClick={() => { setWizardOpen(true); store.setSettings({ mapWizard: { ...(world.settings.mapWizard ?? { step: 0, done: [] }), closed: false } }); }}>Guide: first map, step by step</button>}
+        {mode === 'layers' && selRegion && (
+          <RegionCard region={selRegion} ix={lix} moment={moment} tools={regionTools} setTools={(t) => { setRegionTools(t); if (t.tool !== 'shape') setRegionDraft([]); }}
+            draftPoints={regionDraft.length} onFinish={() => finishRegionShape()} onCancel={() => setRegionDraft([])} onClose={() => { setRegionSel(undefined); setRegionDraft([]); }} />
+        )}
+        {(mode === 'layers' || mode === 'browse') && whatsHere && !selected && (
+          <WhatsHere at={whatsHere} ix={lix} moment={moment} onClose={() => setWhatsHere(null)}
+            onPick={(id) => { setMode('layers'); setRegionSel(id); setRegionLayerPick(lix.regions.get(id)?.layerId); }} />
+        )}
+        {mode === 'layers' && regionLayer && (
+          <RegionList layer={regionLayer} selected={regionSel} ix={lix} moment={moment} onSelect={(id) => {
+            setRegionSel(id);
+            setRegionDraft([]);
+            // a brand-new region has no shape yet: go straight to drawing it
+            const r = store.world.regions.find((q) => q.id === id);
+            if (r && !r.versions.length) setRegionTools((t) => ({ ...t, tool: 'shape', op: 'add' }));
+          }} />
+        )}
+        {mode === 'layers' && <RegionLayerList editing active={regionLayer?.id} setActive={(id) => { setRegionLayerPick(id); setRegionSel(undefined); setRegionDraft([]); }} />}
         {selFeature && <FeatureCard feature={selFeature} onClose={() => setSelected(null)} />}
         {selPlace && (
           <div className="card">
@@ -1332,6 +1541,7 @@ export function MapView() {
         {(Object.keys(layers) as (keyof Layers)[]).map((k) => (
           <label key={k} className="checkbox"><input type="checkbox" checked={layers[k]} onChange={(e) => setLayers({ ...layers, [k]: e.target.checked })} /> {LAYER_NAMES[k]}</label>
         ))}
+        {mode !== 'layers' && layers.regions && world.regions.length > 0 && <RegionLayerList editing={false} />}
         <label className="field"><span className="label">Relief</span>
           <select value={relief} onChange={(e) => setRelief(e.target.value as Relief)}>
             <option value="hillshade">Hillshading</option>

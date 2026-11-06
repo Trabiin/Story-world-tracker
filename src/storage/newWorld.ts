@@ -1,4 +1,4 @@
-import { CANON, DEFAULT_BIOMES, DEFAULT_TRAVEL_MODES, EARTH_TILT, Place, World, emptyTerrain } from '../core';
+import { CANON, DEFAULT_BIOMES, DEFAULT_TRAVEL_MODES, EARTH_TILT, Place, World, defaultRegionLayers, emptyTerrain } from '../core';
 
 export const UNKNOWN_PLACE_ID = 'unknown-place';
 
@@ -54,16 +54,18 @@ export function createEmptyWorld(name: string): World {
     mapFeatures: [],
     mapLayers: [],
     detailMaps: [],
+    regionLayers: defaultRegionLayers(unknown.createdAt),
+    regions: [],
     terrain: emptyTerrain(),
   };
 }
 
-/** Fill in collections that older files or exports do not have yet. */
+/** Fill in collections that older files or exports do not have yet (a missing regionLayers list gets the LY-1 starting set). */
 export function normalizeWorld(w: World): World {
   const empty = createEmptyWorld(w.settings?.name ?? 'World');
   const out = { ...empty, ...w, settings: { ...empty.settings, ...w.settings } } as World;
   for (const k of Object.keys(empty) as (keyof World)[]) {
-    if (k !== 'settings' && k !== 'terrain' && !Array.isArray(out[k])) (out as unknown as Record<string, unknown>)[k] = [];
+    if (k !== 'settings' && k !== 'terrain' && !Array.isArray(out[k])) (out as unknown as Record<string, unknown>)[k] = k === 'regionLayers' ? empty.regionLayers : [];
   }
   if (!out.terrain || typeof out.terrain !== 'object' || !out.terrain.tiles) out.terrain = emptyTerrain();
   return out;

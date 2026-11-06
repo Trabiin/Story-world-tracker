@@ -165,6 +165,19 @@ function CharacterDetail({ c }: { c: Character }) {
             </ol>
           )}
           <Backlinks kind="character" id={c.id} />
+          {world.regions.some((r) => r.ties.some((t) => t.characterId === c.id)) && (
+            <>
+              <h2>Realms and regions</h2>
+              <ul className="plain">
+                {world.regions.flatMap((r) => r.ties.filter((t) => t.characterId === c.id).map((t) => (
+                  <li key={t.id}>
+                    <button className="link" onClick={() => go('layers', r.id)}>{r.name}</button>
+                    <span className="muted"> · {t.role}{(t.start || t.end) && ` · ${t.start ? formatFuzzy(t.start) : '…'} – ${t.end ? formatFuzzy(t.end) : '…'}`}</span>
+                  </li>
+                )))}
+              </ul>
+            </>
+          )}
           {mine.length > 0 && (
             <>
               <h2>Warnings</h2>

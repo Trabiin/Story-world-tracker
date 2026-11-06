@@ -8,3 +8,4 @@ export * from './quickadd';
 export * from './story';
 export * from './terrain';
 export * from './features';
+export * from './layers';

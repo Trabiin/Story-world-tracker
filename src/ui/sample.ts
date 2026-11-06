@@ -1,9 +1,9 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
 import {
   Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Stay, World, exactDate as d, featureAnchor,
-  makeAnchor, textHash, toDayNumber, traceRiver,
+  makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea,
 } from '../core';
-import { nowIso } from '../storage';
+import { newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
 import { sampleTerrain } from './sampleTerrain';
 
@@ -147,6 +147,36 @@ export function sampleWorld(): World {
     { ...recordBase(), name: 'The Heartland', kind: 'region', north: 49.4, south: 45.2, west: 9.6, east: 15.4, notes: '' },
     { ...recordBase(), name: 'Varn', kind: 'city', north: 48.25, south: 48.15, west: 11.42, east: 11.58, placeId: varn.id, notes: '' },
   );
+
+  // Realms, faiths and cultures over time (Phase 3). Thornwick passes from Varn to Ash in a conquest in 1044.
+  const poly = (...pts: [number, number][]) => polygonFromPoints(pts.map(([lat, lng]) => ({ lat, lng })));
+  const region = (layerId: string, name: string, color: string, area: ReturnType<typeof poly>, extra: Partial<Region> = {}): Region => {
+    const r: Region = { ...recordBase(), layerId, name, color, versions: [{ id: newId(), area }], overlords: [], ties: [], entry: '', ...extra };
+    w.regions.push(r);
+    return r;
+  };
+  const ost = poly([55, 3], [55, 9.2], [50.6, 9.8], [49.4, 8.6], [49.2, 3]);
+  const varnRealm = region('layer-political', 'Kingdom of Varn', '#c0504d',
+    subtractArea(poly([55, 3], [55, 15.3], [51, 15.8], [48.5, 15.2], [46, 15.9], [40, 15.6], [40, 3]), ost),
+    { start: d(1001, 3, 1), entry: 'Founded in 1001 when the river lords swore to the first king at Varn. The crown passes to the eldest child; a regent rules while the heir is young.' });
+  const ash = region('layer-political', 'Empire of Ash', '#6b5b95',
+    poly([55, 15.3], [55, 24], [40, 24], [40, 15.6], [46, 15.9], [48.5, 15.2], [51, 15.8]),
+    { entry: 'An old empire of the eastern hills, ruled from Emberhold. It wants the salt of the gulf.', ties: [{ id: newId(), characterId: tamsin.id, role: 'agent', start: d(1040, 1, 1) }] });
+  region('layer-political', 'Duchy of Ost', '#d98c5f', ost, {
+    start: d(1001, 3, 1),
+    overlords: [{ id: newId(), regionId: varnRealm.id, relation: 'part' }],
+    entry: 'The northern march, held for the crown by the dukes of Ost.',
+  });
+  const conquered = poly([52.5, 12.8], [49.5, 13.1], [47.9, 12.6], [46.6, 13.1], [46.6, 16], [52.5, 16]);
+  const after = editRegionArea(w, { regionId: ash.id, area: conquered, op: 'add', from: d(1044, 6, 1), neighbours: 'take', note: 'The Ash conquest of the east march', newId });
+  w.regions = after.regions;
+  region('layer-religion', 'Old Faith', '#4f81bd', poly([55, 3], [55, 14.2], [40, 14.2], [40, 3]), { entry: 'The lamps must never go out.' });
+  const sun = region('layer-religion', 'Sun Faith', '#e9a23b', poly([55, 11.2], [55, 24], [40, 24], [40, 11.2]), { entry: 'The sun sees every oath.' });
+  sun.versions[0].intensity = 70;
+  sun.versions.push({ id: newId(), start: d(1050, 1, 1), area: poly([55, 8.5], [55, 24], [40, 24], [40, 8.5]), intensity: 80, note: 'Spreads west after the conquest' });
+  region('layer-culture', 'Northern culture', '#2c9faf', poly([55, 3], [55, 24], [48.7, 24], [48.4, 3]));
+  w.regionLayers = w.regionLayers.map((l) => (l.type === 'culture' || l.type === 'religion' ? { ...l, visible: false } : l));
+  w.settings.layerPresets = [{ id: newId(), name: 'politics + religion', visibleLayerIds: ['layer-political', 'layer-religion'] }];
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

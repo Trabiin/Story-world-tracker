@@ -3,7 +3,7 @@ import type { Id, LatLng, Warning, World, WorldIndex } from '../core';
 import type { Platform } from './platform';
 import type { WorldStore } from './store';
 
-export type View = 'who' | 'timeline' | 'map' | 'story' | 'manuscripts' | 'characters' | 'places' | 'groups' | 'warnings' | 'settings';
+export type View = 'who' | 'timeline' | 'map' | 'story' | 'manuscripts' | 'characters' | 'places' | 'layers' | 'groups' | 'warnings' | 'settings';
 
 export type EditorTarget =
   | { kind: 'stay'; id?: Id; preset?: Record<string, unknown> }
