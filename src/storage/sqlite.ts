@@ -37,8 +37,22 @@ let sqlPromise: Promise<SqlJsStatic> | null = null;
 
 /** wasmUrl: where the browser finds sql-wasm.wasm. In Node tests it is resolved automatically. */
 export function initSql(wasmUrl?: string): Promise<SqlJsStatic> {
-  if (!sqlPromise) sqlPromise = initSqlJs(wasmUrl ? { locateFile: () => wasmUrl } : undefined);
+  if (!sqlPromise) {
+    // The single-file preview inlines the engine as a data: URL. Sandboxed viewers often block
+    // fetching data: URLs, so decode it here and hand sql.js the bytes directly.
+    const inline = wasmUrl?.startsWith('data:') ? decodeDataUrl(wasmUrl) : null;
+    sqlPromise = initSqlJs(inline ? { wasmBinary: inline } : wasmUrl ? { locateFile: () => wasmUrl } : undefined);
+  }
   return sqlPromise;
+}
+
+function decodeDataUrl(url: string): ArrayBuffer | null {
+  const comma = url.indexOf(',');
+  if (comma < 0 || !url.slice(0, comma).endsWith(';base64')) return null;
+  const bin = atob(url.slice(comma + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
 
 function createSchema(db: Database) {
