@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EARTH_MOON, Id, MOON_ICON, OPEN_END, Segment, TerrainReader, eventIcon, fromDayNumber, formatDayNumber, hasTerrain, moonPhases, occurrences, seasonBands, toDayNumber } from '../../core';
 import { useApp } from '../context';
+import { ShiftDatesModal } from '../components/ShiftDates';
 import { worldDayRange } from '../util';
 
 const ROW_H = 30;
@@ -41,6 +42,7 @@ function cssVar(name: string) {
 
 export function Timeline() {
   const { world, ix, moment, store, edit, warnings, go } = useApp();
+  const [shifting, setShifting] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 900, h: 500 });
@@ -398,7 +400,9 @@ export function Timeline() {
               {world.places.filter((p) => !p.isPlaceholder && ix.locationOf(p.id) && ['city', 'town', 'village', 'capital', 'castle', 'port', 'region'].includes(p.kind)).sort((a, b) => a.name.localeCompare(b.name)).map((p) => <option key={p.id} value={p.id}>Seasons as in {p.name}</option>)}
             </select>
           )}
+          <button className="small" onClick={() => setShifting(true)} title="EU-4: push every date after a day later or earlier">Shift dates…</button>
         </div>
+        {shifting && <ShiftDatesModal onClose={() => setShifting(false)} />}
       </div>
       <div className="timeline-canvas" ref={wrapRef}>
         <canvas ref={canvasRef} style={{ width: size.w, height: size.h }} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => setTip(null)} />

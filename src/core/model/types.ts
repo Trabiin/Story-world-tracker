@@ -58,6 +58,23 @@ export interface WorldSettings {
   travelModifiers?: TravelModifiers;
   /** EU-7: named filters and layouts. */
   savedViews?: SavedView[];
+  /** EU-3: start a character from a template. */
+  characterTemplates?: CharacterTemplate[];
+}
+
+/** EU-3: "soldier of the Guard": what a new character starts with. */
+export interface CharacterTemplate {
+  id: Id;
+  name: string;
+  tags: string[];
+  importance: Importance;
+  color: string;
+  icon: string;
+  description: string;
+  /** Attribute keys and values, without dates. */
+  attributes: { key: string; value: string }[];
+  /** Groups the new character joins. */
+  groupIds: Id[];
 }
 
 /** WH-9: each one on or off. */
@@ -135,6 +152,15 @@ export interface Character extends RecordBase {
   attributes?: CharacterAttribute[];
   /** WH-11: where the character intends to go next, before it is written as a journey. */
   plans?: Plan[];
+  /** EU-10: pictures for the encyclopedia page. */
+  images?: Picture[];
+}
+
+/** EU-10: a picture on an encyclopedia page (a data URL), with a caption. */
+export interface Picture {
+  id: Id;
+  src: string;
+  caption: string;
 }
 
 /** WH-11: "Kaela means to reach Saltmere by midsummer". */
@@ -179,6 +205,7 @@ export interface Place extends RecordBase, TimeSpan {
   notes: string;
   /** WH-12: "unknown place" / "on the road somewhere" counts as accounted for in gap checks. */
   isPlaceholder: boolean;
+  images?: Picture[];
 }
 
 export interface Group extends RecordBase {
@@ -394,6 +421,7 @@ export interface Region extends RecordBase, TimeSpan {
   ties: RegionTie[];
   /** LY-10: the encyclopedia entry (rulers, tenets, history). */
   entry: string;
+  images?: Picture[];
 }
 
 /** ST-1: series → books → chapters → scenes. */
@@ -508,6 +536,7 @@ export interface WorldEvent extends RecordBase, TimeSpan {
   /** TL-6: a holiday or festival held every year on the start date's day and month. */
   yearly?: boolean;
   description: string;
+  images?: Picture[];
 }
 
 /** CH-4: relationship kinds. Directed ones read "a is parent of b", "a is mentor of b". */
@@ -571,6 +600,21 @@ export interface World {
   /** ST-3 plot threads, ST-7 scenarios. */
   threads: PlotThread[];
   scenarios: Scenario[];
+  /** EU-14 to-dos and plot holes. */
+  todos: Todo[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
+}
+
+/** EU-14: what a to-do or plot hole can point at. */
+export type RefKind = LinkTargetKind | 'secret' | 'region' | 'thread' | 'manuscript' | 'relationship';
+export interface TodoRef { kind: RefKind; id: Id }
+
+/** EU-14: a to-do or a plot hole, linked to the records it concerns. */
+export interface Todo extends RecordBase {
+  title: string;
+  note: string;
+  kind: 'todo' | 'plot-hole';
+  done: boolean;
+  refs: TodoRef[];
 }

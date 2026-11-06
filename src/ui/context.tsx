@@ -3,7 +3,7 @@ import type { FixKind, Id, LatLng, ViewFilter, Warning, World, WorldIndex } from
 import type { Platform } from './platform';
 import type { WorldStore } from './store';
 
-export type View = 'who' | 'timeline' | 'map' | 'story' | 'manuscripts' | 'characters' | 'places' | 'layers' | 'groups' | 'warnings' | 'settings' | 'events' | 'people';
+export type View = 'who' | 'timeline' | 'map' | 'story' | 'manuscripts' | 'characters' | 'places' | 'layers' | 'groups' | 'warnings' | 'settings' | 'events' | 'people' | 'home' | 'search' | 'todos';
 
 export type EditorTarget =
   | { kind: 'stay'; id?: Id; preset?: Record<string, unknown> }

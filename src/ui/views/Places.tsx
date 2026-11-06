@@ -8,6 +8,9 @@ import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
 import { PlaceSelect, placeOptions } from '../components/Pickers';
 import { useApp } from '../context';
+import { TodosFor } from '../components/Refs';
+import { Pictures } from '../components/Pictures';
+import { DeleteDialog, MergeDialog } from '../components/RecordTools';
 import { CommaInput } from './Characters';
 import { Backlinks } from '../components/Backlinks';
 import { subjectName } from '../util';
@@ -60,16 +63,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
   const inherited = !p.location ? ix.locationOf(p.id) : undefined;
   const children = world.places.filter((x) => x.parentId === p.id);
   const journeys = world.journeys.filter((j) => j.originId === p.id || j.destinationId === p.id || j.waypointIds.includes(p.id));
-  const remove = async () => {
-    const direct = world.stays.filter((s) => s.placeId === p.id).length + journeys.length;
-    if (direct > 0) {
-      void ask.alert(`${p.name} is used by ${direct} stay(s) or journey(s). Move those to another place first.`);
-      return;
-    }
-    if (!(await ask.confirm(`Delete ${p.name}?${children.length ? ` Its ${children.length} sub-place(s) will move up one level.` : ''}`, { okLabel: 'Delete', danger: true }))) return;
-    store.update((w) => ({ ...w, places: w.places.filter((x) => x.id !== p.id).map((x) => (x.parentId === p.id ? { ...x, parentId: p.parentId } : x)) }));
-    select(undefined);
-  };
+  const [dialog, setDialog] = useState<'delete' | 'merge' | null>(null);
   return (
     <div className="page">
       <div className="page-head">
@@ -77,9 +71,12 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
         <div className="row">
           <button onClick={onAddChild}>+ Place inside</button>
           <button onClick={() => edit({ kind: 'stay', preset: { placeId: p.id } })}>+ Stay here</button>
-          {p.id !== 'unknown-place' && <button className="danger" onClick={remove}>Delete</button>}
+          {p.id !== 'unknown-place' && !p.isPlaceholder && <button onClick={() => setDialog('merge')} title="EU-20: for a place made twice">Merge into…</button>}
+          {p.id !== 'unknown-place' && <button className="danger" onClick={() => setDialog('delete')}>Delete</button>}
         </div>
       </div>
+      {dialog === 'delete' && <DeleteDialog collection="places" id={p.id} onClose={() => setDialog(null)} onDone={() => select(undefined)} />}
+      {dialog === 'merge' && <MergeDialog collection="places" id={p.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
       <div className="two-col">
         <div className="form-grid">
           <Field label="Name"><input value={p.name} onChange={(e) => set({ name: e.target.value })} /></Field>
@@ -126,6 +123,8 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
           )}
           <WhoWasHere p={p} />
           <Backlinks kind="place" id={p.id} title="Manuscript and scenes" only={['passage', 'scene']} />
+          <TodosFor kind="place" id={p.id} />
+          <Pictures value={p.images} onChange={(images) => set({ images })} />
         </div>
       </div>
     </div>

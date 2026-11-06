@@ -72,6 +72,22 @@ export function Settings() {
         ))}
       </div>
 
+      <h2>Character templates</h2>
+      {(s.characterTemplates ?? []).length === 0 ? <p className="muted small">Open a character and choose More… → Save as a template. New characters can then start with the same tags, importance, look, lasting attributes and groups.</p> : (
+        <table className="table">
+          <thead><tr><th>Template</th><th>Starts with</th><th></th></tr></thead>
+          <tbody>
+            {(s.characterTemplates ?? []).map((t) => (
+              <tr key={t.id}>
+                <td><input value={t.name} onChange={(e) => store.setSettings({ characterTemplates: s.characterTemplates!.map((x) => (x.id === t.id ? { ...x, name: e.target.value } : x)) })} /></td>
+                <td className="muted small">{[t.importance, t.tags.length ? `tags ${t.tags.join(', ')}` : '', t.attributes.map((a) => `${a.key}: ${a.value}`).join(', '), t.groupIds.map((g) => world.groups.find((x) => x.id === g)?.name).filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</td>
+                <td><button className="icon" aria-label="Remove template" onClick={() => store.setSettings({ characterTemplates: s.characterTemplates!.filter((x) => x.id !== t.id) })}>×</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
       <h2>Backups</h2>
       {platform.kind === 'desktop' ? (
         <>

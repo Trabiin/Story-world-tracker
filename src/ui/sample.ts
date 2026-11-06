@@ -255,6 +255,14 @@ export function sampleWorld(): World {
   w.journeys[0].incidents = [{ id: crypto.randomUUID(), day: 3, title: 'A lame horse', note: 'She walks the last stretch.' }];
   w.journeys[3].incidents = [{ id: crypto.randomUUID(), day: 9, title: 'Bandits at the ford', note: '' }, { id: crypto.randomUUID(), day: 21, title: 'Spring floods', note: '' }];
 
+  // Phase 4c: to-dos and plot holes (EU-14) and a character template (EU-3).
+  w.todos.push(
+    { ...recordBase(), title: 'How does Tamsin reach Emberhold in two days?', note: 'Either give her a faster way to travel or move her departure earlier.', kind: 'plot-hole', done: false, refs: [{ kind: 'character', id: tamsin.id }, { kind: 'place', id: ember.id }] },
+    { ...recordBase(), title: 'Decide who forged the regent’s seal', note: '', kind: 'todo', done: false, refs: [{ kind: 'secret', id: w.secrets[0].id }] },
+    { ...recordBase(), title: 'Describe the Thornwick market', note: 'Smells, stalls, the toll-keeper.', kind: 'todo', done: true, refs: [{ kind: 'place', id: thornwick.id }, { kind: 'chapter', id: ch2.id }] },
+  );
+  w.settings.characterTemplates = [{ id: crypto.randomUUID(), name: 'Caravan hand', tags: ['Salt Guild'], importance: 'minor', color: '#edae49', icon: '●', description: 'Drives carts on the southern road.', attributes: [{ key: 'allegiance', value: 'Salt Guild' }], groupIds: [caravan.id] }];
+
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;
 }

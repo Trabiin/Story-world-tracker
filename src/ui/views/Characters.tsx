@@ -1,13 +1,17 @@
-/** CH-1, CH-2, CH-6, EU-9: characters list and profile, with their whereabouts chain. */
+/** CH-1, CH-2, CH-6, EU-9: characters list and profile, with their whereabouts chain. EU-3 templates, EU-4 bulk edit, EU-20 merge and delete. */
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
 import { RevealField } from '../components/RevealField';
-import { ATTRIBUTE_KEYS, Character, CharacterAttribute, Importance, ageOn, attributesOn, formatDayNumber, formatFuzzy, fromDayNumber, nominalStart } from '../../core';
+import { ATTRIBUTE_KEYS, BulkCharacterEdit, Character, CharacterAttribute, Id, Importance, ageOn, attributesOn, bulkEditCharacters, characterFromTemplate, formatDayNumber, formatFuzzy, fromDayNumber, nominalStart, templateFromCharacter } from '../../core';
 import { Backlinks } from '../components/Backlinks';
-import { recordBase } from '../../storage';
+import { newId, recordBase } from '../../storage';
+import { Pictures } from '../components/Pictures';
+import { DeleteDialog, MergeDialog } from '../components/RecordTools';
+import { ShiftDatesModal } from '../components/ShiftDates';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
+import { TodosFor } from '../components/Refs';
 import { ICONS, PALETTE, blankCharacter, placeName, splitList } from '../util';
 import { Knowledge, Relationships, StatusBadge } from './CharacterExtras';
 import { Plans } from './CharacterPlans';
@@ -34,6 +38,31 @@ export function Characters() {
     store.upsert('characters', c);
     select(c.id);
   };
+  const templates = world.settings.characterTemplates ?? [];
+  const fromTemplate = async (tid: string) => {
+    const t = templates.find((x) => x.id === tid);
+    if (!t) return;
+    const name = await ask.prompt(`Name of the new ${t.name.toLowerCase()}:`, '');
+    if (!name?.trim()) return;
+    const { character, memberships } = characterFromTemplate(t, name.trim(), recordBase(), newId);
+    store.update((w) => ({ ...w, characters: [...w.characters, character], memberships: [...w.memberships, ...memberships] }));
+    select(character.id);
+  };
+  // EU-4: pick several characters and change them together.
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Id[]>([]);
+  const [shifting, setShifting] = useState(false);
+  const toggle = (id: Id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const bulk = async (v: string) => {
+    let e: BulkCharacterEdit | undefined;
+    if (v === 'add-tag' || v === 'remove-tag') {
+      const tag = await ask.prompt(v === 'add-tag' ? 'Tag to add:' : 'Tag to remove:', '');
+      if (tag?.trim()) e = { kind: v, tag: tag.trim() };
+    } else if (v.startsWith('imp:')) e = { kind: 'importance', importance: v.slice(4) as Importance };
+    else if (v === 'archive' || v === 'unarchive') e = { kind: 'archive', archived: v === 'archive' };
+    else if (v === 'shift') setShifting(true);
+    if (e) store.update((w) => bulkEditCharacters(w, picked, e!));
+  };
   return (
     <div className="master-detail">
       <aside className="master">
@@ -53,11 +82,33 @@ export function Characters() {
           </div>
           <label className="checkbox"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
           <button className="primary" onClick={add}>+ New character</button>
+          {templates.length > 0 && (
+            <select value="" onChange={(e) => void fromTemplate(e.target.value)} title="EU-3: start from a template">
+              <option value="">+ New from a template…</option>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
+          <div className="row">
+            <button className={`small ${picking ? 'on' : ''}`} onClick={() => { setPicking(!picking); setPicked([]); }}>{picking ? 'Done selecting' : 'Select several'}</button>
+            {picking && <button className="small" onClick={() => setPicked(picked.length === list.length ? [] : list.map((c) => c.id))}>{picked.length === list.length ? 'None' : 'All'}</button>}
+          </div>
+          {picking && picked.length > 0 && (
+            <select className="bulk-select" value="" onChange={(e) => void bulk(e.target.value)}>
+              <option value="">Change {picked.length} {picked.length === 1 ? 'character' : 'characters'}…</option>
+              <option value="add-tag">Add a tag…</option>
+              <option value="remove-tag">Remove a tag…</option>
+              {IMPORTANCE.map((i) => <option key={i} value={`imp:${i}`}>Make {i}</option>)}
+              <option value="archive">Archive</option>
+              <option value="unarchive">Unarchive</option>
+              <option value="shift">Shift their dates…</option>
+            </select>
+          )}
         </div>
         <ul className="list">
           {list.map((c, i) => (
-            <li key={c.id} className={c.id === selected ? 'active' : ''} onClick={() => select(c.id)}>
+            <li key={c.id} className={c.id === selected ? 'active' : ''} onClick={() => (picking ? toggle(c.id) : select(c.id))}>
               {(i === 0 || list[i - 1].importance !== c.importance) && <div className="list-heading">{c.importance}</div>}
+              {picking && <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${c.name}`} />}
               <span className="swatch" style={{ color: c.color }}>{c.icon}</span> {c.name}
               {c.archived && <span className="tag">archived</span>}
             </li>
@@ -66,6 +117,7 @@ export function Characters() {
         <div className="muted small-pad">{list.length} of {world.characters.length}</div>
       </aside>
       <section className="detail">{current ? <CharacterDetail key={current.id} c={current} /> : <div className="empty">Select or add a character.</div>}</section>
+      {shifting && <ShiftDatesModal characterIds={picked} title={`Shift dates for ${picked.length} ${picked.length === 1 ? 'character' : 'characters'}`} onClose={() => setShifting(false)} />}
     </div>
   );
 }
@@ -82,26 +134,16 @@ function CharacterDetail({ c }: { c: Character }) {
     const d = fromDayNumber(lastEnd.end.earliest);
     return { subject: { kind: 'character' as const, id: c.id }, departure: { ...d, precision: 'day' as const }, arrival: { ...d, precision: 'day' as const }, originId: lastEnd.destinationId ?? lastEnd.placeId };
   };
-  const remove = async () => {
-    const stays = world.stays.filter((s) => s.subject.kind === 'character' && s.subject.id === c.id);
-    const journeys = world.journeys.filter((j) => j.subject.kind === 'character' && j.subject.id === c.id);
-    const mem = world.memberships.filter((m) => m.characterId === c.id);
-    const rels = world.relationships.filter((r) => r.aId === c.id || r.bId === c.id);
-    if (!(await ask.confirm(`Delete ${c.name}? This also deletes ${stays.length} stay(s), ${journeys.length} journey(s), ${mem.length} group membership(s) and ${rels.length} relationship(s), and takes them out of events and secrets. Consider archiving instead.`, { okLabel: 'Delete', danger: true }))) return;
-    store.update((w) => {
-      const gone = (x: { id: string }, list: { id: string }[]) => list.some((y) => y.id === x.id);
-      return {
-        ...w,
-        characters: w.characters.filter((x) => x.id !== c.id),
-        stays: w.stays.filter((x) => !gone(x, stays)),
-        journeys: w.journeys.filter((x) => !gone(x, journeys)),
-        memberships: w.memberships.filter((x) => !gone(x, mem)),
-        relationships: w.relationships.filter((x) => !gone(x, rels)),
-        events: w.events.map((e) => (e.characterIds.includes(c.id) ? { ...e, characterIds: e.characterIds.filter((id) => id !== c.id) } : e)),
-        secrets: w.secrets.map((sc) => (sc.knowers.some((k) => k.characterId === c.id) ? { ...sc, knowers: sc.knowers.filter((k) => k.characterId !== c.id) } : sc)),
-      };
-    });
-    select(undefined);
+  const [dialog, setDialog] = useState<'delete' | 'merge' | null>(null);
+  const more = async (v: string) => {
+    if (v === 'merge') setDialog('merge');
+    if (v === 'template') {
+      const name = await ask.prompt('Name this template (for example “Soldier of the Guard”):', c.tags[0] ?? '');
+      if (!name?.trim()) return;
+      const t = templateFromCharacter(world, c, name.trim(), newId());
+      store.setSettings({ characterTemplates: [...(world.settings.characterTemplates ?? []), t] });
+      void ask.alert(`Saved. New characters can now start as “${t.name}”, with ${c.name}'s tags, importance, look${t.attributes.length ? ', lasting attributes' : ''}${t.groupIds.length ? ' and groups' : ''}.`);
+    }
   };
   return (
     <div className="page">
@@ -112,9 +154,16 @@ function CharacterDetail({ c }: { c: Character }) {
           {age !== undefined && age >= 0 && <span className="muted">Age {age} on {formatDayNumber(moment)}</span>}
           {segs.length > 0 && <button onClick={() => showTrack(c.id)} title="VW-3: draw every stay and journey on the map">Show track on map</button>}
           <button onClick={() => set({ archived: !c.archived })}>{c.archived ? 'Unarchive' : 'Archive'}</button>
-          <button className="danger" onClick={remove}>Delete</button>
+          <select className="more" value="" onChange={(e) => void more(e.target.value)} aria-label="More actions">
+            <option value="">More…</option>
+            <option value="merge">Merge into another character…</option>
+            <option value="template">Save as a template…</option>
+          </select>
+          <button className="danger" onClick={() => setDialog('delete')}>Delete</button>
         </div>
       </div>
+      {dialog === 'delete' && <DeleteDialog collection="characters" id={c.id} extra="Consider archiving instead: archived characters keep their history but leave the lists." onClose={() => setDialog(null)} onDone={() => select(undefined)} />}
+      {dialog === 'merge' && <MergeDialog collection="characters" id={c.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
       <div className="two-col">
         <div className="form-grid">
           <Field label="Name"><input value={c.name} onChange={(e) => set({ name: e.target.value })} /></Field>
@@ -187,6 +236,8 @@ function CharacterDetail({ c }: { c: Character }) {
           <Plans c={c} />
           <Knowledge c={c} />
           <Backlinks kind="character" id={c.id} />
+          <TodosFor kind="character" id={c.id} />
+          <Pictures value={c.images} onChange={(images) => set({ images })} />
           {world.regions.some((r) => r.ties.some((t) => t.characterId === c.id)) && (
             <>
               <h2>Realms and regions</h2>
