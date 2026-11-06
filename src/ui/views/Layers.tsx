@@ -3,13 +3,15 @@
  * realm hierarchy over time (duchy → kingdom → empire, vassals), characters tied to it and its border history.
  */
 import { useMemo, useState } from 'react';
-import { FuzzyDate, Id, LAYER_TYPES, LayerIndex, Region, RegionOverlord, RegionTie, areaContains, describeChain, formatDayNumber, formatFuzzy, labelPoint, toWindow } from '../../core';
+import { FuzzyDate, Id, LAYER_TYPES, LayerIndex, Region, RegionOverlord, RegionTie, areaContains, describeChain, eventIcon, formatDayNumber, formatFuzzy, labelPoint, toWindow } from '../../core';
 import { newId } from '../../storage';
 import { ask } from '../components/Dialogs';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
 import { RevealField } from '../components/RevealField';
 import { useApp } from '../context';
+import { TodosFor } from '../components/Refs';
+import { Pictures } from '../components/Pictures';
 import { BorderHistory, RegionLayerList, sortedLayers } from '../map/RegionsPanel';
 import { PLACE_ICON } from './Places';
 
@@ -61,7 +63,7 @@ export function Layers() {
 }
 
 function RegionPage({ r, ix }: { r: Region; ix: LayerIndex }) {
-  const { world, store, moment, select, showOnMap, go } = useApp();
+  const { world, store, moment, select, showOnMap, go, ix: wix } = useApp();
   const set = (patch: Partial<Region>) => store.upsert('regions', { ...r, ...patch });
   const layer = ix.layer(r.layerId);
   const political = layer?.type === 'political';
@@ -70,6 +72,13 @@ function RegionPage({ r, ix }: { r: Region; ix: LayerIndex }) {
   const members = world.regions.filter((x) => x.overlords.some((o) => o.regionId === r.id));
   const now = ix.versionAt(r, moment);
   const placesInside = now ? world.places.filter((p) => !p.isPlaceholder && p.location && !['river', 'lake', 'road', 'area'].includes(p.kind) && areaContains(now.area, p.location)) : [];
+  // EU-10: events at places inside the region (as it was on each event's date).
+  const eventsHere = world.events.filter((e) => {
+    const loc = e.placeId ? wix.locationOf(e.placeId) : undefined;
+    if (!loc || !e.start) return false;
+    const v = ix.versionAt(r, win(e.start).earliest);
+    return !!v && areaContains(v.area, loc);
+  });
   const setOverlord = (o: RegionOverlord, patch: Partial<RegionOverlord>) => set({ overlords: r.overlords.map((x) => (x.id === o.id ? { ...x, ...patch } : x)) });
   const setTie = (t: RegionTie, patch: Partial<RegionTie>) => set({ ties: r.ties.map((x) => (x.id === t.id ? { ...x, ...patch } : x)) });
   const setVersion = (id: Id, patch: Partial<Region['versions'][number]>) => {
@@ -198,6 +207,14 @@ function RegionPage({ r, ix }: { r: Region; ix: LayerIndex }) {
               <ul className="plain">{placesInside.map((p) => <li key={p.id}><button className="link" onClick={() => go('places', p.id)}>{PLACE_ICON[p.kind]} {p.name}</button></li>)}</ul>
             </>
           )}
+          {eventsHere.length > 0 && (
+            <>
+              <h2>Events here</h2>
+              <ul className="plain">{eventsHere.map((e) => <li key={e.id}><button className="link" onClick={() => go('events', e.id)}>{eventIcon(e.kind)} {e.name}</button>{e.start && <span className="muted small"> · {formatFuzzy(e.start)}</span>}</li>)}</ul>
+            </>
+          )}
+          <TodosFor kind="region" id={r.id} />
+          <Pictures value={r.images} onChange={(images) => set({ images })} />
         </div>
       </div>
     </div>

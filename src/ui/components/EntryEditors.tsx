@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { ask } from './Dialogs';
 import { Backlinks } from './Backlinks';
-import { FuzzyDate, Incident, Journey, LatLng, Stay, Subject, WorldIndex, describeFactor, eventIcon, formatDayNumber, formatFuzzy, fromDay, routeThrough } from '../../core';
+import { FuzzyDate, Incident, Journey, duplicateEntry, LatLng, Stay, Subject, WorldIndex, describeFactor, eventIcon, formatDayNumber, formatFuzzy, fromDay, routeThrough } from '../../core';
 import { recordBase } from '../../storage';
 import { useApp } from '../context';
 import { DateInput } from './DateInput';
@@ -29,7 +29,7 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
 }
 
 export function StayEditor({ id, preset, onClose }: { id?: string; preset?: Partial<Stay>; onClose: () => void }) {
-  const { world, store } = useApp();
+  const { world, store, edit } = useApp();
   const existing = world.stays.find((s) => s.id === id);
   const [s, setS] = useState<Stay>(
     () => existing ?? { ...recordBase(), subject: undefined as unknown as Subject, placeId: '', arrival: undefined as unknown as FuzzyDate, purpose: '', notes: '', ...preset },
@@ -51,6 +51,7 @@ export function StayEditor({ id, preset, onClose }: { id?: string; preset?: Part
       footer={
         <>
           {existing && <DeleteButton onDelete={() => (store.removeMany([{ c: 'stays', id: s.id }]), onClose())} />}
+          {existing && <button onClick={() => edit({ kind: 'stay', preset: duplicateEntry(s) as Record<string, unknown> })} title="EU-3: a new stay with the same details">Duplicate</button>}
           <span className="spacer" />
           <button onClick={onClose}>Cancel</button>
           <button className="primary" disabled={!valid} onClick={save}>Save</button>
@@ -85,7 +86,7 @@ export function StayEditor({ id, preset, onClose }: { id?: string; preset?: Part
 }
 
 export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: Partial<Journey>; onClose: () => void }) {
-  const { world, store, moment, go, startRoute } = useApp();
+  const { world, store, moment, go, startRoute, edit } = useApp();
   const existing = world.journeys.find((j) => j.id === id);
   const [j, setJ] = useState<Journey>(
     () =>
@@ -132,6 +133,7 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
       footer={
         <>
           {existing && <DeleteButton onDelete={() => (store.removeMany([{ c: 'journeys', id: j.id }]), onClose())} />}
+          {existing && <button onClick={() => edit({ kind: 'journey', preset: { ...duplicateEntry(j), incidents: j.incidents?.map((x) => ({ ...x, id: crypto.randomUUID() })) } as Record<string, unknown> })} title="EU-3: a new journey with the same details, for example the way back">Duplicate</button>}
           <span className="spacer" />
           <button onClick={onClose}>Cancel</button>
           <button className="primary" disabled={!valid} onClick={() => (store.upsert('journeys', j), onClose())}>Save</button>

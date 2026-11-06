@@ -23,8 +23,12 @@ import { Settings } from './views/Settings';
 import { Timeline } from './views/Timeline';
 import { Warnings } from './views/Warnings';
 import { WhoIsWhere } from './views/WhoIsWhere';
+import { Home } from './views/Home';
+import { SearchPage } from './views/SearchPage';
+import { Todos } from './views/Todos';
 
 const NAV: { view: View; label: string; key: string }[] = [
+  { view: 'home', label: 'Home', key: '' },
   { view: 'who', label: 'Who is where', key: '1' },
   { view: 'timeline', label: 'Timeline', key: '2' },
   { view: 'map', label: 'Map', key: '3' },
@@ -37,6 +41,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'layers', label: 'Realms & layers', key: '' },
   { view: 'groups', label: 'Groups', key: '8' },
   { view: 'warnings', label: 'Warnings', key: '9' },
+  { view: 'todos', label: 'To-dos', key: '' },
   { view: 'settings', label: 'Settings', key: '0' },
 ];
 
@@ -83,9 +88,12 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const shownChars = useMemo(() => new Set(world.characters.map((c) => c.id)), [world.characters]);
   const warnings = useMemo(() => (world === unfiltered ? allWarnings : allWarnings.filter((w) => !w.characterId || shownChars.has(w.characterId))), [allWarnings, shownChars, world, unfiltered]);
   const moment = defaultMoment(world, ix);
-  const [view, setView] = useState<View>(() => (localStorage.getItem('swt.view') as View) || 'who');
+  const [view, setView] = useState<View>(() => (localStorage.getItem('swt.view') as View) || 'home');
   const [selectedByView, setSelectedByView] = useState<Partial<Record<View, Id>>>({});
-  const [editor, setEditor] = useState<EditorTarget | null>(null);
+  const [editor, setEditorState] = useState<EditorTarget | null>(null);
+  // Each opening gets a fresh editor, so "Duplicate" can open a copy from inside an editor (EU-3).
+  const [editorN, setEditorN] = useState(0);
+  const setEditor = useCallback((t: EditorTarget | null) => { setEditorN((n) => n + 1); setEditorState(t); }, []);
   const [command, setCommand] = useState(false);
   const [pickFor, setPickFor] = useState<Id | undefined>();
   const [routeFor, setRouteFor] = useState<Id | undefined>();
@@ -124,6 +132,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   }, [store, go]);
 
   const openWarnings = warnings.filter((w) => !w.dismissed && w.severity === 'warning').length;
+  const openTodos = world.todos.filter((t) => !t.done).length;
   const ctx = {
     store, world, ix, warnings, platform, moment, view, go,
     scenarioId,
@@ -192,6 +201,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
             <button key={n.view} className={view === n.view ? 'active' : ''} onClick={() => go(n.view)} title={n.key ? `Alt+${n.key}` : undefined}>
               {n.label}
               {n.view === 'warnings' && openWarnings > 0 && <span className="badge">{openWarnings}</span>}
+              {n.view === 'todos' && openTodos > 0 && <span className="count">{openTodos}</span>}
             </button>
           ))}
           <div className="sidebar-actions">
@@ -202,6 +212,9 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
         <main className={`main ${readerAt !== undefined ? 'reader-on' : ''}`}>
           {scenarioId !== CANON && <div className="scenario-banner">What if: <b>{stored.scenarios.find((x) => x.id === scenarioId)?.name}</b>. Changes you make now stay in this scenario; canon is untouched. <button className="link" onClick={() => savePrefs({ ...prefs, scenarioId: CANON })}>Back to canon</button></div>}
           {readerAt !== undefined && <div className="reader-banner">Reader's view: only what the reader knows after “{choices.find((c) => c.value === readerAt && !c.book)?.label}”. Editing is off. <button className="link" onClick={() => setAsOf(undefined)}>Back to Author view</button></div>}
+          {view === 'home' && <Home />}
+          {view === 'search' && <SearchPage />}
+          {view === 'todos' && <Todos />}
           {view === 'who' && <WhoIsWhere />}
           {view === 'timeline' && <Timeline />}
           {view === 'map' && <MapView />}
@@ -216,8 +229,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'warnings' && <Warnings />}
           {view === 'settings' && <Settings />}
         </main>
-        {editor?.kind === 'stay' && <StayEditor key={editor.id ?? 'new'} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
-        {editor?.kind === 'journey' && <JourneyEditor key={editor.id ?? 'new'} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
+        {editor?.kind === 'stay' && <StayEditor key={editorN} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
+        {editor?.kind === 'journey' && <JourneyEditor key={editorN} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
         {command && <CommandBar onClose={() => setCommand(false)} />}
         {quick && <QuickAdd onClose={() => setQuick(false)} />}
       </div>

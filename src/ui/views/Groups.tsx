@@ -1,12 +1,14 @@
 /** CH-5, DM-5: groups that travel together; time-bound membership. */
+import { useState } from 'react';
 import { Group, Membership, formatFuzzy } from '../../core';
-import { ask } from '../components/Dialogs';
 import { RevealField } from '../components/RevealField';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Backlinks } from '../components/Backlinks';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
+import { TodosFor } from '../components/Refs';
+import { DeleteDialog, MergeDialog } from '../components/RecordTools';
 import { PALETTE, placeName, sortByName } from '../util';
 
 export function Groups() {
@@ -41,11 +43,7 @@ function GroupDetail({ g }: { g: Group }) {
   const setM = (m: Membership, p: Partial<Membership>) => store.upsert('memberships', { ...m, ...p });
   const stays = world.stays.filter((s) => s.subject.kind === 'group' && s.subject.id === g.id);
   const journeys = world.journeys.filter((j) => j.subject.kind === 'group' && j.subject.id === g.id);
-  const remove = async () => {
-    if (!(await ask.confirm(`Delete ${g.name}, its ${members.length} membership(s), ${stays.length} stay(s) and ${journeys.length} journey(s)?`, { okLabel: 'Delete', danger: true }))) return;
-    store.removeMany([{ c: 'groups', id: g.id }, ...members.map((m) => ({ c: 'memberships' as const, id: m.id })), ...stays.map((s) => ({ c: 'stays' as const, id: s.id })), ...journeys.map((j) => ({ c: 'journeys' as const, id: j.id }))]);
-    select(undefined);
-  };
+  const [dialog, setDialog] = useState<'delete' | 'merge' | null>(null);
   const subject = { kind: 'group' as const, id: g.id };
   return (
     <div className="page">
@@ -54,9 +52,12 @@ function GroupDetail({ g }: { g: Group }) {
         <div className="row">
           <button onClick={() => edit({ kind: 'stay', preset: { subject } })}>+ Group stay</button>
           <button onClick={() => edit({ kind: 'journey', preset: { subject } })}>+ Group journey</button>
-          <button className="danger" onClick={remove}>Delete</button>
+          <button onClick={() => setDialog('merge')}>Merge into…</button>
+          <button className="danger" onClick={() => setDialog('delete')}>Delete</button>
         </div>
       </div>
+      {dialog === 'delete' && <DeleteDialog collection="groups" id={g.id} onClose={() => setDialog(null)} onDone={() => select(undefined)} />}
+      {dialog === 'merge' && <MergeDialog collection="groups" id={g.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
       <div className="two-col">
         <div className="form-grid">
           <Field label="Name"><input value={g.name} onChange={(e) => set({ name: e.target.value })} /></Field>
@@ -99,6 +100,7 @@ function GroupDetail({ g }: { g: Group }) {
           </ul>
           {stays.length + journeys.length === 0 && <p className="muted">None yet.</p>}
           <Backlinks kind="group" id={g.id} />
+          <TodosFor kind="group" id={g.id} />
         </div>
       </div>
     </div>

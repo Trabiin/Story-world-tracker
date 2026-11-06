@@ -121,6 +121,17 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **Travel** (WH-9 to WH-11): optional slow-downs for mountains, winter, danger and river currents (Settings); incidents on a journey shown on the map and timeline; characters' plans, flagged when they run out of time.
 - World file format 8 (threads, scenarios). Older files open as before.
 
+## Phase 4c: everyday tools
+
+- **Home** (EU-15): the new starting page, with open warnings, to-dos, recent changes, loose ends and chapters not yet linked to the manuscript.
+- **Search** (VW-8, top bar or Ctrl+K): finds words in names, notes, scenes, events, encyclopedia entries and the manuscripts themselves.
+- **To-dos and plot holes** (EU-14): their own page, and on every character, place, scene or event page they are linked to.
+- **Merge and safe delete** (EU-20): fold a duplicate into the real record, or see everything that depends on a record before deleting it, and hand it to another record instead.
+- **Bulk edit and shifting dates** (EU-4): tag, re-rank or archive many characters at once; push everything after a date later or earlier.
+- **Templates and duplicates** (EU-3): start a character from a template, or duplicate a stay or journey.
+- **Pictures** (EU-10) on character, place, region and event pages.
+- World file format 9 (to-dos). Older files open as before.
+
 ## Development
 
 ```bash

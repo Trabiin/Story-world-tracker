@@ -8,7 +8,11 @@ import { ask } from '../components/Dialogs';
 import { Field } from '../components/Modal';
 import { CharacterChips, CharacterSelect, PlaceSelect } from '../components/Pickers';
 import { RevealField } from '../components/RevealField';
+import { Pictures } from '../components/Pictures';
+import { MergeDialog } from '../components/RecordTools';
+import { ShiftDatesModal } from '../components/ShiftDates';
 import { useApp } from '../context';
+import { TodosFor } from '../components/Refs';
 import { placeName } from '../util';
 
 export function Events() {
@@ -80,6 +84,7 @@ function EventDetail({ e }: { e: WorldEvent }) {
   const hanging = datesHangingOn(world, e.id);
   const secrets = world.secrets.filter((s) => s.eventId === e.id);
   const where = e.placeId ? ix.locationOf(e.placeId) : undefined;
+  const [dialog, setDialog] = useState<'merge' | 'shift' | null>(null);
   const remove = async () => {
     const extra = [hanging ? `${hanging} record(s) have dates tied to it; they keep their current dates.` : '', secrets.length ? `${secrets.length} secret(s) about it stay, without the link.` : ''].filter(Boolean).join(' ');
     if (!(await ask.confirm(`Delete ${e.name}? ${extra}`, { okLabel: 'Delete', danger: true }))) return;
@@ -96,9 +101,13 @@ function EventDetail({ e }: { e: WorldEvent }) {
         <div className="row">
           {e.start && <button onClick={() => store.setMoment(eventWindow(world, e)!.earliest)}>Go to date</button>}
           {where && <button onClick={() => showOnMap(where)}>Show on map</button>}
+          {e.start && <button onClick={() => setDialog('shift')} title="EU-4: move every date after this event">Shift later dates…</button>}
+          <button onClick={() => setDialog('merge')}>Merge into…</button>
           <button className="danger" onClick={remove}>Delete</button>
         </div>
       </div>
+      {dialog === 'merge' && <MergeDialog collection="events" id={e.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
+      {dialog === 'shift' && <ShiftDatesModal from={e.start} title={`Shift everything from ${e.name} on`} onClose={() => setDialog(null)} />}
       <div className="two-col">
         <div className="form-grid">
           <Field label="Name"><input value={e.name} onChange={(x) => set({ name: x.target.value })} /></Field>
@@ -137,6 +146,8 @@ function EventDetail({ e }: { e: WorldEvent }) {
             </>
           )}
           <Backlinks kind="event" id={e.id} />
+          <TodosFor kind="event" id={e.id} />
+          <Pictures value={e.images} onChange={(images) => set({ images })} />
         </div>
       </div>
     </div>
