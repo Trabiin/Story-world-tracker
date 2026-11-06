@@ -1,6 +1,6 @@
 /** VW-5: every character's location and activity on the current moment. */
 import { useMemo, useState } from 'react';
-import { Id, ageOn, attributesOn, formatDayNumber, fromDayNumber, whereIs } from '../../core';
+import { Id, ageOn, attributesOn, formatDayNumber, fromDayNumber, plansOn, whereIs } from '../../core';
 import { useApp } from '../context';
 import { placePath } from '../util';
 
@@ -8,6 +8,7 @@ export function WhoIsWhere() {
   const { world, ix, moment, go, edit } = useApp();
   const [groupByPlace, setGroupByPlace] = useState(false);
   const [filter, setFilter] = useState<'all' | 'main' | 'secondary' | 'minor'>('all');
+  const plans = useMemo(() => plansOn(ix, moment).filter((v) => v.plan.placeId && (v.active || v.overdue)), [ix, moment]);
   const rows = useMemo(() => {
     return world.characters
       .filter((c) => !c.archived && (filter === 'all' || c.importance === filter))
@@ -80,7 +81,12 @@ export function WhoIsWhere() {
                   {r.where}
                   {r.via && <span className="tag">with {r.via}</span>}
                 </td>
-                <td>{r.doing}</td>
+                <td>
+                  {r.doing}
+                  {plans.filter((v) => v.character.id === r.c.id).map((v) => (
+                    <div key={v.plan.id} className={`small ${v.overdue ? 'warn-text' : 'muted'}`}>Plans to reach {ix.places.get(v.plan.placeId)?.name ?? '?'}{v.plan.by ? ` by ${formatDayNumber(ix.win(v.plan.by).latest)}` : ''}{v.overdue ? ' (overdue)' : ''}</div>
+                  ))}
+                </td>
                 <td className="actions">
                   {r.recordId ? (
                     <button className="small" onClick={() => edit({ kind: r.recordKind!, id: r.recordId })}>Edit</button>

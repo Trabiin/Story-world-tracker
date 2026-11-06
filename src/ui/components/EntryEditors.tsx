@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { ask } from './Dialogs';
 import { Backlinks } from './Backlinks';
-import { FuzzyDate, Journey, LatLng, Stay, Subject, WorldIndex, formatDayNumber, formatFuzzy, fromDay, routeThrough } from '../../core';
+import { FuzzyDate, Incident, Journey, LatLng, Stay, Subject, WorldIndex, describeFactor, eventIcon, formatDayNumber, formatFuzzy, fromDay, routeThrough } from '../../core';
 import { recordBase } from '../../storage';
 import { useApp } from '../context';
 import { DateInput } from './DateInput';
@@ -122,6 +122,7 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
   const km = j.originId && j.destinationId ? ix.journeyDistanceKm(j) : undefined;
   const days = j.originId && j.destinationId ? ix.suggestedTravelDays(j) : undefined;
   const suggested = days !== undefined && j.departure ? fromDay(ix.win(j.departure).earliest + days) : undefined;
+  const tf = km !== undefined ? ix.travelFactorOf(j) : undefined;
   const valid = j.subject && j.originId && j.destinationId && j.departure;
   const missingPos = j.originId && j.destinationId && km === undefined;
   return (
@@ -181,7 +182,7 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
             missingPos ? 'Give both places a position on the map to get a suggested arrival.' :
             km !== undefined ? (
               <>
-                {j.route ? `${Math.round(km)} km along the route` : `${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km travelled`} ≈ {days} day(s).{' '}
+                {j.route ? `${Math.round(km)} km along the route` : `${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km travelled`} {tf && tf.factor !== 1 && <>, {describeFactor(tf)},</>} ≈ {days} day(s).{' '}
                 {suggested && (
                   <>
                     Suggested arrival: <b>{formatFuzzy(suggested)}</b>{' '}
@@ -195,11 +196,41 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
           <DateInput value={j.arrival} placeholder={suggested ? `blank = suggested (${formatDayNumber(ix.win(suggested).earliest)})` : undefined} onChange={(arrival) => set({ arrival })} />
         </Field>
         <Field label="Purpose"><input value={j.purpose} onChange={(e) => set({ purpose: e.target.value })} /></Field>
+        <Incidents j={j} days={j.departure ? (j.arrival ? ix.win(j.arrival).earliest : ix.journeyEnd(j).end.earliest) - ix.win(j.departure).earliest + 1 : undefined} onChange={(incidents) => setJ((x) => ({ ...x, incidents: incidents.length ? incidents : undefined }))} />
         <Field label="Notes"><textarea rows={3} value={j.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
         <RevealField value={j.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
         <StatusToggle value={j.status} onChange={(status) => set({ status })} />
         {existing && <Backlinks kind="journey" id={j.id} title="Linked passages" />}
       </div>
     </Modal>
+  );
+}
+
+/** WH-10: things that happen on the way, by day of the journey. */
+function Incidents({ j, days, onChange }: { j: Journey; days?: number; onChange: (list: Incident[]) => void }) {
+  const { world } = useApp();
+  const list = [...(j.incidents ?? [])].sort((a, b) => a.day - b.day);
+  const put = (id: string, p: Partial<Incident>) => onChange(list.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  return (
+    <Field label="On the way" hint={days ? `Day 1 is the departure day; the journey takes about ${days} ${days === 1 ? 'day' : 'days'}. Incidents show on the map and the timeline.` : 'Ambushes, storms, chance meetings: things that happen on a given day of the journey.'}>
+      <div className="stack">
+        {list.map((x) => (
+          <div className="row wrap incident-row" key={x.id}>
+            <span className="muted">day</span>
+            <input type="number" min={1} style={{ width: 60 }} value={x.day} onChange={(e) => put(x.id, { day: Math.max(1, Math.round(Number(e.target.value) || 1)) })} />
+            <input value={x.title} placeholder="what happens" onChange={(e) => put(x.id, { title: e.target.value })} />
+            {world.events.length > 0 && (
+              <select value={x.eventId ?? ''} onChange={(e) => put(x.id, { eventId: e.target.value || undefined })} title="Tie it to a world event">
+                <option value="">no event</option>
+                {world.events.map((ev) => <option key={ev.id} value={ev.id}>{eventIcon(ev.kind)} {ev.name}</option>)}
+              </select>
+            )}
+            {days !== undefined && x.day > days && <span className="tag warn">after arrival</span>}
+            <button className="icon" aria-label="Remove" onClick={() => onChange(list.filter((y) => y.id !== x.id))}>×</button>
+          </div>
+        ))}
+        <div><button className="small" onClick={() => onChange([...list, { id: crypto.randomUUID(), day: Math.min(days ?? 1, list.length ? list[list.length - 1].day + 1 : 2), title: '', note: '' }])}>+ Add an incident</button></div>
+      </div>
+    </Field>
   );
 }

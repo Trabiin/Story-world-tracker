@@ -1,7 +1,7 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
 import {
   Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
-  makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea,
+  makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
 } from '../core';
 import { newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
@@ -220,6 +220,40 @@ export function sampleWorld(): World {
     ],
   });
   w.settings.timelineSky = { events: true, seasons: true, moon: true, holidays: true };
+
+  // Phase 4b: a third chapter with a flashback and a parallel scene (ST-4, ST-5), plot threads (ST-3),
+  // a what-if (ST-7), a plan (WH-11) and incidents on the way (WH-10).
+  const ch3 = { ...recordBase(), bookId: book.id, title: 'Chapter 3: Two Roads', order: 3, notes: '' };
+  w.chapters.push(ch3);
+  const keepNight: Scene = { ...recordBase(), chapterId: ch3.id, title: 'The keep at night', order: 1, start: d(1042, 5, 3), povCharacterId: tamsin.id, characterIds: [], summary: 'Tamsin overhears who the letter names.' };
+  const saltWind: Scene = { ...recordBase(), chapterId: ch3.id, title: 'Salt on the wind', order: 2, start: d(1042, 5, 7), povCharacterId: mira.id, characterIds: [oren.id], summary: 'The same morning at the gate, as Mira sees it.' };
+  const heir: Scene = { ...recordBase(), chapterId: ch3.id, title: 'The heir’s letter', order: 3, start: d(1042, 5, 16), povCharacterId: kaela.id, characterIds: [], summary: 'Kaela opens the letter at the harbour.' };
+  w.scenes.push(keepNight, saltWind, heir);
+  const thread = (name: string, color: string, characterIds: string[], extra: Partial<PlotThread> = {}): PlotThread => {
+    const t: PlotThread = { ...recordBase(), name, color, description: '', characterIds, ...extra };
+    w.threads.push(t);
+    return t;
+  };
+  const letter = thread('The sealed letter', '#c0504d', [kaela.id], { description: 'Kaela carries the regent’s letter south.' });
+  const trade = thread('The salt trade', '#4f81bd', [oren.id, mira.id]);
+  const spy = thread('Tamsin’s spying', '#8064a2', [tamsin.id], { parentId: letter.id, rejoinsId: letter.id });
+  const tag = (sc: Scene, ...ts: PlotThread[]) => { sc.threadIds = ts.map((t) => t.id); };
+  const [s1, s2, s3] = w.scenes;
+  tag(s1, letter); tag(s2, letter); tag(s3, letter, trade); tag(keepNight, spy); tag(saltWind, trade); tag(heir, letter);
+  w.settings.savedViews = [{ id: crypto.randomUUID(), name: 'The sealed letter', filter: { threadId: letter.id, drafts: 'show' }, view: 'timeline' }];
+
+  const whatIf = { ...newScenario(recordBase(), 'What if Mira stays with the caravan?'), description: 'Mira never stops at Thornwick and rides east with Oren.' };
+  const miraStay = w.stays.find((x) => x.subject.id === mira.id)!;
+  const miraMember = w.memberships.find((m) => m.characterId === mira.id)!;
+  whatIf.hidden.push(`stays:${miraStay.id}`);
+  const { end: _end, ...staysOn } = miraMember;
+  void _end;
+  w.memberships.push({ ...staysOn, id: overlayId(whatIf.id, miraMember.id), scenarioId: whatIf.id });
+  w.scenarios.push(whatIf);
+
+  kaela.plans = [{ id: crypto.randomUUID(), placeId: ember.id, from: d(1042, 5, 16), by: d(1042, 7, 1), note: 'find the heir’s guardian' }];
+  w.journeys[0].incidents = [{ id: crypto.randomUUID(), day: 3, title: 'A lame horse', note: 'She walks the last stretch.' }];
+  w.journeys[3].incidents = [{ id: crypto.randomUUID(), day: 9, title: 'Bandits at the ford', note: '' }, { id: crypto.randomUUID(), day: 21, title: 'Spring floods', note: '' }];
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

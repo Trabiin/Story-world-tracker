@@ -207,6 +207,19 @@ export function Timeline() {
           g.restore();
         }
         const fmt = (n: number) => (n === OPEN_END ? '…' : formatDayNumber(n));
+        // WH-10: incidents on a journey, as diamonds on the arrow.
+        if (s.kind === 'journey') {
+          const j = ix.journeys.get(s.recordId);
+          for (const inc of j?.incidents ?? []) {
+            const day = s.start.earliest + Math.max(0, inc.day - 1);
+            const ix0 = xOf(day + 0.5);
+            if (ix0 < LABEL_W || ix0 > w) continue;
+            const cy = top + hh / 2;
+            g.beginPath(); g.moveTo(ix0, cy - 6); g.lineTo(ix0 + 5, cy); g.lineTo(ix0, cy + 6); g.lineTo(ix0 - 5, cy); g.closePath();
+            g.fillStyle = bg; g.fill(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); g.lineWidth = 1;
+            hs.push({ x0: ix0 - 6, x1: ix0 + 6, y0: cy - 7, y1: cy + 7, kind: 'journey', id: s.recordId, label: `◆ ${inc.title || 'Incident'}\nday ${inc.day} of the journey, ${formatDayNumber(day)}` });
+          }
+        }
         hs.push({ x0, x1: Math.max(x1, x0 + 4), y0: top, y1: top + hh, kind: s.kind, id: s.recordId, label: `${label}\n${fmt(s.start.earliest)} – ${fmt(open ? OPEN_END : s.end.latest)}${s.viaGroupId ? `\nwith ${world.groups.find((gg) => gg.id === s.viaGroupId)?.name}` : ''}` });
       }
       // label column

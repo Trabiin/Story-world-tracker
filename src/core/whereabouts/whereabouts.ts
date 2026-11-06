@@ -6,6 +6,7 @@
 import { DayWindow, FuzzyDate, Hemisphere, midpoint, toWindow } from '../dates';
 import { DEFAULT_DETOUR_FACTOR, LatLng, greatCircleKm, interpolateGreatCircle, travelDays } from '../globe';
 import type { Character, Id, Journey, Membership, Place, Stay, World } from '../model';
+import { TravelFactor, travelFactor } from '../travel/modifiers';
 
 export const OPEN_END = Number.MAX_SAFE_INTEGER;
 
@@ -121,11 +122,25 @@ export class WorldIndex {
     return j.detourFactor ?? this.world.settings.defaultDetourFactor ?? DEFAULT_DETOUR_FACTOR;
   }
 
-  /** WH-8: suggested number of travel days, or undefined when places lack positions. */
+  // Keyed by the record itself, so an edited copy of a journey (in the editor) is worked out afresh.
+  private factorCache = new WeakMap<Journey, TravelFactor>();
+  private modCache = {};
+  /** WH-9: how much terrain, season, danger and current change this journey's time (1 = not at all). */
+  travelFactorOf(j: Journey): TravelFactor {
+    if (!j.departure) return { factor: 1, parts: [] };
+    let f = this.factorCache.get(j);
+    if (!f) {
+      f = travelFactor(this.world, this.journeyPath(j), j.modeId, this.win(j.departure).earliest, this.modCache);
+      this.factorCache.set(j, f);
+    }
+    return f;
+  }
+
+  /** WH-8: suggested number of travel days, or undefined when places lack positions. WH-9 modifiers apply when switched on. */
   suggestedTravelDays(j: Journey): number | undefined {
     const km = this.journeyDistanceKm(j);
     if (km === undefined) return undefined;
-    return travelDays(km, this.speedOf(j.modeId), this.detourOf(j));
+    return travelDays(km * this.travelFactorOf(j).factor, this.speedOf(j.modeId), this.detourOf(j));
   }
 
   stayEnd(s: Stay): { end: DayWindow; open: boolean } {

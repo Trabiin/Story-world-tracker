@@ -10,10 +10,12 @@ import { describeClash, findBiomeClashes, findRainShadows, hasTerrain, windName 
 import { FixKind, checkRivers, checkWater } from '../features';
 import { OPEN_END, Segment, WorldIndex, nominalEnd, nominalStart } from '../whereabouts';
 import { checkPeople } from '../people/checks';
+import { describeFactor } from '../travel/modifiers';
+import { overduePlans } from '../travel/plans';
 
 export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate' | 'river-uphill' | 'river-dead-end' | 'river-split'
   | 'lake-outlet' | 'river-crossing' | 'river-source' | 'settlement-water' | 'rain-shadow'
-  | 'life-span' | 'place-existence' | 'scene-place' | 'knowledge-order';
+  | 'life-span' | 'place-existence' | 'scene-place' | 'knowledge-order' | 'plan-overdue';
 
 export const RULES: Record<RuleId, { name: string; requirement: string; severity: 'warning' | 'info' }> = {
   'two-places': { name: 'In two places at once', requirement: 'CC-1', severity: 'warning' },
@@ -35,6 +37,7 @@ export const RULES: Record<RuleId, { name: string; requirement: string; severity
   'place-existence': { name: 'Place visited when it does not exist', requirement: 'CC-5', severity: 'warning' },
   'scene-place': { name: 'Scene place differs from the stay', requirement: 'CC-6', severity: 'warning' },
   'knowledge-order': { name: 'Learns of an event before it happens', requirement: 'CH-8', severity: 'warning' },
+  'plan-overdue': { name: 'Plan never carried out', requirement: 'WH-11', severity: 'info' },
 };
 
 export interface RecordRef {
@@ -165,7 +168,8 @@ export function checkJourney(ix: WorldIndex, j: Journey): Warning[] {
   const km = ix.journeyDistanceKm(j);
   if (km === undefined) return [];
   const speed = ix.speedOf(j.modeId);
-  const neededDays = (km * ix.detourOf(j)) / speed;
+  const tf = ix.travelFactorOf(j);
+  const neededDays = (km * ix.detourOf(j) * tf.factor) / speed;
   // A journey arriving on its departure day still gets that one day (inclusive counting).
   if (neededDays <= maxDays + 1) return [];
   const mode = ix.world.settings.travelModes.find((m) => m.id === j.modeId)?.name.toLowerCase() ?? j.modeId;
@@ -173,7 +177,7 @@ export function checkJourney(ix: WorldIndex, j: Journey): Warning[] {
     key: `impossible-travel:${j.id}`,
     rule: 'impossible-travel',
     severity: 'warning',
-    message: `${subjectName} travels ${route} (${j.route ? `${Math.round(km)} km along its route` : `${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km by road`}) by ${mode} in at most ${maxDays + 1} day(s), but it needs about ${Math.ceil(neededDays)}.`,
+    message: `${subjectName} travels ${route} (${j.route ? `${Math.round(km)} km along its route` : `${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km by road`}) by ${mode} in at most ${maxDays + 1} day(s), but it needs about ${Math.ceil(neededDays)}${tf.parts.length ? ` (${describeFactor(tf)})` : ''}.`,
     refs: [{ kind: 'journey', id: j.id }],
     day: dep.earliest,
   }];
@@ -194,6 +198,7 @@ export function checkWorld(world: World): Warning[] {
     }
   }
   for (const p of checkPeople(world, ix)) out.push({ ...p, severity: 'warning' });
+  for (const p of overduePlans(world)) out.push({ key: p.key, rule: 'plan-overdue', severity: 'info', characterId: p.characterId, message: p.message, refs: [{ kind: 'character', id: p.characterId }], day: p.day });
   out.push(...checkTerrain(world));
   const terrainOn = hasTerrain(world.terrain);
   for (const r of checkRivers(world)) {

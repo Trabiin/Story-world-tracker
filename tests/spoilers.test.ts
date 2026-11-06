@@ -7,7 +7,7 @@ const names = (xs: { name: string }[]) => xs.map((x) => x.name).sort();
 describe('"as of" spoiler filter (EU-8)', () => {
   it('shows only what the reader knows at the end of chapter 1', () => {
     const w = sampleWorld();
-    expect(readingChoices(w).map((c) => c.label)).toEqual(['Chapter 1: The Sealed Letter', 'Chapter 2: Market Days', 'End of The Salt Roads']);
+    expect(readingChoices(w).map((c) => c.label)).toEqual(['Chapter 1: The Sealed Letter', 'Chapter 2: Market Days', 'Chapter 3: Two Roads', 'End of The Salt Roads']);
     expect(readerDay(w, 0)).toBe(toDayNumber({ year: 1042, month: 4, day: 30 }));
     const v = spoilerView(w, 0);
     expect(names(v.characters)).toEqual(['Kaela Venn']);

@@ -59,6 +59,8 @@ export function createEmptyWorld(name: string): World {
     events: [],
     relationships: [],
     secrets: [],
+    threads: [],
+    scenarios: [],
     terrain: emptyTerrain(),
   };
 }

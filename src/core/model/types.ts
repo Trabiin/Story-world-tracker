@@ -54,6 +54,44 @@ export interface WorldSettings {
   timelineSky?: { events: boolean; seasons: boolean; seasonsAt?: Id; moon: boolean; holidays: boolean };
   /** TL-6: the moon's cycle, from one known new moon (a day number). */
   moon?: { periodDays: number; newMoonDay: number; name?: string };
+  /** WH-9 (optional): what slows or speeds travel beyond the travel mode's speed. */
+  travelModifiers?: TravelModifiers;
+  /** EU-7: named filters and layouts. */
+  savedViews?: SavedView[];
+}
+
+/** WH-9: each one on or off. */
+export interface TravelModifiers {
+  /** Hills and mountains slow travel on land. */
+  terrain: boolean;
+  /** Winter slows travel on land and at sea. */
+  season: boolean;
+  /** Regions on Danger layers slow everyone by their intensity. */
+  danger: boolean;
+  /** Ships go faster downstream and slower upstream on drawn rivers. */
+  river: boolean;
+}
+
+/** VW-7: what every view shows. */
+export interface ViewFilter {
+  bookId?: Id;
+  threadId?: Id;
+  /** A faction or allegiance attribute value, or a group name. */
+  faction?: string;
+  tag?: string;
+  /** Only scenes from this character's point of view, and who appears in them. */
+  povId?: Id;
+  /** ST-6: 'hide' leaves draft records out of every view and check. */
+  drafts: 'show' | 'hide';
+}
+
+/** EU-7: a named filter and layout to come back to in one click. */
+export interface SavedView {
+  id: Id;
+  name: string;
+  filter: ViewFilter;
+  view: string;
+  scenarioId?: Id;
 }
 
 /** LY-8: a named set of region layers to show together. */
@@ -95,6 +133,21 @@ export interface Character extends RecordBase {
   archived: boolean;
   /** CH-3: time-bound attributes such as title, allegiance or health. */
   attributes?: CharacterAttribute[];
+  /** WH-11: where the character intends to go next, before it is written as a journey. */
+  plans?: Plan[];
+}
+
+/** WH-11: "Kaela means to reach Saltmere by midsummer". */
+export interface Plan {
+  id: Id;
+  placeId: Id;
+  /** When they decide; absent = from the start. */
+  from?: FuzzyDate;
+  /** When they mean to be there. */
+  by?: FuzzyDate;
+  note: string;
+  /** Given up, or written as a journey. */
+  done?: boolean;
 }
 
 export const ATTRIBUTE_KEYS = ['title', 'allegiance', 'faction', 'culture', 'religion', 'health', 'possession', 'status'] as const;
@@ -166,8 +219,21 @@ export interface Journey extends RecordBase {
   detourFactor?: number; // overrides world default
   /** WH-6: the route drawn on the map, origin to destination. Its length replaces straight distance × detour. */
   route?: LatLng[];
+  /** WH-10: things that happen on the way, placed on the route by day. */
+  incidents?: Incident[];
   purpose: string;
   notes: string;
+}
+
+/** WH-10: "an ambush on day 4". */
+export interface Incident {
+  id: Id;
+  /** Days after departure (day 1 = the departure day). */
+  day: number;
+  title: string;
+  note: string;
+  /** A world event this incident is (optional). */
+  eventId?: Id;
 }
 
 /** MP-1, MK-1: an image pinned to world coordinates by its corners. */
@@ -356,6 +422,31 @@ export interface Scene extends RecordBase {
   placeId?: Id;
   characterIds: Id[];
   summary: string;
+  /** ST-3: plot threads this scene belongs to. */
+  threadIds?: Id[];
+}
+
+/** ST-3: a storyline. A thread can branch off another and rejoin it (or any other) later. */
+export interface PlotThread extends RecordBase {
+  name: string;
+  color: string;
+  description: string;
+  characterIds: Id[];
+  /** Branches off this thread. */
+  parentId?: Id;
+  /** Joins this thread again after its last scene. */
+  rejoinsId?: Id;
+}
+
+/**
+ * ST-7, DM-6: a "what if" branch of the whole world. Its records are stored beside canon with the
+ * id "<scenario id>~<record id>" and replace the canon record of the same id while it is active;
+ * canon records it removes are listed in hidden as "<collection>:<id>".
+ */
+export interface Scenario extends RecordBase {
+  name: string;
+  description: string;
+  hidden: string[];
 }
 
 /** ST-8: a Word file read (never written). Its text is cached so links and the reader work offline. */
@@ -477,6 +568,9 @@ export interface World {
   events: WorldEvent[];
   relationships: Relationship[];
   secrets: Secret[];
+  /** ST-3 plot threads, ST-7 scenarios. */
+  threads: PlotThread[];
+  scenarios: Scenario[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

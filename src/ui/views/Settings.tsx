@@ -1,6 +1,6 @@
 /** World settings, travel speeds (WH-7), backups (EU-17) and open exports (PL-4). */
 import { useMemo, useState } from 'react';
-import { EARTH_MOON, MOON_ICON, fromDay, moonPhases, toWindow, BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM } from '../../core';
+import { EARTH_MOON, MOON_ICON, fromDay, moonPhases, toWindow, BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM, NO_MODIFIERS } from '../../core';
 import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
 import { Field } from '../components/Modal';
@@ -57,6 +57,21 @@ export function Settings() {
       </table>
       <button onClick={() => store.setSettings({ travelModes: [...s.travelModes, { id: crypto.randomUUID(), name: 'New mode', speedKmPerDay: 40 }] })}>+ Add travel mode</button>
 
+      <h3>What slows travel down</h3>
+      <p className="muted small">Optional. Each one changes the suggested travel time of every journey that has no arrival date of its own, and the too-fast warnings.</p>
+      <div className="stack">
+        {([
+          ['terrain', 'Hills and mountains', 'Land travel over painted heights: hills ×1.25, high ground ×1.6, peaks ×2.'],
+          ['season', 'Winter', 'Land ×1.35, sea ×1.15 when a journey sets out in winter at that latitude.'],
+          ['danger', 'Danger', 'Regions on a Danger layer slow everyone, up to ×1.5 at full intensity.'],
+          ['river', 'River currents', 'Ships on drawn rivers: downstream ×0.75, upstream ×1.4.'],
+        ] as const).map(([k, label, hint]) => (
+          <label className="checkbox" key={k} title={hint}>
+            <input type="checkbox" checked={!!s.travelModifiers?.[k]} onChange={(e) => store.setSettings({ travelModifiers: { ...NO_MODIFIERS, ...s.travelModifiers, [k]: e.target.checked } })} /> {label} <span className="muted small">{hint}</span>
+          </label>
+        ))}
+      </div>
+
       <h2>Backups</h2>
       {platform.kind === 'desktop' ? (
         <>
@@ -79,8 +94,8 @@ export function Settings() {
       <h2>Export</h2>
       <p>Open formats, so your world is never locked in.</p>
       <div className="row wrap">
-        <button onClick={async () => platform.saveBinaryFile(`${safe}.world`, await worldToBytes(world, store.snapshots))}>World file (.world, SQLite)</button>
-        <button onClick={() => platform.saveTextFile(`${safe}.json`, worldToJson(world), 'application/json')}>Everything as JSON</button>
+        <button onClick={async () => platform.saveBinaryFile(`${safe}.world`, await worldToBytes(store.world, store.snapshots))}>World file (.world, SQLite)</button>
+        <button onClick={() => platform.saveTextFile(`${safe}.json`, worldToJson(store.world), 'application/json')}>Everything as JSON</button>
         <button onClick={() => platform.saveTextFile(`${safe}-places.geojson`, placesToGeoJson(world), 'application/geo+json')}>Places as GeoJSON</button>
       </div>
 

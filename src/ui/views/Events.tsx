@@ -49,7 +49,7 @@ export function Events() {
         <ul className="list">
           {tab === 'events' && events.map(({ e, day }) => (
             <li key={e.id} className={e.id === selected ? 'active' : ''} onClick={() => select(e.id)}>
-              <span className="swatch">{eventIcon(e.kind)}</span> {e.name}
+              <span className="swatch">{eventIcon(e.kind)}</span> {e.name}{e.status === 'draft' && <span className="tag">draft</span>}
               <div className="muted small">{day === Infinity ? 'no date yet' : formatDayNumber(day)}{e.yearly ? ' · every year' : ''}{e.start?.rel ? ' · relative' : ''}</div>
             </li>
           ))}
@@ -114,6 +114,7 @@ function EventDetail({ e }: { e: WorldEvent }) {
           <Field label="Who takes part"><CharacterChips world={world} value={e.characterIds} onChange={(characterIds) => set({ characterIds })} /></Field>
           <Field label="What happened"><textarea rows={5} value={e.description} onChange={(x) => set({ description: x.target.value })} /></Field>
           <RevealField value={e.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
+          <label className="checkbox"><input type="checkbox" checked={e.status === 'draft'} onChange={(x) => set({ status: x.target.checked ? 'draft' : 'canon' })} /> Draft (not yet canon)</label>
         </div>
         <div>
           {hanging > 0 && <p className="muted">{hanging} {hanging === 1 ? 'record has a date' : 'records have dates'} tied to this event. They move when it moves.</p>}

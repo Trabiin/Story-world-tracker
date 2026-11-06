@@ -8,7 +8,7 @@ import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
   MapFeature, refreshAutoRivers, traceRiver, routeAlongFeatures, networkFor, fromDay, existsOn, featureAnchor, insideArea, nearestOnPolyline, riverFlows, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
-  meanTemperatureC, pathLengthKm, applyFix, changedFeatures, FIX_LABEL, suggestBiomes, addCoastDetail, removeCoastDetail, hasCoastDetail, addDetailToFeatures, removeDetailFromFeatures, localSeasons, BiomeSuggestion, whereIs, wrapLng, LayerIndex, characterTrack, OPEN_END, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon,
+  meanTemperatureC, pathLengthKm, applyFix, changedFeatures, FIX_LABEL, suggestBiomes, addCoastDetail, removeCoastDetail, hasCoastDetail, addDetailToFeatures, removeDetailFromFeatures, localSeasons, BiomeSuggestion, whereIs, wrapLng, LayerIndex, characterTrack, OPEN_END, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon, incidentAt,
 } from '../../core';
 import { newId, recordBase } from '../../storage';
 import { fileToDataUrl } from '../views/Characters';
@@ -546,6 +546,25 @@ export function MapView() {
       }
       g.setLineDash([]);
       g.globalAlpha = 1;
+      // WH-10: incidents on the way, as small diamonds along the leg.
+      for (const leg of t.legs) {
+        const j = ix.journeys.get(leg.journeyId);
+        for (const inc of j?.incidents ?? []) {
+          const at = incidentAt(ix, j!, inc).at;
+          if (!at) continue;
+          for (const o of offsets) {
+            const sp = toScreen(view, w, h, at, o);
+            if (sp.x < -50 || sp.x > w + 50 || sp.y < -20 || sp.y > h + 20) continue;
+            g.beginPath(); g.moveTo(sp.x, sp.y - 6); g.lineTo(sp.x + 6, sp.y); g.lineTo(sp.x, sp.y + 6); g.lineTo(sp.x - 6, sp.y); g.closePath();
+            g.fillStyle = col; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#fff'; g.stroke();
+            if (layers.labels && inc.title) {
+              g.font = `italic 11px ${ff}`; g.textAlign = 'left'; g.textBaseline = 'middle';
+              g.lineWidth = 3; g.strokeStyle = cssVar('--bg'); g.strokeText(inc.title, sp.x + 8, sp.y);
+              g.fillStyle = col; g.fillText(inc.title, sp.x + 8, sp.y);
+            }
+          }
+        }
+      }
       const fmt = (n: number) => formatDayNumber(n);
       t.stops.forEach((st, i) => {
         for (const o of offsets) {

@@ -109,6 +109,18 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **New checks**: activity before birth or after death (CC-4), visiting a place before it exists or after it is gone (CC-5), a scene's place that doesn't match a character's stay (CC-6), and learning of an event before it happens.
 - **Meetings & tools**: who met whom, nesting aware (VW-6); two or three characters side by side (EU-13); calculators for age, travel time and days between dates (EU-12).
 - World file format 7 (events, relationships, secrets). Older files open as before.
+
+## Phase 4b: story structure
+
+- **Plot threads and the thread map** (ST-3, Books & scenes → Threads): storylines with branches that split off and rejoin; tick scenes into threads and see them as lanes across the books.
+- **Reading order vs story order** (ST-4, ST-5, Books & scenes → In order): every scene as read or as it happens, with flashbacks and parallel scenes labelled.
+- **What-if scenarios** (ST-7, top bar): try "what if she goes north" without touching canon, compare the changes and warnings, then make it canon or discard it. Drafts (ST-6) can be hidden everywhere.
+- **Filters and saved views** (VW-7, EU-7, top bar → Filter): show only one book, thread, POV, faction or tag in every view, and save the setup under a name.
+- **Name spotting** (ST-12, Manuscripts → Find names): finds character and place names chapter by chapter and suggests links, cast members and stays.
+- **Chapter overview** (ST-13): each chapter shows when it happens, who is in it and where.
+- **Travel** (WH-9 to WH-11): optional slow-downs for mountains, winter, danger and river currents (Settings); incidents on a journey shown on the map and timeline; characters' plans, flagged when they run out of time.
+- World file format 8 (threads, scenarios). Older files open as before.
+
 ## Development
 
 ```bash
