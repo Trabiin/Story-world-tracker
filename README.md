@@ -166,3 +166,13 @@ The manuscript now lives in the app. Word is the way in and out.
 - **Export to Word**: a book or a range of chapters as a standard manuscript (title page, Times New Roman 12, double spacing, running header with page numbers) or a reading copy.
 - **Plain-text safety copies**: every backup also writes each scene as a `.txt` file, foldered by book and chapter; Settings can download them as a zip.
 - **Spelling**: Windows' English spell checker (UK or US in Settings). Character, place, realm, event and group names are never underlined.
+
+## Phase 6b: write with the world
+
+- **Story sidebar** (WR-9, Write page → Sidebar): the scene's date, place, season and moon; who is present and where each one is staying (flagged if it's somewhere else); where everyone else in the cast is; and the warnings that concern the scene.
+- **Name cards** (WR-10): hover a character, place, realm, group or event name in the text for its card on the scene's date: age, status, whereabouts, relationships, what they know, a place's realm and who is there, and what the reader already knows by this chapter. Ctrl+click opens the page.
+- **Inline links** (WR-11): type `@` and a name to link it, or select words and press `Ctrl+L` (or Link). Links sit in the text, so they never break, and show under "Mentioned in". Realms can be linked too.
+- **Word counts and goals** (WR-12): counts per scene, chapter, book and series; a daily goal, a word goal and deadline per book (words a day needed), a streak and a calendar of words written per day (Sidebar → Goals).
+- **Scene stages** (WR-13): idea, outlined, first draft, revised, final. Shown as a dot in the scene trees, set in the scene header, and available as a filter.
+- **Series dashboard** (SR-1): the Home page starts with every book's stage, words, progress, deadline and open to-dos.
+- World file format 11 (words written per day). Older files open as before.

@@ -1,12 +1,13 @@
-/** VW-7: one filter for every view: book, plot thread, faction, tag, POV and drafts. */
+/** VW-7: one filter for every view: book, plot thread, faction, tag, POV, scene stage (WR-13) and drafts. */
 import type { Id, ViewFilter, World } from '../model';
 import { scenePov } from '../story/story';
 import { withoutDrafts } from './scenarios';
+import { stageOf } from '../writing/goals';
 
 export const NO_FILTER: ViewFilter = { drafts: 'show' };
 
 export function isFiltering(f: ViewFilter | undefined): boolean {
-  return !!f && (!!f.bookId || !!f.threadId || !!f.faction || !!f.tag || !!f.povId || f.drafts === 'hide');
+  return !!f && (!!f.bookId || !!f.threadId || !!f.faction || !!f.tag || !!f.povId || !!f.stage || f.drafts === 'hide');
 }
 
 /** A thread and every branch that grows from it. */
@@ -31,7 +32,7 @@ export function factionChoices(world: World): string[] {
 export function applyFilter(world: World, f: ViewFilter | undefined): World {
   if (!isFiltering(f)) return world;
   let w = f!.drafts === 'hide' ? withoutDrafts(world) : world;
-  if (!f!.bookId && !f!.threadId && !f!.faction && !f!.tag && !f!.povId) return w;
+  if (!f!.bookId && !f!.threadId && !f!.faction && !f!.tag && !f!.povId && !f!.stage) return w;
 
   let scenes = w.scenes;
   let chapters = w.chapters;
@@ -66,9 +67,10 @@ export function applyFilter(world: World, f: ViewFilter | undefined): World {
     scenes = scenes.filter((s) => scenePov(w, s) === f!.povId);
     narrow(cast(scenes));
   }
-  if (f!.bookId || f!.threadId || f!.povId) {
+  if (f!.stage) scenes = scenes.filter((s) => stageOf(s) === f!.stage);
+  if (f!.bookId || f!.threadId || f!.povId || f!.stage) {
     const ch = new Set(scenes.map((s) => s.chapterId));
-    chapters = chapters.filter((c) => ch.has(c.id) || (f!.povId && c.povCharacterId === f!.povId && (!f!.bookId || c.bookId === f!.bookId)));
+    chapters = chapters.filter((c) => ch.has(c.id) || (!f!.stage && f!.povId && c.povCharacterId === f!.povId && (!f!.bookId || c.bookId === f!.bookId)));
     const bk = new Set(chapters.map((c) => c.bookId));
     books = books.filter((b) => bk.has(b.id));
   }

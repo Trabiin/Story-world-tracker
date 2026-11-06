@@ -1,5 +1,5 @@
 /**
- * WR-1, WR-2, WR-8: the editor for one scene. Text is saved into the world a moment after typing
+ * WR-1, WR-2, WR-8, WR-10, WR-11: the editor for one scene. Text is saved into the world a moment after typing
  * stops (and at least every few seconds while typing), when the scene loses focus, and when it
  * closes. The editor keeps its own undo and redo; world undo never touches the text.
  */
@@ -11,7 +11,7 @@ import { Node as PMNode } from 'prosemirror-model';
 import { EditorState, Plugin, PluginKey, Selection, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import { useEffect, useRef } from 'react';
-import { Id, SceneText, TextComment, TextNode, World, addVersion, docWords, emptyDoc, makeVersion, nameRanges, packDoc, versionsOf, wantsAutoVersion, WRITING_VERSION_EVERY_MS } from '../../core';
+import { Id, LinkTargetKind, NameIndex, SceneText, TextComment, TextNode, World, addVersion, docWords, emptyDoc, logWords, makeVersion, nameMatches, nameRanges, packDoc, versionsOf, wantsAutoVersion, WRITING_VERSION_EVERY_MS } from '../../core';
 import { nowIso, newId, recordBase } from '../../storage';
 import type { WorldStore } from '../store';
 import { schema } from './schema';
@@ -20,9 +20,11 @@ import 'prosemirror-view/style/prosemirror.css';
 const COMMIT_IDLE_MS = 1500;
 const COMMIT_MAX_MS = 5000;
 
-/** What the decorations need from the world: its names (WR-8), comments and link labels. */
+/** What the decorations need from the world: its names (WR-8, WR-10), comments and link labels. */
 export interface TextInfo {
   words: Set<string>;
+  /** WR-10: full names and aliases, so a hovered name can show its card. */
+  names: NameIndex;
   comments: Map<Id, TextComment>;
   label: (kind: string, id: Id) => string | undefined;
 }
@@ -34,7 +36,13 @@ function decorate(doc: PMNode, info: TextInfo): DecorationSet {
   doc.descendants((node, pos) => {
     if (!node.isText) return;
     const text = node.text ?? '';
-    for (const [a, b] of nameRanges(text, info.words)) decos.push(Decoration.inline(pos + a, pos + b, { spellcheck: 'false', class: 'world-word' }));
+    // WR-10: names that stand for a record carry it, for the hover card (one span per name, kept out of the
+    // spell checker too). Linked text already says what it points at. WR-8: other world words only skip the checker.
+    const matches = node.marks.some((m) => m.type.name === 'link') ? [] : nameMatches(text, info.names);
+    for (const m of matches) decos.push(Decoration.inline(pos + m.from, pos + m.to, { 'data-ref': `${m.ref.kind}:${m.ref.id}`, spellcheck: 'false', class: 'world-word name-ref' }, { ref: m.ref }));
+    for (const [a, b] of nameRanges(text, info.words)) {
+      if (!matches.some((m) => m.from <= a && b <= m.to)) decos.push(Decoration.inline(pos + a, pos + b, { spellcheck: 'false', class: 'world-word' }));
+    }
     for (const m of node.marks) {
       if (m.type.name === 'comment') {
         const c = info.comments.get(m.attrs.id);
@@ -68,6 +76,115 @@ const sceneBreakRule = new InputRule(/^\s*(\*\s?){3}$/, (state, _m, start, end) 
   void end;
   return tr.setSelection(TextSelection.create(tr.doc, from + 2));
 });
+
+/** WR-11: an "@name" being typed: the text from the @ to the cursor. */
+export interface MentionState {
+  sceneId: Id;
+  view: EditorView;
+  from: number;
+  to: number;
+  query: string;
+  /** Where to show the list, in window coordinates. */
+  left: number;
+  top: number;
+}
+
+const mentionKey = new PluginKey<{ dismissedAt?: number }>('mention');
+
+/** WR-11: "@" after a space (or at the start of a paragraph) and up to 40 letters typed since. */
+export function findMention(state: EditorState): { from: number; to: number; query: string } | null {
+  const sel = state.selection;
+  if (!sel.empty || !sel.$head.parent.isTextblock) return null;
+  const $h = sel.$head;
+  const before = $h.parent.textBetween(0, $h.parentOffset, undefined, '\ufffc');
+  const m = /(?:^|[\s(“"‘'—–])@([^\s@\ufffc][^@\n\ufffc]{0,39})?$/u.exec(before);
+  if (!m) return null;
+  const query = m[1] ?? '';
+  if (/\s\s$/.test(query) || /[.,;:!?)]$/.test(query)) return null;
+  return { from: $h.pos - query.length - 1, to: $h.pos, query };
+}
+
+function mentionPlugin(get: () => Props) {
+  let last = '';
+  const report = (view: EditorView) => {
+    const p = get();
+    if (!p.onMention) return;
+    const found = view.hasFocus() && !p.readOnly ? findMention(view.state) : null;
+    const dismissed = mentionKey.getState(view.state)?.dismissedAt;
+    const m = found && found.from !== dismissed ? found : null;
+    const key = m ? `${m.from}:${m.query}` : '';
+    if (key === last) return;
+    last = key;
+    if (!m) { p.onMention(null); return; }
+    let left = 0, top = 0;
+    try { const c = view.coordsAtPos(m.from); left = c.left; top = c.bottom; } catch { /* not drawn yet */ }
+    p.onMention({ sceneId: p.sceneId, view, ...m, left, top });
+  };
+  return new Plugin<{ dismissedAt?: number }>({
+    key: mentionKey,
+    state: {
+      init: () => ({}),
+      apply: (tr, v) => {
+        const meta = tr.getMeta(mentionKey);
+        if (meta) return meta;
+        return v.dismissedAt !== undefined && tr.docChanged ? { dismissedAt: tr.mapping.map(v.dismissedAt) } : v;
+      },
+    },
+    view: () => ({ update: report, destroy: () => { if (last) get().onMention?.(null); } }),
+    props: {
+      handleKeyDown: (_v, e) => get().onMentionKey?.(e) ?? false,
+      handleDOMEvents: { blur: (v) => { last = ''; get().onMention?.(null); void v; return false; } },
+    },
+  });
+}
+
+/** WR-11: stop offering links for this "@" (Esc). */
+export function dismissMention(view: EditorView, from: number) {
+  view.dispatch(view.state.tr.setMeta(mentionKey, { dismissedAt: from }).setMeta('addToHistory', false));
+}
+
+/** WR-11: put a link to a record on text: replace from–to with the label, or (label undefined) link the text that is there. */
+export function linkText(view: EditorView, from: number, to: number, target: { kind: LinkTargetKind; id: Id }, label?: string) {
+  const mark = schema.marks.link.create({ kind: target.kind, id: target.id, note: '' });
+  let tr = view.state.tr;
+  if (label !== undefined) {
+    const keep = view.state.doc.resolve(from).marks().filter((m) => m.type !== schema.marks.link);
+    tr = tr.replaceWith(from, to, schema.text(label, [...keep, mark]));
+    tr = tr.setSelection(TextSelection.create(tr.doc, from + label.length)).removeStoredMark(schema.marks.link);
+  } else {
+    tr = tr.removeMark(from, to, schema.marks.link).addMark(from, to, mark);
+  }
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
+/** WR-11: the extent of the link at a position (the run of text carrying the same link). */
+export function linkRangeAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  const $p = state.doc.resolve(pos);
+  const parent = $p.parent;
+  const start = $p.start();
+  let found: { from: number; to: number; id?: string } | null = null;
+  let cur: { from: number; to: number; id: string } | null = null;
+  parent.forEach((child, offset) => {
+    const a = start + offset, b = a + child.nodeSize;
+    const link = child.marks.find((m) => m.type === schema.marks.link);
+    if (link && cur && cur.id === link.attrs.id && cur.to === a) cur.to = b;
+    else cur = link ? { from: a, to: b, id: link.attrs.id } : null;
+    if (cur && cur.from <= pos && pos <= cur.to && (!found || found.from === cur.from)) found = { ...cur };
+  });
+  return found ? { from: (found as { from: number }).from, to: (found as { to: number }).to } : null;
+}
+
+/** WR-10: the extent of the name at a position, as the decorations found it. */
+export function nameRangeAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  const d = infoKey.getState(state)?.find(pos, pos + 1, (spec) => !!spec.ref)[0];
+  return d ? { from: d.from, to: d.to } : null;
+}
+
+/** WR-11: take a link off (the text stays). */
+export function unlinkText(view: EditorView, from: number, to: number) {
+  view.dispatch(view.state.tr.removeMark(from, to, schema.marks.link));
+}
 
 export const commands = {
   bold: toggleMark(schema.marks.strong),
@@ -107,15 +224,25 @@ interface Props {
   onNav: (sceneId: Id, dir: 'prev' | 'next') => void;
   register: (sceneId: Id, view: EditorView | null) => void;
   onChange?: () => void;
+  /** WR-11: an "@name" is being typed (null: not any more). */
+  onMention?: (m: MentionState | null) => void;
+  /** WR-11: keys go here first while the @ list is open; true = handled. */
+  onMentionKey?: (e: KeyboardEvent) => boolean;
+  /** WR-11: Ctrl+L, link the selected words (or a name at the cursor). */
+  onLinkKey?: (sceneId: Id, view: EditorView) => void;
 }
 
-/** Save the editor's text into the world (not an undo step: the editor has its own undo). */
+/**
+ * Save the editor's text into the world (not an undo step: the editor has its own undo).
+ * WR-12: the change in the scene's word count goes into today's words-written log.
+ */
 export function commitText(store: WorldStore, sceneId: Id, doc: TextNode) {
   store.update((w: World) => {
     const words = docWords(doc);
     const t = w.sceneTexts.find((x) => x.sceneId === sceneId);
     const rec: SceneText = t ? { ...t, doc, words, updatedAt: nowIso() } : { ...recordBase(), id: newId(), sceneId, doc, words };
-    return { ...w, sceneTexts: t ? w.sceneTexts.map((x) => (x === t ? rec : x)) : [...w.sceneTexts, rec] };
+    const next = { ...w, sceneTexts: t ? w.sceneTexts.map((x) => (x === t ? rec : x)) : [...w.sceneTexts, rec] };
+    return logWords(next, words - (t?.words ?? 0));
   }, false);
 }
 
@@ -170,6 +297,8 @@ export function SceneEditor(p: Props) {
     const state = EditorState.create({
       doc: docNode(p.text?.doc),
       plugins: [
+        // WR-11 first, so the @ list gets arrow keys, Enter and Esc before the editor does.
+        mentionPlugin(() => props.current),
         inputRules({ rules: [...smartQuotes, ellipsis, emDash, sceneBreakRule] }),
         history(),
         keymap({
@@ -177,6 +306,7 @@ export function SceneEditor(p: Props) {
           'Mod-b': commands.bold, 'Mod-i': commands.italic,
           'Mod-Alt-0': commands.paragraph, 'Mod-Alt-1': commands.heading(1), 'Mod-Alt-2': commands.heading(2), 'Mod-Alt-3': commands.heading(3),
           'Mod-Enter': commands.sceneBreak,
+          'Mod-l': (_s, _d, v) => { if (v && props.current.onLinkKey) props.current.onLinkKey(props.current.sceneId, v); return true; },
           'Shift-Enter': (s, d) => { d?.(s.tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView()); return true; },
           ArrowDown: (s, _d, v) => atEdge(s, v, 'end', 'down') && nav('next'),
           ArrowRight: (s) => s.selection.empty && s.selection.head === Selection.atEnd(s.doc).head && nav('next'),

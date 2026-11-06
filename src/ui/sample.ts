@@ -1,8 +1,8 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
 import {
-  Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
+  Book, Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
   makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
-  Block, Run, TextComment, blocksToDoc, docWords,
+  Block, Run, TextComment, blocksToDoc, docToBlocks, docWords, addDays, dayKey,
 } from '../core';
 import { newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
@@ -70,7 +70,7 @@ export function sampleWorld(): World {
   ];
 
   // Story structure (ST-1, ST-2)
-  const book = { ...recordBase(), title: 'The Salt Roads', order: 1, notes: '' };
+  const book: Book = { ...recordBase(), title: 'The Salt Roads', order: 1, notes: '' };
   w.books.push(book);
   const ch1 = { ...recordBase(), bookId: book.id, title: 'Chapter 1: The Sealed Letter', order: 1, povCharacterId: kaela.id, notes: '' };
   const ch2 = { ...recordBase(), bookId: book.id, title: 'Chapter 2: Market Days', order: 2, povCharacterId: oren.id, notes: '' };
@@ -291,6 +291,21 @@ export function sampleWorld(): World {
   sceneText(keepNight, [P('Tamsin had not meant to listen. But the keep was old, and its walls carried voices the way a well carries an echo, and the name she heard was _Bram_.')]);
   sceneText(saltWind, [P('The same grey morning, from the other side of the gate: Mira watched Oren lose his temper over a toll of two coppers, and wondered what he was really waiting for.')]);
   sceneText(heir, [P('At the harbour, with the gulls quarrelling over the fish market, Kaela broke the seal.')]);
+
+  // Phase 6b: scene stages (WR-13), a word goal and deadline for the book, a daily goal and some days of writing (WR-12),
+  // and an inline link to a realm typed with @ (WR-11).
+  const stages: Scene['stage'][] = ['revised', 'first-draft', 'first-draft', 'outlined', 'idea', 'idea'];
+  [s1, s2, s3, keepNight, saltWind, heir].forEach((sc, i) => { sc.stage = stages[i]; });
+  const today = dayKey();
+  book.wordGoal = 90000;
+  book.deadline = addDays(today, 120);
+  w.settings.writing = { ...w.settings.writing, dailyGoal: 500 };
+  const pattern = [620, 0, 410, 530, 880, 0, 0, 350, 510, 700, 240, 0, 560, 505, 0, 720, 300, 0, 0, 450, 515, 610, 90, 0, 530, 680, 540, 0, 400, 520];
+  pattern.forEach((words, i) => { if (words) w.writingDays.push({ id: addDays(today, -(pattern.length - i)), scenarioId: 'canon', added: words + 40, removed: 40 }); });
+  w.writingDays.push({ id: today, scenarioId: 'canon', added: 260, removed: 25 });
+  const t3 = w.sceneTexts.find((t) => t.sceneId === s3.id)!;
+  t3.doc = blocksToDoc([...docToBlocks(t3.doc), { kind: 'p', runs: [{ text: '“A courier from the ' }, { text: 'Kingdom of Varn', link: { kind: 'region', id: varnRealm.id } }, { text: '? Then the regent is frightened.”' }] }]);
+  t3.words = docWords(t3.doc);
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

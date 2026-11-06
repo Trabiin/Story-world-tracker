@@ -1,6 +1,6 @@
 /** Top-bar controls: ST-7 what-if scenarios, VW-7 filters with ST-6 drafts, and EU-7 saved views. */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CANON, Id, SavedView, ViewFilter, applyFilter, checkWorld, discardScenario, factionChoices, isFiltering, newScenario, promoteScenario, scenarioChanges, scenarioView } from '../../core';
+import { CANON, Id, SCENE_STAGES, STAGE_LABEL, SavedView, ViewFilter, applyFilter, checkWorld, discardScenario, factionChoices, isFiltering, newScenario, promoteScenario, scenarioChanges, scenarioView } from '../../core';
 import { newId, nowIso } from '../../storage';
 import { useApp, View } from '../context';
 import { ask } from './Dialogs';
@@ -41,7 +41,7 @@ export function ViewControls() {
 }
 
 function activeFilterCount(f: ViewFilter): number {
-  return [f.bookId, f.threadId, f.faction, f.tag, f.povId, f.drafts === 'hide' ? 'x' : undefined].filter(Boolean).length;
+  return [f.bookId, f.threadId, f.faction, f.tag, f.povId, f.stage, f.drafts === 'hide' ? 'x' : undefined].filter(Boolean).length;
 }
 
 /** VW-7 + EU-7 */
@@ -93,6 +93,12 @@ function FilterPanel({ onClose }: { onClose: () => void }) {
           <select value={filter.povId ?? ''} onChange={(e) => set({ povId: e.target.value || undefined })}>
             <option value="">Any POV</option>
             {sortByName(world.characters.filter((c) => world.chapters.some((ch) => ch.povCharacterId === c.id) || world.scenes.some((s) => s.povCharacterId === c.id))).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Scene stage" hint="WR-13: only scenes at this stage.">
+          <select value={filter.stage ?? ''} onChange={(e) => set({ stage: (e.target.value || undefined) as ViewFilter['stage'] })}>
+            <option value="">Any stage</option>
+            {SCENE_STAGES.map((st) => <option key={st} value={st}>{STAGE_LABEL[st]}</option>)}
           </select>
         </Field>
         <Field label="Faction or group">

@@ -79,6 +79,10 @@ export interface WritingSettings {
   textSize?: number;
   /** WR-3: keep the line being typed in the middle of the screen. */
   typewriter?: boolean;
+  /** WR-12: words to write each day (net words added to scene text). Absent or 0 = no daily goal. */
+  dailyGoal?: number;
+  /** WR-9: the story sidebar beside the page is shown. Absent = shown. */
+  sidebar?: boolean;
 }
 
 /** EU-3: "soldier of the Guard": what a new character starts with. */
@@ -117,6 +121,8 @@ export interface ViewFilter {
   tag?: string;
   /** Only scenes from this character's point of view, and who appears in them. */
   povId?: Id;
+  /** WR-13: only scenes at this writing stage (the cast is not narrowed). */
+  stage?: SceneStage;
   /** ST-6: 'hide' leaves draft records out of every view and check. */
   drafts: 'show' | 'hide';
 }
@@ -448,6 +454,10 @@ export interface Book extends RecordBase {
   title: string;
   order: number;
   notes: string;
+  /** WR-12: the length the book should reach, in words. */
+  wordGoal?: number;
+  /** WR-12: the real-world date the book should be finished by, "YYYY-MM-DD" (not an in-world date). */
+  deadline?: string;
 }
 
 export interface Chapter extends RecordBase {
@@ -471,7 +481,15 @@ export interface Scene extends RecordBase {
   summary: string;
   /** ST-3: plot threads this scene belongs to. */
   threadIds?: Id[];
+  /**
+   * WR-13: how far the writing of this scene has got. Absent = 'idea'. Not the same as `status`
+   * (RecordBase, ST-6), which says whether the scene is canon or a draft record.
+   */
+  stage?: SceneStage;
 }
+
+/** WR-13: the writing stages of a scene, in order. */
+export type SceneStage = 'idea' | 'outlined' | 'first-draft' | 'revised' | 'final';
 
 /** ST-3: a storyline. A thread can branch off another and rejoin it (or any other) later. */
 export interface PlotThread extends RecordBase {
@@ -528,7 +546,8 @@ export interface PassageAnchor {
   heading: string; // nearest heading above the passage
 }
 
-export type LinkTargetKind = 'character' | 'place' | 'group' | 'stay' | 'journey' | 'book' | 'chapter' | 'scene' | 'event';
+/** What a passage can be linked to (ST-9 manuscript links, WR-11 inline links in scene text). */
+export type LinkTargetKind = 'character' | 'place' | 'group' | 'stay' | 'journey' | 'book' | 'chapter' | 'scene' | 'event' | 'region';
 
 /** ST-9: a passage linked to a record. */
 export interface ManuscriptLink extends RecordBase {
@@ -604,6 +623,17 @@ export interface SceneText extends RecordBase {
   comments?: TextComment[];
 }
 
+/**
+ * WR-12: one real-world day of writing. id is the day as "YYYY-MM-DD" in the writer's local time.
+ * added and removed are the words the editor saved that day, summed over every scene; net = added − removed.
+ */
+export interface WritingDay {
+  id: string;
+  scenarioId: Id;
+  added: number;
+  removed: number;
+}
+
 /** A node of a scene's text (ProseMirror JSON). */
 export interface TextNode {
   type: string;
@@ -674,6 +704,8 @@ export interface World {
   /** WR-1 the manuscript text, one record per scene; WR-6 each scene's saved versions. */
   sceneTexts: SceneText[];
   sceneVersions: SceneVersion[];
+  /** WR-12: words written on each real-world day. Shared by every scenario; world undo leaves it alone. */
+  writingDays: WritingDay[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

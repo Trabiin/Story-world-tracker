@@ -64,6 +64,7 @@ export function createEmptyWorld(name: string): World {
     todos: [],
     sceneTexts: [],
     sceneVersions: [],
+    writingDays: [],
     terrain: emptyTerrain(),
   };
 }
