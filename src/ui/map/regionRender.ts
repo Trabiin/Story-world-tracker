@@ -19,6 +19,8 @@ export interface RegionRenderOpts {
   reader?: TerrainReader;
   labels: boolean;
   selected?: Id;
+  /** VW-2, LY-6: regions whose borders just changed during playback; 0..1 fades the highlight. */
+  flash?: { ids: Set<Id>; strength: number };
   /** The layer being edited is drawn a little stronger. */
   activeLayer?: Id;
   fg: string;
@@ -201,6 +203,26 @@ export function drawRegionLayers(g: CanvasRenderingContext2D, o: RegionRenderOpt
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.drawImage(scratch, 0, 0);
+    g.restore();
+  }
+
+  // borders that just changed glow for a moment (LY-6 "scrubbing animates conquests")
+  if (o.flash && o.flash.strength > 0) {
+    g.save();
+    for (const id of o.flash.ids) {
+      const r = o.ix.regions.get(id);
+      const v = r && o.ix.versionAt(r, o.day);
+      if (!v) continue;
+      for (const off of offs) {
+        g.beginPath();
+        if (!tracePath(g, v.area, o.project, off, o.w, o.h)) continue;
+        g.globalAlpha = o.flash.strength;
+        g.strokeStyle = '#ffd166'; g.lineWidth = 7; g.stroke();
+        g.strokeStyle = '#b5562c'; g.lineWidth = 2; g.stroke();
+        g.globalAlpha = o.flash.strength * 0.25;
+        g.fillStyle = '#ffd166'; g.fill('evenodd');
+      }
+    }
     g.restore();
   }
 

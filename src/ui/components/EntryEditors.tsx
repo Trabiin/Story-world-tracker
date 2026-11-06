@@ -8,6 +8,7 @@ import { useApp } from '../context';
 import { DateInput } from './DateInput';
 import { Field, Modal } from './Modal';
 import { PlaceSelect, SubjectSelect } from './Pickers';
+import { RevealField } from './RevealField';
 
 type Draftable = { status: 'draft' | 'canon' };
 
@@ -75,6 +76,7 @@ export function StayEditor({ id, preset, onClose }: { id?: string; preset?: Part
         </Field>
         <Field label="Doing what" hint="Purpose and activities (WH-2)"><input value={s.purpose} onChange={(e) => set({ purpose: e.target.value })} placeholder="e.g. recovering from wounds, negotiating the treaty" /></Field>
         <Field label="Notes"><textarea rows={3} value={s.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+        <RevealField value={s.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
         <StatusToggle value={s.status} onChange={(status) => set({ status })} />
         {existing && <Backlinks kind="stay" id={s.id} title="Linked passages" />}
       </div>
@@ -194,6 +196,7 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
         </Field>
         <Field label="Purpose"><input value={j.purpose} onChange={(e) => set({ purpose: e.target.value })} /></Field>
         <Field label="Notes"><textarea rows={3} value={j.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+        <RevealField value={j.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
         <StatusToggle value={j.status} onChange={(status) => set({ status })} />
         {existing && <Backlinks kind="journey" id={j.id} title="Linked passages" />}
       </div>

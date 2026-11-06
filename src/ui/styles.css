@@ -3,6 +3,9 @@
   --panel: #f1efe9;
   --fg: #22211f;
   --muted: #77736b;
+  --notice-bg: #fff6d6;
+  --notice-fg: #5a4300;
+  --notice-line: #e8c766;
   --line: #dcd8cf;
   --accent: #b5562c;
   --accent-fg: #fff;
@@ -25,6 +28,9 @@
     --panel: #262522;
     --fg: #ebe8e1;
     --muted: #9b968c;
+    --notice-bg: #3b3214;
+    --notice-fg: #ffe7a3;
+    --notice-line: #7a6420;
     --line: #3b3935;
     --accent: #e0814f;
     --danger: #e5675a;
@@ -42,6 +48,9 @@
     --panel: #262522;
     --fg: #ebe8e1;
     --muted: #9b968c;
+    --notice-bg: #3b3214;
+    --notice-fg: #ffe7a3;
+    --notice-line: #7a6420;
     --line: #3b3935;
     --accent: #e0814f;
     --danger: #e5675a;
@@ -349,3 +358,17 @@ blockquote.quote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--ac
 .list-group .list-heading { padding: 0 12px; }
 .list .sw { vertical-align: -1px; margin-right: 4px; }
 .realm-history li { margin: 3px 0; }
+.moment-speed { font-size: 12px; padding: 2px 4px; max-width: 92px; }
+
+/* Phase 3b: playback banner, reader's view (EU-8), place visits (VW-4) */
+.map-banner { position: absolute; top: 54px; left: 50%; transform: translateX(-50%); background: var(--notice-bg); color: var(--notice-fg); border: 1px solid var(--notice-line); padding: 5px 14px; border-radius: 999px; font-size: 13px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18); pointer-events: none; max-width: 70%; text-align: center; z-index: 2; }
+.reader-select.on { background: var(--notice-bg); color: var(--notice-fg); border-color: var(--notice-line); font-weight: 600; }
+.main.reader-on { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.reader-banner { background: var(--notice-bg); color: var(--notice-fg); border-bottom: 1px solid var(--notice-line); padding: 6px 14px; font-size: 13px; }
+.visit-chart { width: 100%; display: block; margin: 6px 0 10px; }
+.visit-chart text { font-size: 11px; fill: var(--muted, #667); }
+.visit-list { list-style: none; padding: 0; margin: 0; }
+.visit-list li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+.visit-list li.now { background: rgba(255, 209, 102, 0.18); }
+.visit-list .when { color: var(--muted, #667); font-size: 12px; }
+.reader-select { max-width: 220px; }

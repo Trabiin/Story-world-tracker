@@ -25,6 +25,9 @@ export class WorldStore {
   saveError = '';
   lastBackupInfo = '';
   version = 0;
+  /** EU-8: while the reader's view is on, the world shown is filtered, so edits are blocked. */
+  readOnly = false;
+  onBlocked: (() => void) | null = null;
   private lastSnapshotAt = 0;
   private snapshotWorld: World | null = null;
 
@@ -73,6 +76,10 @@ export class WorldStore {
 
   /** Apply a change. undoable=false for view state like the current moment. */
   update(fn: (w: World) => World, undoable = true) {
+    if (undoable && this.readOnly) {
+      this.onBlocked?.();
+      return;
+    }
     const next = fn(this.world);
     if (next === this.world) return;
     if (undoable) {
@@ -86,6 +93,7 @@ export class WorldStore {
   }
 
   undo() {
+    if (this.readOnly) return this.onBlocked?.();
     const prev = this.past.pop();
     if (!prev) return;
     this.future.push(this.world);
@@ -94,6 +102,7 @@ export class WorldStore {
     this.emit();
   }
   redo() {
+    if (this.readOnly) return this.onBlocked?.();
     const next = this.future.pop();
     if (!next) return;
     this.past.push(this.world);
@@ -128,8 +137,9 @@ export class WorldStore {
     this.update((w) => ({ ...w, settings: { ...w.settings, ...patch } }), undoable);
   }
 
-  setMoment(day: number) {
-    this.setSettings({ currentMoment: Math.round(day) }, false);
+  /** exact: keep a fraction of a day, so playback moves markers smoothly (VW-2). */
+  setMoment(day: number, exact = false) {
+    this.setSettings({ currentMoment: exact ? day : Math.round(day) }, false);
   }
 
   private scheduleSave() {

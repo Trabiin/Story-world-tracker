@@ -15,6 +15,8 @@ export interface RecordBase {
   status: 'draft' | 'canon'; // ST-6
   createdAt: string; // ISO timestamp
   updatedAt: string;
+  /** EU-8: when the reader learns of it: a chapter id, 'start' or 'never'. Absent = worked out from the story. */
+  revealedIn?: Id;
 }
 
 /** DM-7: optional time span on anything. */

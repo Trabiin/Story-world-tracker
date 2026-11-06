@@ -35,6 +35,9 @@ export interface AppCtx {
   /** Open the map centred on a spot (n changes each time, so the same spot can be shown again). */
   showOnMap: (at: LatLng) => void;
   mapFocus: { at: LatLng; n: number } | undefined;
+  /** VW-3: open the map with this character's whole track drawn. */
+  showTrack: (characterId: Id) => void;
+  trackRequest: { id: Id; n: number } | undefined;
 }
 
 export const Ctx = createContext<AppCtx>(null as unknown as AppCtx);

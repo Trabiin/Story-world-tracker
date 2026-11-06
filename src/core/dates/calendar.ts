@@ -45,7 +45,7 @@ export function toDayNumber({ year, month, day }: YMD): number {
 }
 
 export function fromDayNumber(n: number): YMD {
-  const z = n + 719468;
+  const z = Math.floor(n) + 719468; // playback can pass a fraction of a day
   const era = Math.floor(z / 146097);
   const doe = z - era * 146097;
   const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);

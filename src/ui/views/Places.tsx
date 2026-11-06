@@ -1,7 +1,8 @@
 /** Places (WH-4, MP-5, DM-2): nest physically, positioned in lat/long on the globe. */
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
-import { LayerIndex, Place, PlaceKind, formatFuzzy, wrapLng, clampLat } from '../../core';
+import { RevealField } from '../components/RevealField';
+import { LayerIndex, OPEN_END, Place, PlaceKind, PlaceVisit, formatDayNumber, formatFuzzy, placeVisits, wrapLng, clampLat } from '../../core';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
@@ -58,7 +59,6 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
   const set = (patch: Partial<Place>) => store.upsert('places', { ...p, ...patch });
   const inherited = !p.location ? ix.locationOf(p.id) : undefined;
   const children = world.places.filter((x) => x.parentId === p.id);
-  const stays = world.stays.filter((s) => s.placeId === p.id || ix.ancestors(s.placeId).includes(p.id));
   const journeys = world.journeys.filter((j) => j.originId === p.id || j.destinationId === p.id || j.waypointIds.includes(p.id));
   const remove = async () => {
     const direct = world.stays.filter((s) => s.placeId === p.id).length + journeys.length;
@@ -113,6 +113,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
           <Field label="Exists until"><DateInput value={p.end} onChange={(end) => set({ end })} placeholder="still exists" /></Field>
           <label className="checkbox"><input type="checkbox" checked={p.isPlaceholder} onChange={(e) => set({ isPlaceholder: e.target.checked })} /> Placeholder for vague whereabouts (counts as accounted for)</label>
           <Field label="Notes"><textarea rows={6} value={p.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+          <RevealField value={p.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
         </div>
         <div>
           <RealmHistory p={p} />
@@ -122,30 +123,8 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
               <ul className="plain">{children.map((c) => <li key={c.id}><button className="link" onClick={() => select(c.id)}>{PLACE_ICON[c.kind]} {c.name}</button></li>)}</ul>
             </>
           )}
-          <h2>Who stays here</h2>
-          {stays.length === 0 ? <p className="muted">Nobody yet.</p> : (
-            <ul className="plain">
-              {stays.map((s) => (
-                <li key={s.id}>
-                  <button className="link" onClick={() => edit({ kind: 'stay', id: s.id })}>
-                    {subjectName(world, s.subject)}: {formatFuzzy(s.arrival)} – {s.departure ? formatFuzzy(s.departure) : '…'}
-                    {s.placeId !== p.id && <span className="muted"> ({world.places.find((x) => x.id === s.placeId)?.name})</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <WhoWasHere p={p} />
           <Backlinks kind="place" id={p.id} title="Manuscript and scenes" only={['passage', 'scene']} />
-          {journeys.length > 0 && (
-            <>
-              <h2>Journeys</h2>
-              <ul className="plain">
-                {journeys.map((j) => (
-                  <li key={j.id}><button className="link" onClick={() => edit({ kind: 'journey', id: j.id })}>{subjectName(world, j.subject)}: {formatFuzzy(j.departure)}, {world.places.find((x) => x.id === j.originId)?.name} → {world.places.find((x) => x.id === j.destinationId)?.name}</button></li>
-                ))}
-              </ul>
-            </>
-          )}
         </div>
       </div>
     </div>
@@ -185,6 +164,61 @@ function RealmHistory({ p }: { p: Place }) {
           {here.map((x, i) => <span key={x.layer.id}>{i > 0 && ' · '}{x.hits.map((h) => `${h.region.name}${h.intensity < 100 ? ` ${h.intensity}%` : ''}`).join(' + ')}</span>)}
         </p>
       )}
+    </>
+  );
+}
+
+const VISIT_WORD: Record<PlaceVisit['kind'], string> = { stay: 'stays', arrives: 'arrives', departs: 'leaves', passes: 'passes through' };
+
+/** VW-4: everyone who was here (or anywhere inside), over time, with the current moment marked. */
+function WhoWasHere({ p }: { p: Place }) {
+  const { world, ix, moment, edit, go } = useApp();
+  const visits = useMemo(() => placeVisits(ix, p.id), [ix, p.id]);
+  if (!visits.length) return <><h2>Who was here</h2><p className="muted">Nobody yet.</p></>;
+  const who = [...new Set(visits.map((v) => v.subject.id))];
+  const finite = visits.flatMap((v) => [v.start, v.end]).filter((n) => n !== OPEN_END);
+  const lo = Math.min(...finite, moment);
+  const hi = Math.max(...finite, moment, lo + 1);
+  const W = 520, L = 110, R = 10, rowH = 20, top = 6;
+  const x = (d: number) => L + ((Math.min(d, hi) - lo) / (hi - lo)) * (W - L - R);
+  const H = top + who.length * rowH + 18;
+  const char = (id: string) => ix.characters.get(id);
+  const open = (v: PlaceVisit) => edit({ kind: v.kind === 'stay' ? 'stay' : 'journey', id: v.recordId });
+  return (
+    <>
+      <h2>Who was here</h2>
+      <svg className="visit-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Who was at ${p.name} over time`}>
+        {who.map((id, r) => {
+          const c = char(id);
+          const y = top + r * rowH;
+          return (
+            <g key={id}>
+              <text x={0} y={y + 13} style={{ cursor: 'pointer' }} onClick={() => go('characters', id)}>{(c?.name ?? '?').slice(0, 16)}</text>
+              <line x1={L} x2={W - R} y1={y + 9} y2={y + 9} stroke="var(--line)" />
+              {visits.filter((v) => v.subject.id === id).map((v, n) => v.kind === 'stay'
+                ? <rect key={n} x={x(v.start)} y={y + 3} width={Math.max(3, x(v.end === OPEN_END ? hi : v.end) - x(v.start))} height={12} rx={3} fill={c?.color ?? '#888'} opacity={v.viaGroupId ? 0.55 : 0.9} style={{ cursor: 'pointer' }} onClick={() => open(v)}><title>{`${c?.name} ${VISIT_WORD[v.kind]} ${formatDayNumber(v.start)} – ${v.end === OPEN_END ? '…' : formatDayNumber(v.end)}`}</title></rect>
+                : <path key={n} d={`M${x(v.start)} ${y + 2} l4 7 l-4 7 l-4 -7 z`} fill="var(--bg)" stroke={c?.color ?? '#888'} strokeWidth={1.5} style={{ cursor: 'pointer' }} onClick={() => open(v)}><title>{`${c?.name} ${VISIT_WORD[v.kind]} ${formatDayNumber(v.start)}`}</title></path>)}
+            </g>
+          );
+        })}
+        <line x1={x(moment)} x2={x(moment)} y1={0} y2={H - 16} stroke="var(--accent)" strokeWidth={1.5} />
+        <text x={L} y={H - 3}>{formatDayNumber(lo)}</text>
+        <text x={W - R} y={H - 3} textAnchor="end">{formatDayNumber(hi)}</text>
+      </svg>
+      <ul className="visit-list">
+        {visits.map((v, n) => {
+          const now = v.start <= moment && moment <= (v.end === OPEN_END ? Infinity : v.end);
+          const group = v.viaGroupId ? world.groups.find((g) => g.id === v.viaGroupId)?.name : undefined;
+          return (
+            <li key={n} className={now && v.kind === 'stay' ? 'now' : ''} onClick={() => open(v)}>
+              <span className="when">{formatDayNumber(v.start)}{v.kind === 'stay' && <> – {v.end === OPEN_END ? '…' : formatDayNumber(v.end)}</>}</span>{' '}
+              <b style={{ color: char(v.subject.id)?.color }}>{char(v.subject.id)?.name}</b> {VISIT_WORD[v.kind]}
+              {v.placeId !== p.id && <> at {world.places.find((x2) => x2.id === v.placeId)?.name}</>}
+              {group && <span className="tag">with {group}</span>}
+            </li>
+          );
+        })}
+      </ul>
     </>
   );
 }

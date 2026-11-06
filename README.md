@@ -80,6 +80,13 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **Realms & layers** page: each region's encyclopedia entry, rulers and other characters tied to it with dates, overlords and vassals over time, border history and the places inside it. A **place** page shows its realm history ("Kingdom of Varn 1001–1044, Empire of Ash 1044–"); a character page shows the realms they are tied to.
 - Places as GeoJSON exports every border version as a MultiPolygon with its dates.
 
+## Phase 3b: views over time
+
+- **Play** (top bar) moves the date smoothly, at 1 day, 1 week, 1 month or 1 year per second. Characters glide along their routes. When the date crosses a border change, the regions involved glow and the map names the change and its date ("01/06/1044: The Ash conquest of the east march").
+- **Character track**: **Show track on map** on a character page draws their whole path, with numbered stops and dates. The part travelled by the current date is solid; the rest is dashed. Track several characters at once from the map's Tracks card.
+- **Who was here**: a place page shows everyone who was there (or anywhere inside it) on a small timeline with the current date marked, plus a list of stays, arrivals, departures and passes.
+- **Reader's view** (top bar): see the world as the reader knows it at the end of any chapter or book. Characters, places and groups appear from the first chapter that mentions them; stays, journeys, borders and attributes appear once the story has reached their date. Override it on any record with **Reader learns of it**. Editing is off while the reader's view is on.
+
 ## Development
 
 ```bash
