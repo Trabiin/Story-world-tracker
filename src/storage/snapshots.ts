@@ -26,7 +26,8 @@ export async function makeSnapshot(world: World, label: string): Promise<Snapsho
   // Map images are large and rarely change; keep their settings but not their pixels.
   // Terrain is kept as references to tiles stored once in the world file.
   const terrain = await encodeTerrain(world.terrain);
-  const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })), terrain };
+  // Scene versions (WR-6) are a history of their own and stay out of world versions.
+  const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })), sceneVersions: [], terrain };
   const json = new TextEncoder().encode(JSON.stringify(lean));
   return { id: crypto.randomUUID(), at: new Date().toISOString(), label, summary: summarize(world), data: await gzip(json), terrainRefs: manifestHashes(terrain) };
 }
@@ -41,6 +42,7 @@ export async function restoreSnapshot(s: Snapshot, current: World): Promise<Worl
   w.mapImages = w.mapImages
     .map((m) => ({ ...m, dataUrl: current.mapImages.find((c) => c.id === m.id)?.dataUrl ?? '' }))
     .filter((m) => m.dataUrl);
+  w.sceneVersions = current.sceneVersions;
   w.settings = { ...w.settings, currentMoment: current.settings.currentMoment, backupFolder: current.settings.backupFolder };
   return w;
 }

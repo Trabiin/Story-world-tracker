@@ -13,6 +13,8 @@ import { placePath, sortByName } from '../util';
 import { ChapterOverviewPanel, OrderList, SceneThreads, ThreadDetail, ThreadList, ThreadMap } from './StoryStructure';
 
 type Mode = 'outline' | 'order' | 'threads';
+/** WR-1: a scene's text goes with it. */
+const textsOf = (w: { sceneTexts: { id: Id; sceneId: Id }[] }, sceneIds: Id[]) => w.sceneTexts.filter((t) => sceneIds.includes(t.sceneId)).map((t) => ({ c: 'sceneTexts' as const, id: t.id }));
 const saved = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const keep = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
@@ -128,8 +130,8 @@ function BookDetail({ b }: { b: Book }) {
   const remove = async () => {
     const chapters = world.chapters.filter((c) => c.bookId === b.id);
     const scenes = world.scenes.filter((s) => chapters.some((c) => c.id === s.chapterId));
-    if (!(await ask.confirm(`Delete ${b.title} with its ${chapters.length} chapter(s) and ${scenes.length} scene(s)? Manuscript files are not affected.`, { okLabel: 'Delete', danger: true }))) return;
-    store.removeMany([{ c: 'books', id: b.id }, ...chapters.map((c) => ({ c: 'chapters' as const, id: c.id })), ...scenes.map((s) => ({ c: 'scenes' as const, id: s.id }))]);
+    if (!(await ask.confirm(`Delete ${b.title} with its ${chapters.length} chapter(s) and ${scenes.length} scene(s), including their text? Undo brings it back. Word files are not affected.`, { okLabel: 'Delete', danger: true }))) return;
+    store.removeMany([{ c: 'books', id: b.id }, ...chapters.map((c) => ({ c: 'chapters' as const, id: c.id })), ...scenes.map((s) => ({ c: 'scenes' as const, id: s.id })), ...textsOf(world, scenes.map((s) => s.id))]);
     select(undefined);
   };
   return (
@@ -150,8 +152,8 @@ function ChapterDetail({ c }: { c: Chapter }) {
   const siblings = world.chapters.filter((x) => x.bookId === c.bookId);
   const scenes = world.scenes.filter((s) => s.chapterId === c.id).sort((a, b) => a.order - b.order);
   const remove = async () => {
-    if (!(await ask.confirm(`Delete ${c.title} and its ${scenes.length} scene(s)?`, { okLabel: 'Delete', danger: true }))) return;
-    store.removeMany([{ c: 'chapters', id: c.id }, ...scenes.map((s) => ({ c: 'scenes' as const, id: s.id }))]);
+    if (!(await ask.confirm(`Delete ${c.title} and its ${scenes.length} scene(s), including their text? Undo brings it back.`, { okLabel: 'Delete', danger: true }))) return;
+    store.removeMany([{ c: 'chapters', id: c.id }, ...scenes.map((s) => ({ c: 'scenes' as const, id: s.id })), ...textsOf(world, scenes.map((s) => s.id))]);
     select(undefined);
   };
   return (
@@ -187,13 +189,14 @@ function SceneDetail({ s }: { s: Scene }) {
   const pov = scenePov(world, s);
   const place = scenePlace(ix, s);
   const remove = async () => {
-    if (!(await ask.confirm(`Delete ${s.title}?`, { okLabel: 'Delete', danger: true }))) return;
-    store.removeMany([{ c: 'scenes', id: s.id }]);
+    const words = world.sceneTexts.find((t) => t.sceneId === s.id)?.words ?? 0;
+    if (!(await ask.confirm(`Delete ${s.title}${words ? ` and its ${words.toLocaleString('en-US')} words of text` : ''}? Undo brings it back.`, { okLabel: 'Delete', danger: true }))) return;
+    store.removeMany([{ c: 'scenes', id: s.id }, ...textsOf(world, [s.id])]);
     select(undefined);
   };
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>{s.title}</h1><div className="row"><Reorder list={siblings} item={s} collection="scenes" /><button className="danger" onClick={remove}>Delete</button></div></div>
+      <div className="page-head"><h1>{s.title}</h1><div className="row"><button className="primary" onClick={() => go('write', s.id)} title="WR-1: write this scene">Write</button><Reorder list={siblings} item={s} collection="scenes" /><button className="danger" onClick={remove}>Delete</button></div></div>
       <div className="form-grid">
         <Field label="Title"><input value={s.title} onChange={(e) => set({ title: e.target.value })} /></Field>
         <Field label="Chapter">

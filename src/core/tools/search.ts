@@ -1,5 +1,6 @@
 /** VW-8: one search box over characters, places, events, scenes, notes and the manuscripts. */
 import type { Id, RefKind, World } from '../model';
+import { docParagraphs } from '../writing/doc';
 
 export interface SearchHit {
   kind: RefKind;
@@ -11,6 +12,8 @@ export interface SearchHit {
   snippet?: string;
   /** For manuscript hits: the paragraph. */
   paraIndex?: number;
+  /** WR-1: found in the scene's text (opens the writing page, not the scene's details). */
+  inText?: boolean;
   score: number;
 }
 
@@ -84,6 +87,19 @@ export function globalSearch(world: World, query: string, limit = 200): SearchHi
       if (!terms.every((w) => t.includes(w))) return;
       n++;
       hits.push({ kind: 'manuscript', id: m.id, title: m.name, sub: 'Manuscript', snippet: snippetOf(p.text, terms), paraIndex: i, score: 10 });
+    });
+  }
+  // Scene text (WR-1): one hit per paragraph, at most 10 per scene.
+  for (const t of world.sceneTexts) {
+    const s = world.scenes.find((x) => x.id === t.sceneId);
+    if (!s) continue;
+    let n = 0;
+    docParagraphs(t.doc).forEach((p, i) => {
+      if (n >= 10) return;
+      const tx = norm(p.text);
+      if (!terms.every((w) => tx.includes(w))) return;
+      n++;
+      hits.push({ kind: 'scene', id: s.id, title: s.title, sub: `Text · ${chapter(s.chapterId) ?? '?'}`, snippet: snippetOf(p.text, terms), paraIndex: i, inText: true, score: 12 });
     });
   }
   return hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, limit);

@@ -102,6 +102,7 @@ const REQUIRED: Partial<Record<DataCollection, string[]>> = {
   scenes: ['chapterId'],
   chapters: ['bookId'],
   regions: ['layerId'],
+  sceneTexts: ['sceneId'],
 };
 
 function strip(v: unknown, id: Id, parentOf: Id | undefined, depth = 0): unknown {

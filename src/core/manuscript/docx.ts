@@ -7,20 +7,20 @@ import type { Paragraph } from '../model';
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
-function decode(s: string): string {
+export function decode(s: string): string {
   return s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e: string) => {
     if (e[0] === '#') return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
     return ENTITIES[e] ?? m;
   });
 }
 
-function attr(xml: string, tag: string, name = 'w:val'): string | undefined {
+export function attr(xml: string, tag: string, name = 'w:val'): string | undefined {
   const m = xml.match(new RegExp(`<${tag}\\b[^>]*\\b${name}="([^"]*)"`));
   return m ? decode(m[1]) : undefined;
 }
 
 /** Map style id → heading level, using names ("heading 1", "Title") and outline levels, so localized styles work. */
-function headingStyles(stylesXml: string | undefined): Map<string, number> {
+export function headingStyles(stylesXml: string | undefined): Map<string, number> {
   const out = new Map<string, number>();
   if (!stylesXml) return out;
   for (const m of stylesXml.matchAll(/<w:style\b[^>]*w:type="paragraph"[^>]*>([\s\S]*?)<\/w:style>/g)) {

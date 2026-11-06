@@ -60,6 +60,25 @@ export interface WorldSettings {
   savedViews?: SavedView[];
   /** EU-3: start a character from a template. */
   characterTemplates?: CharacterTemplate[];
+  /** WR-3, WR-5, WR-8: how the writing page looks and what goes on an exported title page. */
+  writing?: WritingSettings;
+}
+
+/** WR-3, WR-5, WR-8, EU-18. */
+export interface WritingSettings {
+  /** Title page and running header of an exported manuscript (WR-5). */
+  authorName?: string;
+  /** Surname for the running header ("Surname / TITLE / 1"); absent = last word of authorName. */
+  authorSurname?: string;
+  /** Contact lines (address, email, agent) for the top left of the title page. */
+  contact?: string;
+  /** WR-8: which English the spell checker uses. */
+  spelling?: 'en-GB' | 'en-US';
+  /** WR-3, EU-18: page colour and text size of the writing page and focus mode. */
+  page?: 'light' | 'dark' | 'sepia';
+  textSize?: number;
+  /** WR-3: keep the line being typed in the middle of the screen. */
+  typewriter?: boolean;
 }
 
 /** EU-3: "soldier of the Guard": what a new character starts with. */
@@ -487,6 +506,9 @@ export interface Manuscript extends RecordBase {
   /** Fingerprint of the last text read, to notice edits. */
   textHash: string;
   loadedAt: string;
+  /** WR-4: when the file was brought into the app's own editor, and into which book. */
+  importedAt?: string;
+  importedBookId?: Id;
 }
 
 export interface Paragraph {
@@ -569,6 +591,53 @@ export interface Knower {
   how: string;
 }
 
+/**
+ * WR-1: the text of one scene, as a ProseMirror document in JSON form (see core/writing/doc.ts for
+ * the node and mark types). One record per scene; id is usually the scene id.
+ */
+export interface SceneText extends RecordBase {
+  sceneId: Id;
+  doc: TextNode;
+  /** Kept up to date on every save, so counts never need the whole text parsed. */
+  words: number;
+  /** WR-4, NT-1: margin comments. The commented text carries a "comment" mark with the same id. */
+  comments?: TextComment[];
+}
+
+/** A node of a scene's text (ProseMirror JSON). */
+export interface TextNode {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: TextNode[];
+  text?: string;
+  marks?: TextMark[];
+}
+export interface TextMark {
+  type: string;
+  attrs?: Record<string, unknown>;
+}
+
+/** WR-4, NT-1: a margin comment, e.g. one brought in from Word. */
+export interface TextComment {
+  id: Id;
+  author: string;
+  date?: string;
+  text: string;
+}
+
+/** WR-6: one saved version of a scene's text. The document is gzipped JSON in base64 to keep the world file small. */
+export interface SceneVersion {
+  id: Id;
+  sceneId: Id;
+  at: string;
+  /** "Automatic", "Before restoring …", or the writer's own label. */
+  label: string;
+  /** Kept by hand: never thinned out. */
+  pinned: boolean;
+  words: number;
+  data: string;
+}
+
 export interface World {
   settings: WorldSettings;
   characters: Character[];
@@ -602,6 +671,9 @@ export interface World {
   scenarios: Scenario[];
   /** EU-14 to-dos and plot holes. */
   todos: Todo[];
+  /** WR-1 the manuscript text, one record per scene; WR-6 each scene's saved versions. */
+  sceneTexts: SceneText[];
+  sceneVersions: SceneVersion[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

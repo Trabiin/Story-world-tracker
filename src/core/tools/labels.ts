@@ -3,14 +3,14 @@ import { formatFuzzy } from '../dates';
 import type { Id, RefKind, World } from '../model';
 
 /** Collections that hold story data (not settings, terrain or map images). */
-export const DATA_COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'detailMaps', 'regionLayers', 'regions', 'events', 'relationships', 'secrets', 'threads', 'todos'] as const;
+export const DATA_COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'detailMaps', 'regionLayers', 'regions', 'events', 'relationships', 'secrets', 'threads', 'todos', 'sceneTexts'] as const;
 
 export const COLLECTION_LABEL: Record<(typeof DATA_COLLECTIONS)[number], [string, string]> = {
   characters: ['character', 'characters'], places: ['place', 'places'], groups: ['group', 'groups'], memberships: ['group membership', 'group memberships'],
   stays: ['stay', 'stays'], journeys: ['journey', 'journeys'], books: ['book', 'books'], chapters: ['chapter', 'chapters'], scenes: ['scene', 'scenes'],
   manuscripts: ['manuscript', 'manuscripts'], links: ['manuscript link', 'manuscript links'], mapSymbols: ['map symbol', 'map symbols'], mapFeatures: ['map feature', 'map features'],
   detailMaps: ['detail map', 'detail maps'], regionLayers: ['layer', 'layers'], regions: ['region', 'regions'], events: ['event', 'events'], relationships: ['relationship', 'relationships'],
-  secrets: ['secret', 'secrets'], threads: ['plot thread', 'plot threads'], todos: ['to-do', 'to-dos'],
+  secrets: ['secret', 'secrets'], threads: ['plot thread', 'plot threads'], todos: ['to-do', 'to-dos'], sceneTexts: ['scene text', 'scene texts'],
 };
 
 export const countText = (n: number, c: (typeof DATA_COLLECTIONS)[number]) => `${n} ${COLLECTION_LABEL[c][n === 1 ? 0 : 1]}`;
@@ -27,6 +27,7 @@ export function recordLabel(world: World, c: string, r: unknown): string {
   if (c === 'journeys') return `${who(o.subject as never)}: ${place(o.originId)} → ${place(o.destinationId)}${when(o.departure)}`;
   if (c === 'memberships') return `${ch(o.characterId)} in ${world.groups.find((g) => g.id === o.groupId)?.name ?? '?'}`;
   if (c === 'relationships') return `${ch(o.aId)} and ${ch(o.bId)} (${o.kind})`;
+  if (c === 'sceneTexts') return `Text of ${world.scenes.find((s) => s.id === o.sceneId)?.title ?? 'a scene'}`;
   if (c === 'links') return `“${String((o.anchor as { quote?: string })?.quote ?? '').slice(0, 50)}”`;
   return String(o.kind ?? c);
 }
