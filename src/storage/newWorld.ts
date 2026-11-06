@@ -51,6 +51,7 @@ export function createEmptyWorld(name: string): World {
     manuscripts: [],
     links: [],
     mapSymbols: [],
+    mapFeatures: [],
     terrain: emptyTerrain(),
   };
 }

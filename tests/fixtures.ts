@@ -22,7 +22,7 @@ export function world(): World {
     journeys: [],
     mapImages: [],
     dismissals: [],
-    books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], terrain: emptyTerrain(),
+    books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], mapFeatures: [], terrain: emptyTerrain(),
   };
 }
 

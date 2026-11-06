@@ -25,8 +25,10 @@ export function worldFromJson(text: string): World {
 /** GeoJSON FeatureCollection of places (RFC 7946: coordinates are [longitude, latitude]). */
 export function placesToGeoJson(world: World): string {
   const ix = new WorldIndex(world);
-  const features = world.places
-    .filter((p) => !p.isPlaceholder)
+  // Places drawn as map features (rivers, lakes, roads, areas) are exported with their real shape.
+  const drawn = new Set(world.mapFeatures.map((f) => f.placeId).filter(Boolean));
+  const features: unknown[] = world.places
+    .filter((p) => !p.isPlaceholder && !drawn.has(p.id))
     .map((p) => {
       const loc = ix.locationOf(p.id);
       return loc
@@ -48,5 +50,23 @@ export function placesToGeoJson(world: World): string {
         : null;
     })
     .filter(Boolean);
+  for (const f of world.mapFeatures) {
+    if (f.points.length < 2) continue;
+    const ring = f.points.map((p) => [p.lng, p.lat]);
+    features.push({
+      type: 'Feature',
+      id: f.id,
+      geometry: f.shape === 'line' ? { type: 'LineString', coordinates: ring } : { type: 'Polygon', coordinates: [[...ring, ring[0]]] },
+      properties: {
+        name: f.name,
+        kind: f.kind,
+        placeId: f.placeId ?? null,
+        joinsId: f.joinsId ?? null,
+        start: f.start ?? null,
+        end: f.end ?? null,
+        notes: f.notes,
+      },
+    });
+  }
   return JSON.stringify({ type: 'FeatureCollection', features, properties: { world: world.settings.name, radiusKm: world.settings.radiusKm } }, null, 2);
 }

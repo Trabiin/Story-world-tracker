@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ask } from '../components/Dialogs';
 import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
+  MapFeature, connectKm, touchKm, existsOn, featureAnchor, insideArea, nearestOnPolyline, polylineKm, riverFlows, traceDownhill, carveValley, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
   meanTemperatureC, pathLengthKm, whereIs, wrapLng,
 } from '../../core';
@@ -15,18 +16,24 @@ import { PLACE_ICON } from '../views/Places';
 import { useApp } from '../context';
 import { TiledImage, TILE } from './tiles';
 import { ViewState, boundsFromTwoPoints, toLatLng, toScreen, wrapOffsets } from './projection';
-import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, toolInfo } from './DrawPanel';
+import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
 import { GlobePreview } from './GlobePreview';
 import { Overview, Relief, RenderStyle, SYMBOL_BLOCK, TileImageCache, autoSymbols, hexToRgb, PALETTE, styleKey } from './terrainRender';
 import { drawCompass, drawSymbol } from './symbols';
+import { KIND_NAME, RIVER_COLOR, ScreenShape, drawFeatures, hitFeature, projectLine } from './featureRender';
+import { FeatureCard } from './FeatureCard';
+
+/** Map features never show as place markers; they are drawn as lines and areas. */
+const FEATURE_PLACE_KINDS = new Set(['river', 'lake', 'road', 'area']);
+const SETTLEMENT_SIZE: Record<string, number> = { capital: 18, city: 16, town: 13, village: 11 };
 
 type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw';
 const DRAW_KEY = 'swt.draw';
 const LAYERS_KEY = 'swt.mapLayers';
-const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, climate: false, places: true, characters: true, routes: true, labels: true };
+const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, climate: false, places: true, characters: true, routes: true, labels: true };
 type Layers = typeof DEFAULT_LAYERS;
 const LAYER_NAMES: Record<keyof Layers, string> = {
-  grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols',
+  grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols', features: 'Rivers, lakes, roads and areas',
   climate: 'Climate zones', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels',
 };
 
@@ -87,13 +94,20 @@ export function MapView() {
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [mode, setMode] = useState<Mode>(pickFor ? 'pick' : 'browse');
   const [hover, setHover] = useState<LatLng | null>(null);
-  const [selected, setSelected] = useState<{ kind: 'place' | 'character'; id: Id } | null>(null);
+  const [selected, setSelected] = useState<{ kind: 'place' | 'character' | 'feature'; id: Id } | null>(null);
   const [measure, setMeasure] = useState<LatLng[]>([]);
   const [layers, setLayers] = useState<Layers>(() => loadJson(LAYERS_KEY, DEFAULT_LAYERS));
   const [relief, setRelief] = useState<Relief>(() => (localStorage.getItem('swt.relief') as Relief) || 'hillshade');
   const [draw, setDraw] = useState<DrawState>(() => loadJson(DRAW_KEY, DEFAULT_DRAW));
   const [working, setWorking] = useState<Terrain | null>(null);
   const [poly, setPoly] = useState<LatLng[]>([]);
+  /** A river, lake, line or area being drawn, with the place each point snapped to. */
+  const [draft, setDraft] = useState<{ pts: LatLng[]; stops: (Id | null)[] }>({ pts: [], stops: [] });
+  const shapes = useRef<ScreenShape[]>([]);
+  /** Dragging a vertex of the selected feature (MK-19: drag the line to adjust it). */
+  const vdrag = useRef<{ id: Id; idx: number } | null>(null);
+  const [editPts, setEditPts] = useState<{ id: Id; pts: LatLng[]; stops?: (Id | null)[] } | null>(null);
+  const freehand = useRef<{ lastX: number; lastY: number; started: boolean } | null>(null);
   const [globe, setGlobe] = useState(false);
   const [focus, setFocus] = useState<LatLng | null>(null);
   const [overviewVersion, setOverviewVersion] = useState(0);
@@ -177,6 +191,8 @@ export function MapView() {
     }
     return out;
   }, [world, ix, moment]);
+
+  const flows = useMemo(() => riverFlows(world.mapFeatures, world.settings.radiusKm), [world.mapFeatures, world.settings.radiusKm]);
 
   // ---- drawing ----
   useEffect(() => {
@@ -346,6 +362,15 @@ export function MapView() {
       g.stroke();
     };
 
+    // drawn features (MP-6, MP-7), only while they exist (MP-9)
+    if (layers.features) {
+      const visible = world.mapFeatures.filter((f) => existsOn((d) => ix.win(d), f, moment));
+      shapes.current = drawFeatures(g, visible, {
+        offsets, project: (p, o) => toScreen(view, w, h, p, o), scale: view.scale, flows, selected: selected?.kind === 'feature' ? selected.id : undefined,
+        labels: layers.labels, fg: cssVar('--fg'), bg: cssVar('--bg'), w, h,
+      });
+    } else shapes.current = [];
+
     // journeys in progress
     if (layers.routes) {
       for (const cp of characterPositions) {
@@ -361,7 +386,8 @@ export function MapView() {
 
     // places
     const showPlace = (p: Place) => {
-      if (!p.location || p.isPlaceholder) return false;
+      if (!p.location || p.isPlaceholder || FEATURE_PLACE_KINDS.has(p.kind)) return false;
+      if (!existsOn((d) => ix.win(d), p, moment)) return false; // MP-9
       if (!p.parentId) return true;
       return view.scale > 60; // nested places with their own position only when zoomed in
     };
@@ -374,13 +400,13 @@ export function MapView() {
           const s = toScreen(view, w, h, p.location!, o);
           if (s.x < -50 || s.x > w + 50 || s.y < -20 || s.y > h + 20) continue;
           const isPick = pickFor === p.id;
-          g.font = `${p.kind === 'city' ? 16 : 13}px system-ui`;
+          g.font = `${SETTLEMENT_SIZE[p.kind] ?? 13}px system-ui`;
           g.textAlign = 'center';
           g.textBaseline = 'middle';
           g.fillStyle = isPick || (selected?.kind === 'place' && selected.id === p.id) ? cssVar('--accent') : fg;
           g.fillText(PLACE_ICON[p.kind], s.x, s.y);
-          if (layers.labels && (view.scale > 6 || p.kind === 'city')) {
-            g.font = `${p.kind === 'city' ? 'bold ' : ''}12px system-ui`;
+          if (layers.labels && (view.scale > 6 || p.kind === 'city' || p.kind === 'capital')) {
+            g.font = `${p.kind === 'city' || p.kind === 'capital' ? 'bold ' : ''}${p.kind === 'capital' ? 14 : 12}px system-ui`;
             g.textAlign = 'left';
             g.lineWidth = 3;
             g.strokeStyle = bg;
@@ -485,7 +511,7 @@ export function MapView() {
     }
 
     markers.current = ms;
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus]);
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -497,9 +523,24 @@ export function MapView() {
     const g = cv.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, size.w, size.h);
-    if (mode !== 'draw') return;
     const { w, h } = size;
     const offsets = wrapOffsets(view, w);
+    // vertex handles on the selected feature
+    const sf = selected?.kind === 'feature' && !draft.pts.length ? world.mapFeatures.find((f) => f.id === selected.id) : undefined;
+    if (sf) {
+      const pts = editPts?.id === sf.id ? editPts.pts : sf.points;
+      for (const o of offsets) {
+        const sp = projectLine(sf.shape === 'area' ? [...pts, pts[0]] : pts, (p, oo) => toScreen(view, w, h, p, oo), o);
+        if (editPts?.id === sf.id) {
+          g.strokeStyle = '#b5562c'; g.lineWidth = 2; g.setLineDash([5, 4]);
+          g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+          g.setLineDash([]);
+        }
+        g.fillStyle = '#fff'; g.strokeStyle = '#b5562c'; g.lineWidth = 1.5;
+        for (const p of sp.slice(0, pts.length)) { g.fillRect(p.x - 3.5, p.y - 3.5, 7, 7); g.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7); }
+      }
+    }
+    if (mode !== 'draw') return;
     if (hover && isBrush(draw.tool)) {
       const kmPerDeg = (Math.PI * world.settings.radiusKm) / 180;
       const ry = (draw.radiusKm / kmPerDeg) * view.scale;
@@ -511,6 +552,42 @@ export function MapView() {
       g.strokeStyle = '#222';
       g.lineWidth = 1.2;
       g.beginPath(); g.ellipse(s0.x, s0.y, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+    }
+    if (isDrawnFeature(draw.tool) && draft.pts.length) {
+      const pts = hover ? [...draft.pts, { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }] : draft.pts;
+      const closed = draw.tool === 'lake' || draw.tool === 'area';
+      // MK-22: stretches of a river that climb show red while drawing
+      const bad = draw.tool === 'river' ? uphillSegments(world.terrain, pts, world.settings.radiusKm) : new Set<number>();
+      for (const o of offsets) {
+        const sp = projectLine(closed ? [...pts, pts[0]] : pts, (p, oo) => toScreen(view, w, h, p, oo), o);
+        if (closed) {
+          g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+          g.fillStyle = draw.tool === 'lake' ? 'rgba(120,170,200,0.5)' : 'rgba(181,86,44,0.15)';
+          g.fill();
+        }
+        g.lineWidth = draw.tool === 'river' ? 3 : 2;
+        g.lineCap = 'round';
+        for (let i = 1; i < sp.length; i++) {
+          g.strokeStyle = bad.has(i - 1) ? '#d62828' : draw.tool === 'river' || draw.tool === 'lake' ? RIVER_COLOR : '#b5562c';
+          g.setLineDash(hover && i === sp.length - 1 && !closed ? [4, 4] : []);
+          g.beginPath(); g.moveTo(sp[i - 1].x, sp[i - 1].y); g.lineTo(sp[i].x, sp[i].y); g.stroke();
+        }
+        g.setLineDash([]);
+        draft.pts.forEach((p, i) => {
+          const q = toScreen(view, w, h, p, o);
+          g.fillStyle = draft.stops[i] ? '#2a9d8f' : i === 0 && draw.tool === 'river' ? RIVER_COLOR : '#b5562c';
+          g.beginPath(); g.arc(q.x, q.y, draft.stops[i] ? 5 : 3, 0, Math.PI * 2); g.fill();
+        });
+      }
+      if (bad.size) {
+        g.fillStyle = '#d62828';
+        g.font = 'bold 12px system-ui';
+        const q = toScreen(view, w, h, pts[pts.length - 1]);
+        g.strokeStyle = 'rgba(255,255,255,0.85)';
+        g.lineWidth = 3;
+        g.strokeText('flows uphill here', q.x + 10, q.y - 10);
+        g.fillText('flows uphill here', q.x + 10, q.y - 10);
+      }
     }
     if (draw.tool === 'polygon' && poly.length) {
       const pts = hover ? [...poly, hover] : poly;
@@ -536,7 +613,7 @@ export function MapView() {
         }
       }
     }
-  }, [hover, draw, poly, mode, view, size, world.settings.radiusKm]);
+  }, [hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts]);
 
   // ---- interaction ----
   const drag = useRef<{ x: number; y: number; moved: boolean; v: ViewState } | null>(null);
@@ -614,6 +691,103 @@ export function MapView() {
     setPoly([]);
   };
 
+  // ---- features (MP-6..MP-9, MK-8..MK-10, MK-19) ----
+  const SNAP_PX = 14;
+  /** Snap a click to a nearby settlement or place (roads, MK-10). */
+  const snapToPlace = (x: number, y: number): { ll: LatLng; placeId: Id } | null => {
+    let best: { ll: LatLng; placeId: Id } | null = null, bestD = SNAP_PX ** 2;
+    for (const m of markers.current) {
+      if (m.kind !== 'place') continue;
+      const d = (m.x - x) ** 2 + (m.y - y) ** 2;
+      if (d < bestD) { const loc = ix.locationOf(m.id); if (loc) { bestD = d; best = { ll: loc, placeId: m.id }; } }
+    }
+    return best;
+  };
+  const pxPerKm = () => view.scale / ((Math.PI * world.settings.radiusKm) / 180);
+  /** The nearest other river within snapping distance of a point. */
+  const riverNear = (p: LatLng, exclude?: Id, km = SNAP_PX / pxPerKm()) => {
+    let best: { f: MapFeature; point: LatLng; km: number } | null = null;
+    for (const f of world.mapFeatures) {
+      if (f.kind !== 'river' || f.id === exclude || f.points.length < 2) continue;
+      const n = nearestOnPolyline(p, f.points, world.settings.radiusKm);
+      if (n && n.km <= km && (!best || n.km < best.km)) best = { f, point: n.point, km: n.km };
+    }
+    return best;
+  };
+  const defaultName = (kind: string) => `${KIND_NAME[kind] ?? 'Feature'} ${world.mapFeatures.filter((f) => f.kind === kind).length + 1}`;
+  /** Add a feature and the place that stands for it (MP-8) as one undo step. */
+  const addFeature = (f: Omit<MapFeature, keyof ReturnType<typeof recordBase> | 'placeId' | 'name' | 'notes'> & { name?: string }, terrain?: Terrain) => {
+    const base = recordBase();
+    const name = f.name ?? defaultName(f.kind);
+    const placeKind = f.kind === 'river' ? 'river' : f.kind === 'lake' || f.kind === 'sea' ? 'lake' : f.shape === 'line' ? 'road' : 'area';
+    const feature: MapFeature = { ...base, notes: '', ...f, name, placeId: undefined };
+    const place: Place = { ...recordBase(), name, aliases: [], kind: placeKind, location: featureAnchor(feature), notes: '', isPlaceholder: false };
+    feature.placeId = place.id;
+    store.update((w) => {
+      let features = [...w.mapFeatures, feature];
+      // MK-9: a river that starts in a lake without an outlet becomes its outlet.
+      if (feature.kind === 'river') {
+        const lake = features.find((l) => l.kind === 'lake' && !l.outletId && !l.salt && insideArea(feature.points[0], l.points));
+        if (lake) features = features.map((l) => (l.id === lake.id ? { ...l, outletId: feature.id } : l));
+      }
+      return { ...w, mapFeatures: features, places: [...w.places, place], terrain: terrain ?? w.terrain };
+    });
+    setSelected({ kind: 'feature', id: feature.id });
+  };
+  const finishDraft = (pts = draft.pts, stops = draft.stops) => {
+    const tool = draw.tool;
+    const min = tool === 'river' || tool === 'line' ? 2 : 3;
+    if (pts.length < min) return;
+    if (tool === 'river') {
+      // MK-8: ending on another river makes this one its tributary.
+      const end = riverNear(pts[pts.length - 1]);
+      const points = end ? [...pts.slice(0, -1), end.point] : pts;
+      addFeature({ shape: 'line', kind: 'river', points, joinsId: end?.f.id });
+    } else if (tool === 'line') {
+      addFeature({ shape: 'line', kind: draw.lineKind, points: pts, stops });
+    } else if (tool === 'lake') {
+      addFeature({ shape: 'area', kind: 'lake', points: pts });
+    } else if (tool === 'area') {
+      addFeature({ shape: 'area', kind: draw.areaKind, points: pts });
+    }
+    setDraft({ pts: [], stops: [] });
+  };
+  const addDraftPoint = (x: number, y: number) => {
+    const raw = llAt(x, y);
+    const snap = draw.tool === 'line' ? snapToPlace(x, y) : null;
+    setDraft((d) => ({ pts: [...d.pts, snap?.ll ?? raw], stops: [...d.stops, snap?.placeId ?? null] }));
+  };
+  /** MK-19: trace a river downhill from a clicked source. */
+  const autoRiver = (src: LatLng) => {
+    const R = world.settings.radiusKm;
+    const near = connectKm(world), touch = touchKm(world);
+    // a river that starts in a lake is its outlet, so only other lakes end it
+    const lakes = world.mapFeatures.filter((f) => f.kind === 'lake' && f.points.length >= 3 && !insideArea(src, f.points));
+    let joined: { f: MapFeature; point: LatLng } | null = null;
+    const t = traceDownhill(world.terrain, src, (p) => {
+      if (lakes.some((l) => insideArea(p, l.points))) return true;
+      const r = riverNear(p, undefined, touch);
+      if (r && polylineKm([src, p], R) > near) { joined = { f: r.f, point: r.point }; return true; }
+      return false;
+    });
+    if (t.points.length < 2) {
+      void ask.alert(reader.elevation(src) <= 0 ? 'That spot is under water. Click on land to start a river.' : 'There is no way downhill from here. Raise the ground around the source or pick another spot.');
+      return;
+    }
+    const j = joined as { f: MapFeature; point: LatLng } | null;
+    const points = j ? [...t.points, j.point] : t.points;
+    // The river cuts its valley through low rims it spills over, in the same undo step.
+    addFeature({ shape: 'line', kind: 'river', points, auto: true, joinsId: j?.f.id, endsInBasin: t.endsIn === 'basin' }, carveValley(world.terrain, t.cells));
+  };
+  const addSettlement = async (ll: LatLng) => {
+    const name = await ask.prompt(`Name of the new ${draw.settlement}?`);
+    if (!name) return;
+    const p: Place = { ...recordBase(), name, aliases: [], kind: draw.settlement, location: ll, notes: '', isPlaceholder: false };
+    store.upsert('places', p);
+    setSelected({ kind: 'place', id: p.id });
+  };
+  useEffect(() => { if (!isDrawnFeature(draw.tool)) setDraft({ pts: [], stops: [] }); }, [draw.tool]);
+
   // MK-26: keyboard shortcuts for every drawing tool.
   useEffect(() => {
     if (mode !== 'draw') return;
@@ -626,8 +800,9 @@ export function MapView() {
         setDraw((d) => ({ ...d, radiusKm: Math.max(2, Math.min(2000, Math.round(d.radiusKm * (e.key === ']' ? 1.25 : 0.8)))) }));
         return;
       }
-      if (e.key === 'Enter') { finishPolygon(); return; }
-      if (e.key === 'Escape') { setPoly([]); return; }
+      if (e.key === 'Enter') { if (isDrawnFeature(draw.tool)) finishDraft(); else finishPolygon(); return; }
+      if (e.key === 'Escape') { setPoly([]); setDraft({ pts: [], stops: [] }); return; }
+      if (e.key === 'Backspace' && draft.pts.length) { setDraft((d) => ({ pts: d.pts.slice(0, -1), stops: d.stops.slice(0, -1) })); e.preventDefault(); return; }
       if (e.key === 'Backspace' && poly.length) { setPoly((p) => p.slice(0, -1)); e.preventDefault(); return; }
       const t = TOOLS.find((x) => x.key === e.key.toUpperCase());
       if (t) { setDraw((d) => ({ ...d, tool: t.tool })); e.preventDefault(); }
@@ -638,12 +813,47 @@ export function MapView() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   });
 
+  /** The vertex of the selected feature under a screen point. */
+  const handleAt = (x: number, y: number): { f: MapFeature; idx: number } | null => {
+    if (selected?.kind !== 'feature' || draft.pts.length) return null;
+    const f = world.mapFeatures.find((q) => q.id === selected.id);
+    if (!f) return null;
+    for (const o of wrapOffsets(view, size.w)) {
+      const sp = projectLine(f.points, (p, oo) => toScreen(view, size.w, size.h, p, oo), o);
+      for (let i = sp.length - 1; i >= 0; i--) if (Math.abs(sp[i].x - x) <= 6 && Math.abs(sp[i].y - y) <= 6) return { f, idx: i };
+    }
+    return null;
+  };
+  const saveFeaturePoints = (f: MapFeature, points: LatLng[], stops?: (Id | null)[]) => {
+    const moved = { ...f, points, stops: f.stops ? stops : undefined };
+    const at = featureAnchor(moved);
+    store.update((w) => ({
+      ...w,
+      mapFeatures: w.mapFeatures.map((q) => (q.id === f.id ? moved : q)),
+      places: f.placeId && at ? w.places.map((p) => (p.id === f.placeId ? { ...p, location: at } : p)) : w.places,
+    }));
+  };
   const onDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     const { x, y } = local(e);
+    const hv = e.button === 0 && !space.current ? handleAt(x, y) : null;
+    if (hv) {
+      const { f, idx } = hv;
+      if (e.shiftKey) { // Shift-click a handle removes that point
+        if (f.points.length > (f.shape === 'area' ? 3 : 2)) saveFeaturePoints(f, f.points.filter((_, i) => i !== idx), f.stops?.filter((_, i) => i !== idx));
+        return;
+      }
+      vdrag.current = { id: f.id, idx };
+      setEditPts({ id: f.id, pts: f.points, stops: f.stops });
+      return;
+    }
     if (mode === 'draw' && e.button === 0 && !space.current && isBrush(draw.tool)) {
       startStroke(e, llAt(x, y));
       return;
+    }
+    if (mode === 'draw' && e.button === 0 && !space.current && (draw.tool === 'river' || draw.tool === 'line' || draw.tool === 'lake' || draw.tool === 'area')) {
+      // Drag to draw freehand; a plain click adds one point (handled on release).
+      freehand.current = { lastX: x, lastY: y, started: false };
     }
     drag.current = { x, y, moved: false, v: view };
   };
@@ -651,22 +861,55 @@ export function MapView() {
     const { x, y } = local(e);
     setHover(toLatLng(view, size.w, size.h, x, y));
     if (stroke.current) { continueStroke(e, llAt(x, y)); return; }
+    const vd = vdrag.current;
+    if (vd) {
+      const f = world.mapFeatures.find((q) => q.id === vd.id);
+      const snap = f && f.shape === 'line' && f.kind !== 'river' ? snapToPlace(x, y) : null;
+      setEditPts((ep) => {
+        if (!ep) return ep;
+        const pts = ep.pts.slice(); pts[vd.idx] = snap?.ll ?? llAt(x, y);
+        const stops = ep.stops?.slice(); if (stops) stops[vd.idx] = snap?.placeId ?? null;
+        return { ...ep, pts, stops };
+      });
+      return;
+    }
     const d = drag.current;
     if (!d) return;
     if (Math.abs(x - d.x) + Math.abs(y - d.y) > 3) d.moved = true;
+    const fh = freehand.current;
+    if (fh && d.moved) {
+      if (Math.hypot(x - fh.lastX, y - fh.lastY) >= 8) {
+        if (!fh.started) addDraftPoint(fh.lastX, fh.lastY); // the point where the drag began
+        addDraftPoint(x, y);
+        fh.lastX = x; fh.lastY = y; fh.started = true;
+      }
+      return;
+    }
     if (d.moved) setView(clampView({ ...d.v, centerLng: d.v.centerLng - (x - d.x) / d.v.scale, centerLat: d.v.centerLat + (y - d.y) / d.v.scale }));
   };
   const onUp = async (e: React.PointerEvent) => {
     if (stroke.current) { endStroke(); return; }
+    if (vdrag.current) {
+      const f = world.mapFeatures.find((q) => q.id === vdrag.current!.id);
+      vdrag.current = null;
+      if (f && editPts && editPts.id === f.id && editPts.pts.some((p, i) => p !== f.points[i])) saveFeaturePoints(f, editPts.pts, editPts.stops);
+      setEditPts(null);
+      return;
+    }
     const d = drag.current;
     drag.current = null;
+    const wasFreehand = freehand.current;
+    freehand.current = null;
     if (!d || d.moved) return;
     const { x, y } = local(e);
+    if (mode === 'draw' && wasFreehand) { addDraftPoint(x, y); return; }
     const raw = toLatLng(view, size.w, size.h, x, y);
     const ll = { lat: clampLat(raw.lat), lng: wrapLng(raw.lng) };
     setFocus(null);
     if (mode === 'draw') {
       if (draw.tool === 'polygon') setPoly((p) => [...p, ll]);
+      if (draw.tool === 'auto-river') autoRiver(ll);
+      if (draw.tool === 'settlement') void addSettlement(ll);
       if (draw.tool === 'stamp') {
         if (e.shiftKey) {
           let best: MapSymbol | undefined, bestD = 16 ** 2;
@@ -728,7 +971,8 @@ export function MapView() {
       return;
     }
     const m = hit(x, y);
-    setSelected(m ? { kind: m.kind, id: m.id } : null);
+    const f = m ? null : hitFeature(shapes.current, x, y);
+    setSelected(m ? { kind: m.kind, id: m.id } : f ? { kind: 'feature', id: f } : null);
   };
   const onDouble = (e: React.MouseEvent) => {
     if (mode === 'draw') {
@@ -736,6 +980,7 @@ export function MapView() {
         // the double-click's second click added a duplicate corner; leave it out
         finishPolygon(poly.slice(0, -1));
       }
+      if (isDrawnFeature(draw.tool)) finishDraft(draft.pts.slice(0, -1), draft.stops.slice(0, -1));
       return;
     }
     const { x, y } = local(e);
@@ -770,6 +1015,7 @@ export function MapView() {
     el.src = dataUrl;
   };
 
+  const selFeature = selected?.kind === 'feature' ? world.mapFeatures.find((f) => f.id === selected.id) : undefined;
   const selPlace = selected?.kind === 'place' ? world.places.find((p) => p.id === selected.id) : undefined;
   const selChar = selected?.kind === 'character' ? world.characters.find((c) => c.id === selected.id) : undefined;
   const selWhere = selChar ? whereIs(ix, selChar.id, moment) : undefined;
@@ -856,13 +1102,15 @@ export function MapView() {
       </div>
       <aside className="map-side">
         {mode === 'draw' && (
-          <DrawOptions state={draw} onChange={setDraw} biomes={world.settings.biomes} polygonPoints={poly.length} onFinishPolygon={() => finishPolygon()} onCancelPolygon={() => setPoly([])} />
+          <DrawOptions state={draw} onChange={setDraw} biomes={world.settings.biomes} polygonPoints={poly.length} onFinishPolygon={() => finishPolygon()} onCancelPolygon={() => setPoly([])}
+            draftPoints={draft.pts.length} onFinishDraft={() => finishDraft()} onCancelDraft={() => setDraft({ pts: [], stops: [] })} />
         )}
         {mode === 'draw' && !showTerrain && (
           <div className="card hint">
             <b>Start with the coastline.</b> Pick <b>Land</b> (L) and paint, or use <b>Shape</b> (P) to click out a continent. Upload a sketch below to trace over it.
           </div>
         )}
+        {selFeature && <FeatureCard feature={selFeature} onClose={() => setSelected(null)} />}
         {selPlace && (
           <div className="card">
             <h3>{PLACE_ICON[selPlace.kind]} {selPlace.name}</h3>

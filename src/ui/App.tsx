@@ -36,7 +36,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const world = useStore(store);
   const ix = useMemo(() => new WorldIndex(world), [world]);
   // Warnings ignore the current moment, so recompute only when records change.
-  const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.settings.biomes, world.settings.axialTiltDeg]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.mapFeatures, world.settings.biomes, world.settings.axialTiltDeg]); // eslint-disable-line react-hooks/exhaustive-deps
   const warnings = useMemo(() => checkWorld(recordsKey), [recordsKey]);
   const moment = defaultMoment(world, ix);
   const [view, setView] = useState<View>(() => (localStorage.getItem('swt.view') as View) || 'who');

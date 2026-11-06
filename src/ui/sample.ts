@@ -1,5 +1,8 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
-import { Character, Journey, ManuscriptLink, Paragraph, Place, Stay, World, exactDate as d, makeAnchor, textHash, toDayNumber } from '../core';
+import {
+  Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Stay, World, carveValley, touchKm, exactDate as d, featureAnchor, insideArea,
+  makeAnchor, nearestOnPolyline, textHash, toDayNumber, traceDownhill,
+} from '../core';
 import { nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
 import { sampleTerrain } from './sampleTerrain';
@@ -11,7 +14,7 @@ export function sampleWorld(): World {
     w.places.push(p);
     return p;
   };
-  const varn = place('Varn', 'city', 48.2, 11.5);
+  const varn = place('Varn', 'capital', 48.2, 11.5);
   const keep = place('Varn Keep', 'castle', undefined, undefined, varn.id);
   const hall = place('Hall of Lamps', 'room', undefined, undefined, keep.id);
   const thornwick = place('Thornwick', 'town', 47.4, 13.6);
@@ -106,6 +109,47 @@ export function sampleWorld(): World {
     { ...recordBase(), kind: 'reeds', location: { lat: 45.95, lng: 11.1 }, size: 0.8 },
   );
   w.settings.mainMap = { north: 54, south: 40, west: 3, east: 24 };
+
+  // Rivers, a lake and roads (Phase 2b). Rivers are traced downhill like the Automatic river tool.
+  const feature = (f: Omit<MapFeature, 'id' | 'scenarioId' | 'status' | 'createdAt' | 'updatedAt' | 'placeId' | 'notes'>): MapFeature => {
+    const placeKind = f.kind === 'river' ? 'river' : f.kind === 'lake' ? 'lake' : f.shape === 'line' ? 'road' : 'area';
+    const mf: MapFeature = { ...recordBase(), notes: '', ...f };
+    const p = place(f.name, placeKind, featureAnchor(mf)?.lat, featureAnchor(mf)?.lng);
+    mf.placeId = p.id;
+    w.mapFeatures.push(mf);
+    return mf;
+  };
+  const R = w.settings.radiusKm;
+  const river = (name: string, source: LatLng, extra: Partial<MapFeature> = {}) => {
+    const near = touchKm(w);
+    let joins: { f: MapFeature; point: LatLng } | undefined;
+    const t = traceDownhill(w.terrain, source, (p) => {
+      for (const f of w.mapFeatures) {
+        if (f.kind === 'lake' && insideArea(p, f.points) && !insideArea(source, f.points)) return true;
+        if (f.kind !== 'river') continue;
+        const n = nearestOnPolyline(p, f.points, R);
+        if (n && n.km < near) { joins = { f, point: n.point }; return true; }
+      }
+      return false;
+    });
+    w.terrain = carveValley(w.terrain, t.cells);
+    const j = joins as { f: MapFeature; point: LatLng } | undefined;
+    return feature({ shape: 'line', kind: 'river', name, points: j ? [...t.points, j.point] : t.points, auto: true, joinsId: j?.f.id, ...extra });
+  };
+  river('The Sallow', { lat: 49.0, lng: 11.0 });
+  const mere = feature({
+    shape: 'area', kind: 'lake', name: 'Glass Mere',
+    points: [[49.05, 13.0], [49.05, 13.4], [48.85, 13.5], [48.72, 13.3], [48.78, 13.0]].map(([lat, lng]) => ({ lat, lng })),
+  });
+  const glass = river('Glassrun', { lat: 48.9, lng: 13.2 });
+  mere.outletId = glass.id;
+  river('Greywater', { lat: 49.9, lng: 12.0 });
+  river('The Ember', { lat: 49.1, lng: 15.0 });
+  const road = (name: string, kind: 'road' | 'trade-route', ...stops: Place[]) =>
+    feature({ shape: 'line', kind, name, points: stops.map((p) => p.location!), stops: stops.map((p) => p.id) });
+  road('King\'s Road', 'road', varn, thornwick, ashford);
+  road('Salt Road', 'road', thornwick, saltmere);
+  road('Ember Way', 'trade-route', saltmere, ember);
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

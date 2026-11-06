@@ -34,7 +34,7 @@ The full requirements live in the project's `spec/requirements.md`; the approved
 
 Open the **Map** and press **✎ Draw map**. Every stroke stores real data (land, height in metres, terrain type) on a latitude/longitude grid of the globe, so the realism checks can use it.
 
-- **Land and water**: brush (`L`, `W`; hold Alt to swap), **Shape** tool (`P`) to click out a polygon and fill it with land, water or a terrain type, **Smooth** (`S`) and **Roughen** (`R`) for natural coastlines.
+- **Land and water**: brush (`L`, `W`; hold Alt to swap), **Shape** tool (`P`) to click out a polygon and fill it with land, water or a terrain type, **Smooth** (`S`) and **Roughen** (`G`) for natural coastlines.
 - **Height**: **Raise** (`U`), **Lower** (`D`), **Exact height** (`E`), **Plateau** (`F`), and smart brushes **Mountain range** (`M`) and **Hills** (`H`). Shown as hillshading, contour lines (every 250 m) or both.
 - **Terrain types** (`T`): grassland, forest, rainforest, pine forest, farmland, desert, swamp, tundra, ice, bare rock. The list is editable in Settings, with the climates each type suits.
 - **Symbols**: mountain and hill symbols appear by themselves where the ground is high; a small library (mountain, hill, volcano, trees, palms, reeds, dunes, rocks) can be stamped by hand (`Y`, Shift-click removes).
@@ -43,6 +43,20 @@ Open the **Map** and press **✎ Draw map**. Every stroke stores real data (land
 - **Globe**: the world as a sphere, drag to turn it, click to jump the flat map there.
 - **World settings**: planet radius or circumference, axial tilt (season strength), the part of the globe the main map frames, and map detail (about 11, 6 or 3 km per cell on an Earth-sized globe).
 - The painted map is saved inside the `.world` file (each tile stored once, shared with version history), included in the JSON export, and part of version history.
+
+## Phase 2b: rivers, lakes, roads and settlements
+
+Still in **✎ Draw map**, the lower part of the tool palette draws features. Each one is also a place (it shows in Places, characters can stay there) and can have "exists from / until" dates, so a road built in 1030 only appears from 1030 on.
+
+- **River** (`R`): click points or drag freehand from source to mouth, then double-click or Enter. Stretches that climb show red while you draw. End it on another river and it becomes a tributary. Rivers get wider downstream.
+- **Automatic river** (`A`): click a source and the river finds its own way to the sea, a lake or another river. Small hollows fill up and the river cuts a valley through their rim; a hollow deeper than 300 m becomes an inland basin.
+- **Lake** (`K`): click its outline. A river that starts in a lake becomes its outlet; salt lakes need none.
+- **Road and other lines** (`O`): roads, trade routes, sea lanes and walls. Points snap to settlements and places.
+- **Area** (`N`): named mountain ranges, forests, deserts, swamps and seas.
+- **Settlement** (`C`): village, town, city or capital.
+- Click a feature in Move mode to rename it, set its dates, mark a river's basin or delta, or delete it. Drag the white squares to reshape it; Shift-click a square removes that point.
+- **River checks** in Warnings, with Show on map: rivers that flow uphill (RC-1), dead ends that don't reach the sea, a lake, another river or a marked basin (RC-2), and rivers that split, unless it's a delta or marked intentional (RC-3).
+- Places as GeoJSON now exports rivers and roads as lines and lakes and areas as polygons.
 
 ## Development
 
