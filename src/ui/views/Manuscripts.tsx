@@ -9,6 +9,7 @@ import { ask } from '../components/Dialogs';
 import { Field, Modal } from '../components/Modal';
 import { AppCtx, useApp } from '../context';
 import { placeName, sortByName, subjectName } from '../util';
+import { ImportDialog } from '../writing/ImportDialog';
 
 const KIND_LABEL: Record<LinkTargetKind, string> = { character: 'Character', place: 'Place', group: 'Group', stay: 'Stay', journey: 'Journey', book: 'Book', chapter: 'Chapter', scene: 'Scene', event: 'World event' };
 
@@ -106,6 +107,7 @@ function Reader({ m }: { m: Manuscript }) {
   const [relinkId, setRelinkId] = useState<Id | null>(null);
   const [activeLinks, setActiveLinks] = useState<Id[]>([]);
   const [report, setReport] = useState('');
+  const [importing, setImporting] = useState(false);
   const [filter, setFilter] = useState('');
   const textRef = useRef<HTMLDivElement>(null);
 
@@ -235,11 +237,14 @@ function Reader({ m }: { m: Manuscript }) {
                 {headings.map((h) => <option key={h.i} value={h.i}>{'  '.repeat((h.heading ?? 1) - 1)}{h.text}</option>)}
               </select>
             )}
+            <button className={m.importedAt ? '' : 'primary'} onClick={() => setImporting(true)} title="WR-4: bring this file's text into the app's editor, split into chapters and scenes">{m.importedAt ? 'Import again…' : 'Import into the app…'}</button>
             <button onClick={() => reload()} title={m.path ? 'Read the file again and find every link' : 'Choose the updated file to read again'}>Read again</button>
             {m.path && platform.openExternally && <button onClick={() => platform.openExternally!(m.path!)}>Open in Word</button>}
             <button className="danger" onClick={disconnect}>Disconnect</button>
           </div>
         </div>
+        {importing && <ImportDialog manuscriptId={m.id} onClose={() => setImporting(false)} />}
+        {m.importedAt && <div className="note">Imported into {world.books.find((b) => b.id === m.importedBookId)?.title ?? 'a book'} on {new Date(m.importedAt).toLocaleDateString()}. The text now lives in the app (Write); this reader shows the Word file as it is.</div>}
         {report && <div className="note row">{report}<span className="spacer" /><button className="icon" onClick={() => setReport('')}>×</button></div>}
         {relinkId && <div className="note row warn-note">Select the passage's new text to re-link “{links.find((l) => l.id === relinkId)?.anchor.quote.slice(0, 60)}”.<span className="spacer" /><button className="small" onClick={() => setRelinkId(null)}>Cancel</button></div>}
         <div className="reader-text" ref={textRef} onMouseUp={onMouseUp} onClick={() => setActiveLinks([])}>

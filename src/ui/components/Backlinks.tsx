@@ -8,6 +8,7 @@ export function Backlinks({ kind, id, title = 'Mentioned in', only }: { kind: Li
   if (list.length === 0) return null;
   const open = (b: (typeof list)[number]) => {
     if (b.kind === 'passage') openPassage(b.manuscriptId!, b.linkId!);
+    else if (b.kind === 'text') go('write', b.id);
     else if (b.kind === 'scene' || b.kind === 'chapter') go('story', b.id);
     else if (b.kind === 'stay' || b.kind === 'journey') edit({ kind: b.kind, id: b.id });
     else if (b.kind === 'place') go('places', b.id);
@@ -17,7 +18,7 @@ export function Backlinks({ kind, id, title = 'Mentioned in', only }: { kind: Li
       if (m) go(kind === 'group' ? 'characters' : 'groups', kind === 'group' ? m.characterId : m.groupId);
     }
   };
-  const order = ['passage', 'event', 'scene', 'chapter', 'stay', 'journey', 'membership', 'place'];
+  const order = ['text', 'passage', 'event', 'scene', 'chapter', 'stay', 'journey', 'membership', 'place'];
   const sorted = [...list].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   return (
     <section className="backlinks">
@@ -26,7 +27,7 @@ export function Backlinks({ kind, id, title = 'Mentioned in', only }: { kind: Li
         {sorted.map((b) => (
           <li key={b.kind + b.id}>
             <button className="link" onClick={() => open(b)}>
-              <span className={`kind kind-${b.kind}`}>{b.kind === 'passage' ? 'manuscript' : b.kind}</span> {b.label}
+              <span className={`kind kind-${b.kind}`}>{b.kind === 'passage' ? 'manuscript' : b.kind === 'text' ? 'in the text' : b.kind}</span> {b.label}
             </button>
             {b.detail && <span className="muted"> · {b.detail}</span>}
           </li>

@@ -11,7 +11,8 @@ export const REF_LABEL: Record<RefKind, string> = {
 
 export function useOpenRef() {
   const { go, edit, world, openPassage } = useApp();
-  return (r: { kind: RefKind; id: Id; paraIndex?: number }) => {
+  return (r: { kind: RefKind; id: Id; paraIndex?: number; inText?: boolean }) => {
+    if (r.inText) return go('write', r.id);
     switch (r.kind) {
       case 'character': return go('characters', r.id);
       case 'place': return go('places', r.id);

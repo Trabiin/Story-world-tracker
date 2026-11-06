@@ -2,6 +2,7 @@
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { exists, mkdir, readDir, readFile, remove, rename, stat, writeFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { openPath } from '@tauri-apps/plugin-opener';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Platform, WorldHandle, backupFileName } from './types';
 
 const RECENT_KEY = 'swt.recentWorlds';
@@ -111,5 +112,28 @@ export const desktopPlatform: Platform = {
   },
   async openExternally(path) {
     await openPath(path);
+  },
+  async writeTextCopies(worldName, files, folder) {
+    // Write the new copy beside the old one, then swap, so a failure never leaves a half copy.
+    const safe = worldName.replace(/[<>:"/\\|?*]+/g, ' ').trim() || 'world';
+    const dir = join(folder, `${safe} text`);
+    const tmp = join(folder, `${safe} text (writing)`);
+    if (await exists(tmp)) await remove(tmp, { recursive: true });
+    await mkdir(tmp, { recursive: true });
+    const made = new Set<string>();
+    for (const f of files) {
+      let at = tmp;
+      for (const part of f.path.slice(0, -1)) {
+        at = join(at, part);
+        if (!made.has(at)) { await mkdir(at, { recursive: true }); made.add(at); }
+      }
+      await writeTextFile(join(at, f.path[f.path.length - 1]), f.text);
+    }
+    if (await exists(dir)) await remove(dir, { recursive: true });
+    await rename(tmp, dir);
+    return dir;
+  },
+  async setFullscreen(on) {
+    await getCurrentWindow().setFullscreen(on);
   },
 };

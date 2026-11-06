@@ -31,6 +31,10 @@ export interface Platform {
   modifiedAt?(path: string): Promise<number | null>;
   /** Desktop: open a file in its usual program (e.g. Word). */
   openExternally?(path: string): Promise<void>;
+  /** WR-7 (desktop): write every scene as a plain text file into "<world> text" inside the folder, replacing the last copy. Returns the folder. */
+  writeTextCopies?(worldName: string, files: { path: string[]; text: string }[], folder: string): Promise<string | null>;
+  /** WR-3: full screen for focus mode. */
+  setFullscreen?(on: boolean): Promise<void>;
 }
 
 export function backupFileName(name: string, d = new Date()): string {

@@ -80,6 +80,12 @@ export const browserPlatform: Platform = {
     download(name, new Blob([bytes as BlobPart], { type: 'application/octet-stream' }));
     return true;
   },
+  async setFullscreen(on) {
+    try {
+      if (on && !document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else if (!on && document.fullscreenElement) await document.exitFullscreen();
+    } catch { /* not allowed here (e.g. inside a preview frame): the page still fills the window */ }
+  },
   pickFile(accept) {
     return new Promise((resolve) => {
       const input = document.createElement('input');

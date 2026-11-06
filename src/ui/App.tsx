@@ -26,12 +26,14 @@ import { WhoIsWhere } from './views/WhoIsWhere';
 import { Home } from './views/Home';
 import { SearchPage } from './views/SearchPage';
 import { Todos } from './views/Todos';
+import { Write } from './views/Write';
 
 const NAV: { view: View; label: string; key: string }[] = [
   { view: 'home', label: 'Home', key: '' },
   { view: 'who', label: 'Who is where', key: '1' },
   { view: 'timeline', label: 'Timeline', key: '2' },
   { view: 'map', label: 'Map', key: '3' },
+  { view: 'write', label: 'Write', key: '' },
   { view: 'story', label: 'Books & scenes', key: '4' },
   { view: 'manuscripts', label: 'Manuscripts', key: '5' },
   { view: 'characters', label: 'Characters', key: '6' },
@@ -117,7 +119,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
-      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement || (e.target instanceof HTMLElement && e.target.isContentEditable);
       if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); setCommand(true); }
       else if (mod && e.key.toLowerCase() === 'j') { e.preventDefault(); setQuick(true); }
       else if (mod && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); if (e.shiftKey) store.redo(); else store.undo(); }
@@ -218,6 +220,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'who' && <WhoIsWhere />}
           {view === 'timeline' && <Timeline />}
           {view === 'map' && <MapView />}
+          {view === 'write' && <Write />}
           {view === 'story' && <Story />}
           {view === 'manuscripts' && <Manuscripts />}
           {view === 'characters' && <Characters />}

@@ -153,3 +153,16 @@ src-tauri     desktop shell (Tauri 2)
 ## Installers
 
 The **Desktop installers** workflow (Actions tab → Run workflow) builds the Windows `.exe` and `.msi` installers, attached to the run. Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
+
+## Phase 6a: write here
+
+The manuscript now lives in the app. Word is the way in and out.
+
+- **Write** page: one book as a continuous document, scene after scene, each with a thin header (date, POV, words, history). Bold (`Ctrl+B`), italics (`Ctrl+I`), headings (`Ctrl+Alt+1..3`), scene breaks (type `***` or `Ctrl+Enter`), curly quotes, dashes and ellipses as you type. Arrow keys run on into the next scene.
+- **Autosave** a moment after you stop typing, every few seconds while typing, and when you leave a scene. The editor has its own undo; world undo never touches the text.
+- **Focus mode** (`F11`, `Esc` to leave): full screen, light, sepia or dark page, text size, typewriter scrolling.
+- **Scene history**: versions kept as you work (and by hand, with a name); compare any two side by side word by word, and restore one.
+- **Import from Word**: split by headings and `***`/`#` lines into chapters and scenes; headings, bold, italics and scene breaks come along, Word comments become margin comments, and linked passages move with their text. Connected manuscripts have an **Import into the app** button.
+- **Export to Word**: a book or a range of chapters as a standard manuscript (title page, Times New Roman 12, double spacing, running header with page numbers) or a reading copy.
+- **Plain-text safety copies**: every backup also writes each scene as a `.txt` file, foldered by book and chapter; Settings can download them as a zip.
+- **Spelling**: Windows' English spell checker (UK or US in Settings). Character, place, realm, event and group names are never underlined.

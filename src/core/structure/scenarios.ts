@@ -7,7 +7,7 @@
 import { CANON, Id, Scenario, World } from '../model';
 
 /** Collections a scenario can change. The rest (manuscripts, map images, layers…) are shared. */
-export const SCENARIO_COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'mapFeatures', 'mapSymbols', 'regions', 'events', 'relationships', 'secrets', 'threads'] as const;
+export const SCENARIO_COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'mapFeatures', 'mapSymbols', 'regions', 'events', 'relationships', 'secrets', 'threads', 'sceneTexts'] as const;
 export type ScenarioCollection = (typeof SCENARIO_COLLECTIONS)[number];
 
 type Rec = { id: Id; scenarioId: Id; status?: 'draft' | 'canon' };

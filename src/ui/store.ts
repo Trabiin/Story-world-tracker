@@ -2,7 +2,7 @@
  * World state for the UI: immutable updates, undo/redo, debounced autosave, periodic backups.
  */
 import { useSyncExternalStore } from 'react';
-import { CANON, Id, World, applyScenarioEdit, resolveRelativeDates, scenarioView } from '../core';
+import { CANON, Id, World, applyScenarioEdit, resolveRelativeDates, safetyCopyFiles, scenarioView } from '../core';
 import { COLLECTIONS, CollectionName, Snapshot, makeSnapshot, nowIso, pruneSnapshots, restoreSnapshot, worldToBytes } from '../storage';
 import type { Platform, WorldHandle } from './platform';
 
@@ -106,12 +106,23 @@ export class WorldStore {
     this.emit();
   }
 
+  /**
+   * WR-2, WR-6: scene text has its own undo (in the editor) and its own history, so world undo and
+   * redo keep the text as it is now. Text of scenes that come back (an undone delete) comes back too.
+   */
+  private keepText(target: World): World {
+    const cur = this.world;
+    const ids = new Set(cur.sceneTexts.map((t) => t.id));
+    const back = target.sceneTexts.filter((t) => !ids.has(t.id));
+    return { ...target, sceneTexts: back.length ? [...cur.sceneTexts, ...back] : cur.sceneTexts, sceneVersions: cur.sceneVersions, settings: { ...target.settings, currentMoment: cur.settings.currentMoment } };
+  }
+
   undo() {
     if (this.readOnly) return this.onBlocked?.();
     const prev = this.past.pop();
     if (!prev) return;
     this.future.push(this.world);
-    this.world = { ...prev, settings: { ...prev.settings, currentMoment: this.world.settings.currentMoment } };
+    this.world = this.keepText(prev);
     this.scheduleSave();
     this.emit();
   }
@@ -120,7 +131,7 @@ export class WorldStore {
     const next = this.future.pop();
     if (!next) return;
     this.past.push(this.world);
-    this.world = { ...next, settings: { ...next.settings, currentMoment: this.world.settings.currentMoment } };
+    this.world = this.keepText(next);
     this.scheduleSave();
     this.emit();
   }
@@ -185,9 +196,19 @@ export class WorldStore {
   async backupNow(bytes?: Uint8Array) {
     const b = bytes ?? (await worldToBytes(this.world, this.snapshots));
     try {
-      const where = await this.platform.backup(this.handle, b, this.world.settings.backupFolder);
+      const folder = this.world.settings.backupFolder;
+      const where = await this.platform.backup(this.handle, b, folder);
       this.lastBackup = Date.now();
       this.lastBackupInfo = where ? `Backed up ${new Date().toLocaleTimeString()} to ${where}` : 'No backup folder chosen';
+      // WR-7: every scene as a plain text file beside the backup.
+      if (where && folder && this.platform.writeTextCopies && this.world.sceneTexts.length) {
+        try {
+          const dir = await this.platform.writeTextCopies(this.world.settings.name, safetyCopyFiles(this.world), folder);
+          if (dir) this.lastBackupInfo += `, text copies in ${dir}`;
+        } catch (e) {
+          this.lastBackupInfo += ` (text copies failed: ${e})`;
+        }
+      }
     } catch (e) {
       this.lastBackupInfo = `Backup failed: ${e}`;
     }

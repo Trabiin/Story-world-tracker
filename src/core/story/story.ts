@@ -2,6 +2,7 @@
 import { formatFuzzy, midpoint } from '../dates';
 import type { Id, LinkTargetKind, Scene, World } from '../model';
 import { WorldIndex, whereIs } from '../whereabouts';
+import { linksInDoc } from '../writing/doc';
 
 export function scenePov(world: World, s: Scene): Id | undefined {
   return s.povCharacterId ?? world.chapters.find((c) => c.id === s.chapterId)?.povCharacterId;
@@ -29,7 +30,7 @@ export function outline(world: World) {
 }
 
 export interface Backlink {
-  kind: 'passage' | 'scene' | 'chapter' | 'stay' | 'journey' | 'membership' | 'place' | 'event';
+  kind: 'text' | 'passage' | 'scene' | 'chapter' | 'stay' | 'journey' | 'membership' | 'place' | 'event';
   id: Id;
   label: string;
   detail?: string;
@@ -47,6 +48,15 @@ export function backlinksFor(world: World, kind: LinkTargetKind, id: Id): Backli
     if (l.target.kind !== kind || l.target.id !== id) continue;
     const m = world.manuscripts.find((x) => x.id === l.manuscriptId);
     out.push({ kind: 'passage', id: l.id, linkId: l.id, manuscriptId: l.manuscriptId, label: `“${l.anchor.quote.length > 90 ? l.anchor.quote.slice(0, 90) + '…' : l.anchor.quote}”`, detail: [m?.name, l.anchor.heading, l.state === 'lost' ? 'needs re-linking' : ''].filter(Boolean).join(' · ') });
+  }
+  // WR-4, WR-11: passages linked inside the app's own scene text.
+  for (const t of world.sceneTexts) {
+    const sc = world.scenes.find((x) => x.id === t.sceneId);
+    if (!sc) continue;
+    for (const l of linksInDoc(t.doc)) {
+      if (l.kind !== kind || l.id !== id) continue;
+      out.push({ kind: 'text', id: sc.id, label: `“${l.text.length > 90 ? l.text.slice(0, 90) + '…' : l.text}”`, detail: [sc.title, l.note].filter(Boolean).join(' · ') });
+    }
   }
   for (const s of world.scenes) {
     const hit = kind === 'character' ? s.povCharacterId === id || s.characterIds.includes(id) : kind === 'place' ? s.placeId === id : kind === 'chapter' ? s.chapterId === id : false;

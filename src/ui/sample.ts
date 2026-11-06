@@ -2,6 +2,7 @@
 import {
   Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
   makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
+  Block, Run, TextComment, blocksToDoc, docWords,
 } from '../core';
 import { newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
@@ -262,6 +263,34 @@ export function sampleWorld(): World {
     { ...recordBase(), title: 'Describe the Thornwick market', note: 'Smells, stalls, the toll-keeper.', kind: 'todo', done: true, refs: [{ kind: 'place', id: thornwick.id }, { kind: 'chapter', id: ch2.id }] },
   );
   w.settings.characterTemplates = [{ id: crypto.randomUUID(), name: 'Caravan hand', tags: ['Salt Guild'], importance: 'minor', color: '#edae49', icon: '●', description: 'Drives carts on the southern road.', attributes: [{ key: 'allegiance', value: 'Salt Guild' }], groupIds: [caravan.id] }];
+
+  // Phase 6a: the manuscript written in the app (WR-1). _words_ are italic; a comment and a link show how imports look.
+  const para = (t: string, extra?: Partial<Run>): Run[] => t.split(/(_[^_]+_)/).filter(Boolean).map((x) => (x.startsWith('_') ? { text: x.slice(1, -1), italic: true, ...extra } : { text: x, ...extra }));
+  const sceneText = (scene: Scene, blocks: Block[], comments?: TextComment[]) => {
+    const doc = blocksToDoc(blocks);
+    w.sceneTexts.push({ ...recordBase(), sceneId: scene.id, doc, words: docWords(doc), ...(comments ? { comments } : {}) });
+  };
+  const P = (t: string): Block => ({ kind: 'p', runs: para(t) });
+  const commentId = crypto.randomUUID();
+  sceneText(s1, [
+    { kind: 'p', runs: [{ text: 'The lamps in the ' }, { text: 'Hall of Lamps', link: { kind: 'place', id: hall.id } }, { text: ' were never allowed to go out, and so Kaela Venn had learned to read faces by their light. The regent’s face that morning told her nothing at all.' }] },
+    P('“Thornwick,” he said, and pressed the letter into her hand. “Before the market closes. Give it to no one but Oren Hask.”'),
+    P('She turned the letter over. The seal was the regent’s own, the wax still soft at the edges, and it was _heavier_ than a letter had any right to be.'),
+    { kind: 'p', runs: [{ text: '“And if Oren Hask is not there?”' }, { text: ' “Then you wait,” the regent said.', comments: [commentId] }] },
+  ], [{ id: commentId, author: 'Ojon', text: 'Too abrupt? Let him hesitate first.' }]);
+  sceneText(s2, [
+    P('She left Varn on the twenty-eighth, with the seal against her ribs and the gates closing behind her.'),
+    P('By the third day the horse was limping, and Kaela walked beside it through the river mist, counting milestones the way her father had taught her.'),
+    { kind: 'break' },
+    P('Thornwick showed itself at dusk: a smudge of smoke, a bell, the smell of salt carried up from the pans.'),
+  ]);
+  sceneText(s3, [
+    P('Oren Hask counted carts the way other men counted debts. Forty-one had come down the southern road from Ashford, and every one of them was late.'),
+    P('Mira Solt found him at the gate, already arguing with the toll-keeper about the price of salt. “You’ll have a visitor,” she said. “From Varn. She rides like she owes someone money.”'),
+  ]);
+  sceneText(keepNight, [P('Tamsin had not meant to listen. But the keep was old, and its walls carried voices the way a well carries an echo, and the name she heard was _Bram_.')]);
+  sceneText(saltWind, [P('The same grey morning, from the other side of the gate: Mira watched Oren lose his temper over a toll of two coppers, and wondered what he was really waiting for.')]);
+  sceneText(heir, [P('At the harbour, with the gulls quarrelling over the fish market, Kaela broke the seal.')]);
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

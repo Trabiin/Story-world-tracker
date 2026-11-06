@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { EARTH_MOON, MOON_ICON, fromDay, moonPhases, toWindow, BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM, NO_MODIFIERS } from '../../core';
 import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
+import JSZip from 'jszip';
+import { safetyCopyFiles } from '../../core';
 import { Field } from '../components/Modal';
 import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
@@ -104,6 +106,14 @@ export function Settings() {
         <button onClick={() => store.backupNow()}>Back up now</button>
         <span className="muted">{store.lastBackupInfo}</span>
       </div>
+      <p className="muted">WR-7: {platform.kind === 'desktop' ? 'each backup also writes every scene as a plain text file, in a "' + s.name + ' text" folder beside the backups (books and chapters as folders).' : 'download every scene as plain text files, foldered by book and chapter.'} The words are never locked in.</p>
+      <div className="row"><button onClick={async () => {
+        const zip = new JSZip();
+        for (const f of safetyCopyFiles(world)) zip.file(f.path.join('/'), f.text);
+        await platform.saveBinaryFile(`${s.name} text.zip`, await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }));
+      }}>Download text copies (.zip)</button></div>
+
+      <WritingSettings />
 
       <VersionHistory />
 
@@ -122,6 +132,38 @@ export function Settings() {
 }
 
 /** PL-3: restore the world as it was at an earlier time. */
+/** WR-3, WR-5, WR-8, EU-18: the writing page and exported manuscripts. */
+function WritingSettings() {
+  const { world, store } = useApp();
+  const ws = world.settings.writing ?? {};
+  const set = (patch: Partial<typeof ws>) => store.setSettings({ writing: { ...ws, ...patch } });
+  return (
+    <>
+      <h2>Writing</h2>
+      <div className="form-grid narrow-form">
+        <Field label="Author name" hint="On the title page and in the running header of an exported manuscript (WR-5)."><input value={ws.authorName ?? ''} onChange={(e) => set({ authorName: e.target.value })} /></Field>
+        <Field label="Surname for the header" hint="Leave empty to use the last word of the name."><input value={ws.authorSurname ?? ''} onChange={(e) => set({ authorSurname: e.target.value })} /></Field>
+        <Field label="Contact for the title page" hint="One per line: address, email, phone or agent."><textarea rows={3} value={ws.contact ?? ''} onChange={(e) => set({ contact: e.target.value })} /></Field>
+        <Field label="Spelling" hint="WR-8: Windows' spell checker underlines mistakes as you write. Names of characters, places, realms, events and groups are never underlined. British English also exports A4 pages, American English US Letter.">
+          <select value={ws.spelling ?? 'en-GB'} onChange={(e) => set({ spelling: e.target.value as 'en-GB' | 'en-US' })}>
+            <option value="en-GB">English (UK)</option>
+            <option value="en-US">English (US)</option>
+          </select>
+        </Field>
+        <Field label="Writing page">
+          <div className="row wrap">
+            <select value={ws.page ?? 'light'} onChange={(e) => set({ page: e.target.value as 'light' | 'dark' | 'sepia' })}>
+              <option value="light">Light page</option><option value="sepia">Sepia page</option><option value="dark">Dark page</option>
+            </select>
+            <label className="row">Text size <input type="number" min={12} max={32} value={ws.textSize ?? 18} onChange={(e) => set({ textSize: Math.max(12, Math.min(32, Number(e.target.value) || 18)) })} style={{ width: 64 }} /> px</label>
+            <label className="checkbox"><input type="checkbox" checked={!!ws.typewriter} onChange={(e) => set({ typewriter: e.target.checked })} /> Typewriter scrolling</label>
+          </div>
+        </Field>
+      </div>
+    </>
+  );
+}
+
 function VersionHistory() {
   const { store } = useApp();
   const [busy, setBusy] = useState(false);
