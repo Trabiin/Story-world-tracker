@@ -44,6 +44,12 @@ export interface WorldSettings {
   biomes: Biome[];
   /** LY-8: saved combinations of visible region layers ("politics + religion"). */
   layerPresets?: LayerPreset[];
+  /** RC-9 (optional): prevailing winds for the rain-shadow check. 'earth' = Earth-like belts by latitude; a number = the direction the wind blows from, in degrees (0 = north). */
+  winds?: { check: boolean; from: 'earth' | number };
+  /** MK-12: map look. */
+  mapStyle?: 'flat' | 'parchment';
+  /** RC-11: how far a large town may be from water before it is flagged, in km. */
+  settlementWaterKm?: number;
 }
 
 /** LY-8: a named set of region layers to show together. */
@@ -237,6 +243,12 @@ export interface MapFeature extends RecordBase, TimeSpan {
   handEdited?: boolean;
   /** MK-13: the drawing layer it belongs to; none = the base layer. */
   layerId?: Id;
+  /** RC-6: rises at a spring (a plausible source anywhere). */
+  spring?: boolean;
+  /** RC-5: allowed to cross the mountains or the other river (a gorge, an aqueduct…). */
+  crossingOk?: boolean;
+  /** MK-21: the line as drawn, before "add detail"; "remove detail" puts it back. */
+  roughPoints?: LatLng[];
   notes: string;
 }
 

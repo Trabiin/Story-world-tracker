@@ -1,6 +1,6 @@
 /** World settings, travel speeds (WH-7), backups (EU-17) and open exports (PL-4). */
 import { useMemo, useState } from 'react';
-import { BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength } from '../../core';
+import { BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM } from '../../core';
 import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
 import { Field } from '../components/Modal';
@@ -154,6 +154,24 @@ function MapSettings() {
           }}>
             {CELL_SIZES.map((c) => <option key={c} value={c}>{c === 0.1 ? 'Coarse' : c === 0.05 ? 'Standard' : 'Fine'}: {c}° (~{Math.round(c * Math.PI * s.radiusKm / 180)} km)</option>)}
           </select>
+        </Field>
+        <Field label="Map style" hint="MK-12: a clean flat look, or a hand-drawn parchment look. Also used for exported maps.">
+          <select value={s.mapStyle ?? 'flat'} onChange={(e) => store.setSettings({ mapStyle: e.target.value as 'flat' | 'parchment' })}>
+            <option value="flat">Clean and flat</option>
+            <option value="parchment">Hand-drawn parchment</option>
+          </select>
+        </Field>
+        <Field label="Rain-shadow check" hint="RC-9 (optional): flags rainforest and swamps just downwind of high mountains.">
+          <label className="checkbox"><input type="checkbox" checked={!!s.winds?.check} onChange={(e) => store.setSettings({ winds: { from: s.winds?.from ?? 'earth', check: e.target.checked } })} /> Check for rain shadows</label>
+        </Field>
+        <Field label="Prevailing winds" hint="Earth-like: trade winds from the east near the equator, westerlies in the middle latitudes, easterlies near the poles.">
+          <select value={String(s.winds?.from ?? 'earth')} onChange={(e) => store.setSettings({ winds: { check: s.winds?.check ?? false, from: e.target.value === 'earth' ? 'earth' : Number(e.target.value) } })}>
+            <option value="earth">Earth-like belts by latitude</option>
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((d) => <option key={d} value={d}>Always from the {windName(d)}</option>)}
+          </select>
+        </Field>
+        <Field label="Large towns near water (km)" hint="RC-11: towns, cities, capitals and ports further than this from a river, lake or coast are flagged.">
+          <input type="number" min={1} max={200} value={s.settlementWaterKm ?? SETTLEMENT_WATER_KM} onChange={(e) => store.setSettings({ settlementWaterKm: Math.max(1, Math.min(200, Number(e.target.value) || SETTLEMENT_WATER_KM)) })} />
         </Field>
       </div>
       <h3>Terrain types</h3>

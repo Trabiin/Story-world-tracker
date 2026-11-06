@@ -18,7 +18,7 @@ export function sampleWorld(): World {
   const keep = place('Varn Keep', 'castle', undefined, undefined, varn.id);
   const hall = place('Hall of Lamps', 'room', undefined, undefined, keep.id);
   const thornwick = place('Thornwick', 'town', 47.4, 13.6);
-  const saltmere = place('Saltmere', 'port', 45.8, 12.9);
+  const saltmere = place('Saltmere', 'port', 45.65, 12.52);
   const ashford = place('Ashford', 'village', 48.0, 14.3);
   const ember = place('Emberhold', 'city', 44.5, 17.5);
 
@@ -106,7 +106,7 @@ export function sampleWorld(): World {
   w.mapSymbols.push(
     { ...recordBase(), kind: 'volcano', location: { lat: 45.2, lng: 18.6 }, size: 1.3 },
     { ...recordBase(), kind: 'dunes', location: { lat: 44.9, lng: 15.3 }, size: 1 },
-    { ...recordBase(), kind: 'reeds', location: { lat: 45.95, lng: 11.1 }, size: 0.8 },
+    { ...recordBase(), kind: 'reeds', location: { lat: 46.78, lng: 10.05 }, size: 0.8 },
   );
   w.settings.mainMap = { north: 54, south: 40, west: 3, east: 24 };
 
@@ -133,6 +133,15 @@ export function sampleWorld(): World {
   mere.outletId = glass.id;
   river('Greywater', { lat: 49.9, lng: 12.0 });
   river('The Ember', { lat: 49.1, lng: 15.0 });
+  // Towns grow up by water (RC-11): springs in Varn and Thornwick feed small rivers. Emberhold has none, on purpose.
+  const lampwell = river('Lampwell', varn.location!);
+  lampwell.spring = true;
+  river('Thorn Brook', thornwick.location!);
+  // A deliberate problem for the one-click fixes (RC-4, MK-23): a pond in the reeds with no outlet.
+  feature({
+    shape: 'area', kind: 'lake', name: 'Reed Pool',
+    points: [[46.85, 9.9], [46.87, 10.15], [46.72, 10.2], [46.7, 9.95]].map(([lat, lng]) => ({ lat, lng })),
+  });
   const road = (name: string, kind: 'road' | 'trade-route', ...stops: Place[]) =>
     feature({ shape: 'line', kind, name, points: stops.map((p) => p.location!), stops: stops.map((p) => p.id) });
   road('King\'s Road', 'road', varn, thornwick, ashford);

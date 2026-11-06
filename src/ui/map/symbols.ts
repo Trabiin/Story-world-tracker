@@ -176,3 +176,32 @@ export function drawCompass(g: CanvasRenderingContext2D, x: number, y: number, r
   g.fillText('N', 0, -r - 1);
   g.restore();
 }
+
+let grain: HTMLCanvasElement | null = null;
+/** MK-12: paper grain and a soft dark edge over the whole map, for the parchment look. */
+export function paintParchment(g: CanvasRenderingContext2D, w: number, h: number) {
+  if (!grain) {
+    grain = document.createElement('canvas');
+    grain.width = grain.height = 256;
+    const c = grain.getContext('2d')!;
+    const img = c.createImageData(256, 256);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 256 * 256; i++) {
+      const fib = Math.sin(i * 0.37) * 0.5 + 0.5; // faint fibres
+      const v = 222 + rnd() * 28 + fib * 5;
+      img.data[i * 4] = v; img.data[i * 4 + 1] = v * 0.95; img.data[i * 4 + 2] = v * 0.82; img.data[i * 4 + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+  }
+  g.save();
+  g.globalCompositeOperation = 'multiply';
+  g.fillStyle = g.createPattern(grain, 'repeat')!;
+  g.fillRect(0, 0, w, h);
+  const r = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.hypot(w, h) * 0.6);
+  r.addColorStop(0, 'rgba(255,255,255,0)');
+  r.addColorStop(1, 'rgba(110,80,40,0.35)');
+  g.fillStyle = r;
+  g.fillRect(0, 0, w, h);
+  g.restore();
+}

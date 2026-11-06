@@ -115,7 +115,8 @@ let maskCanvas: HTMLCanvasElement | null = null;
 
 /** Draw every visible region layer. Returns label boxes so other labels can avoid them later. */
 export function drawRegionLayers(g: CanvasRenderingContext2D, o: RegionRenderOpts) {
-  const dpr = window.devicePixelRatio || 1;
+  // The target's own scale: the screen's pixel ratio, or more for a sharp export (MK-14).
+  const dpr = g.getTransform().a || window.devicePixelRatio || 1;
   if (!scratch) scratch = document.createElement('canvas');
   if (scratch.width !== Math.round(o.w * dpr) || scratch.height !== Math.round(o.h * dpr)) {
     scratch.width = Math.round(o.w * dpr);

@@ -9,8 +9,8 @@ import { normalizeWorld } from './newWorld';
 import type { Snapshot } from './snapshots';
 import { blobStore, decodeTerrain, encodeTerrain, manifestHashes } from './terrainCodec';
 
-/** 2: painted terrain (terrain_blobs table, "terrain" meta entry) and map symbols. 3: map features. 4: detail maps, drawing layers. 5: region layers and regions. */
-export const SCHEMA_VERSION = 5;
+/** 2: painted terrain (terrain_blobs table, "terrain" meta entry) and map symbols. 3: map features. 4: detail maps, drawing layers. 5: region layers and regions. 6: terrain tiles may carry an added-detail block (MK-21). */
+export const SCHEMA_VERSION = 6;
 
 export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'mapLayers', 'detailMaps', 'regionLayers', 'regions'] as const;
 export type CollectionName = (typeof COLLECTIONS)[number];

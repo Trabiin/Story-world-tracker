@@ -7,7 +7,7 @@ import { MomentBar } from './components/MomentBar';
 import { QuickAdd } from './components/QuickAdd';
 import { Manuscripts } from './views/Manuscripts';
 import { Story } from './views/Story';
-import { Ctx, EditorTarget, View } from './context';
+import { Ctx, EditorTarget, FixPreview, View } from './context';
 import { MapView } from './map/MapView';
 import type { Platform } from './platform';
 import { WorldStore, useStore } from './store';
@@ -59,7 +59,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   store.onBlocked = () => void ask.alert("This is the reader's view, so editing is off. Switch the view back to Author to make changes.");
   const ix = useMemo(() => new WorldIndex(world), [world]);
   // Warnings ignore the current moment, so recompute only when records change.
-  const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.mapFeatures, world.settings.biomes, world.settings.axialTiltDeg]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.mapFeatures, world.settings.biomes, world.settings.axialTiltDeg, world.settings.winds, world.settings.settlementWaterKm]); // eslint-disable-line react-hooks/exhaustive-deps
   const warnings = useMemo(() => checkWorld(recordsKey), [recordsKey]);
   const moment = defaultMoment(world, ix);
   const [view, setView] = useState<View>(() => (localStorage.getItem('swt.view') as View) || 'who');
@@ -72,6 +72,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [focusLink, setFocusLink] = useState<Id | undefined>();
   const [mapFocus, setMapFocus] = useState<{ at: LatLng; n: number } | undefined>();
   const [trackRequest, setTrackRequest] = useState<{ id: Id; n: number } | undefined>();
+  const [fixPreview, setFixPreview] = useState<FixPreview | undefined>();
 
   const go = useCallback((v: View, id?: Id) => {
     setView(v);
@@ -115,6 +116,14 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
     focusLink,
     mapFocus,
     trackRequest,
+    fixPreview,
+    previewFix: (p: FixPreview | undefined) => {
+      setFixPreview(p);
+      if (p) {
+        if (p.at) setMapFocus((f) => ({ at: p.at!, n: (f?.n ?? 0) + 1 }));
+        go('map');
+      }
+    },
     showTrack: (id: Id) => {
       setTrackRequest((t) => ({ id, n: (t?.n ?? 0) + 1 }));
       go('map');
