@@ -87,6 +87,17 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **Who was here**: a place page shows everyone who was there (or anywhere inside it) on a small timeline with the current date marked, plus a list of stays, arrivals, departures and passes.
 - **Reader's view** (top bar): see the world as the reader knows it at the end of any chapter or book. Characters, places and groups appear from the first chapter that mentions them; stays, journeys, borders and attributes appear once the story has reached their date. Override it on any record with **Reader learns of it**. Editing is off while the reader's view is on.
 
+## Phase 3c: map polish and checks
+
+- **More realism checks**: lakes with no outlet or several (RC-4), rivers running into mountains or through each other (RC-5), river sources on low, dry ground (RC-6), large towns far from water (RC-11), and an optional rain-shadow check with Earth-like or fixed winds (RC-9, World settings).
+- **One-click fixes** (MK-23): on the Warnings page, "Fix: …" shows the change on the map first (new lines in green), then Apply or Cancel. Fixes include adding a lake outlet at the lowest point of its shore, rerouting a river downhill, and marking a salt lake, basin, spring, fork or intended crossing.
+- **Seasons** (RC-10): each place page says how long winter and summer last there, from latitude, height and the axial tilt; the map's hover line shows winter length too.
+- **Terrain suggestions** (MK-20): ✎ Draw map → Finishing touches → "Suggest terrain". It proposes forest, rainforest, grassland, desert, tundra, ice and bare rock from climate, distance to the sea and rain shadows. You see it first, then accept or cancel.
+- **Add detail** (MK-21): natural wiggles for coastlines and hand-drawn rivers, lakes and areas; "Remove detail" puts them back exactly. One feature at a time works from its card too.
+- **Curved labels** (MK-11): river names follow the river and range names follow the mountains, sized by importance.
+- **Map styles** (MK-12): clean and flat, or hand-drawn parchment (World settings).
+- **Export** (MK-14): the map's side panel saves the current view as PNG, PNG for print (4×) or SVG with vector lines and labels.
+
 ## Development
 
 ```bash

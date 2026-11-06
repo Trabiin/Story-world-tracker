@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Id, LatLng, Warning, World, WorldIndex } from '../core';
+import type { FixKind, Id, LatLng, Warning, World, WorldIndex } from '../core';
 import type { Platform } from './platform';
 import type { WorldStore } from './store';
 
@@ -38,6 +38,15 @@ export interface AppCtx {
   /** VW-3: open the map with this character's whole track drawn. */
   showTrack: (characterId: Id) => void;
   trackRequest: { id: Id; n: number } | undefined;
+  /** MK-23: a one-click fix shown on the map before it is applied. */
+  fixPreview: FixPreview | undefined;
+  previewFix: (p: FixPreview | undefined) => void;
+}
+
+export interface FixPreview {
+  fix: FixKind;
+  message: string;
+  at?: LatLng;
 }
 
 export const Ctx = createContext<AppCtx>(null as unknown as AppCtx);

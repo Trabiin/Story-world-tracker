@@ -27,6 +27,8 @@ export interface TerrainTile {
   elev: Int16Array;
   /** Terrain type id per cell; 0 = not painted (coloured by height). */
   biome: Uint8Array;
+  /** MK-21: height added by "add detail" to each cell, so "remove detail" can take it off again. */
+  detail?: Int16Array;
 }
 
 export interface Terrain {
@@ -69,7 +71,7 @@ export function newTile(): TerrainTile {
 }
 
 export function cloneTile(t: TerrainTile): TerrainTile {
-  return { elev: t.elev.slice(), biome: t.biome.slice() };
+  return t.detail ? { elev: t.elev.slice(), biome: t.biome.slice(), detail: t.detail.slice() } : { elev: t.elev.slice(), biome: t.biome.slice() };
 }
 
 /** Wrap a global column index east–west. */

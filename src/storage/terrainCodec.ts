@@ -27,22 +27,36 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
   return new Uint8Array(await out.arrayBuffer());
 }
 
+/** Heights (int16 LE), then terrain types (uint8), then (MK-21, only when present) added detail (int16 LE). */
 export function packTile(t: TerrainTile): Uint8Array {
-  const out = new Uint8Array(N * 3);
+  const out = new Uint8Array(t.detail ? N * 5 : N * 3);
   for (let i = 0; i < N; i++) {
     const v = t.elev[i];
     out[i * 2] = v & 0xff;
     out[i * 2 + 1] = (v >> 8) & 0xff;
   }
   out.set(t.biome, N * 2);
+  if (t.detail) {
+    for (let i = 0; i < N; i++) {
+      const v = t.detail[i];
+      out[N * 3 + i * 2] = v & 0xff;
+      out[N * 3 + i * 2 + 1] = (v >> 8) & 0xff;
+    }
+  }
   return out;
 }
 
 export function unpackTile(b: Uint8Array): TerrainTile {
-  if (b.length !== N * 3) throw new Error('Damaged terrain tile');
+  if (b.length !== N * 3 && b.length !== N * 5) throw new Error('Damaged terrain tile');
   const elev = new Int16Array(N);
   for (let i = 0; i < N; i++) elev[i] = (b[i * 2] | (b[i * 2 + 1] << 8)) << 16 >> 16;
-  return { elev, biome: b.slice(N * 2, N * 3) };
+  const tile: TerrainTile = { elev, biome: b.slice(N * 2, N * 3) };
+  if (b.length === N * 5) {
+    const detail = new Int16Array(N);
+    for (let i = 0; i < N; i++) detail[i] = (b[N * 3 + i * 2] | (b[N * 3 + i * 2 + 1] << 8)) << 16 >> 16;
+    tile.detail = detail;
+  }
+  return tile;
 }
 
 /** Two independent 32-bit FNV-1a hashes plus the length: plenty to tell tiles apart. */
@@ -94,6 +108,7 @@ export function manifestHashes(m: TerrainManifest | undefined): string[] {
 export interface TerrainJson {
   cellDeg: number;
   tileCells: number;
+  /** Tiles with added detail (MK-21) carry a third block: int16le detail heights. */
   encoding: 'int16le-heights-then-uint8-types-base64';
   tiles: Record<string, string>;
 }

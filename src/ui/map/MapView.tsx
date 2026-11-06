@@ -8,7 +8,7 @@ import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
   MapFeature, refreshAutoRivers, traceRiver, routeAlongFeatures, networkFor, fromDay, existsOn, featureAnchor, insideArea, nearestOnPolyline, riverFlows, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
-  meanTemperatureC, pathLengthKm, whereIs, wrapLng, LayerIndex, characterTrack, OPEN_END, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon,
+  meanTemperatureC, pathLengthKm, applyFix, changedFeatures, FIX_LABEL, suggestBiomes, addCoastDetail, removeCoastDetail, hasCoastDetail, addDetailToFeatures, removeDetailFromFeatures, localSeasons, BiomeSuggestion, whereIs, wrapLng, LayerIndex, characterTrack, OPEN_END, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon,
 } from '../../core';
 import { newId, recordBase } from '../../storage';
 import { fileToDataUrl } from '../views/Characters';
@@ -18,14 +18,15 @@ import { TiledImage, TILE } from './tiles';
 import { ViewState, boundsFromTwoPoints, toLatLng, toScreen, wrapOffsets } from './projection';
 import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
 import { GlobePreview } from './GlobePreview';
-import { Overview, Relief, RenderStyle, SYMBOL_BLOCK, TileImageCache, autoSymbols, hexToRgb, PALETTE, styleKey } from './terrainRender';
-import { drawCompass, drawSymbol } from './symbols';
+import { Overview, Relief, RenderStyle, SYMBOL_BLOCK, TileImageCache, autoSymbols, hexToRgb, paletteFor, styleKey } from './terrainRender';
+import { drawCompass, drawSymbol, paintParchment } from './symbols';
 import { KIND_NAME, RIVER_COLOR, ScreenShape, drawFeatures, hitFeature, projectLine } from './featureRender';
 import { FeatureCard } from './FeatureCard';
 import { RouteCard } from './RouteCard';
 import { MapWizard } from './MapWizard';
 import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
 import { drawRegionLayers } from './regionRender';
+import { mapToSvg } from './exportSvg';
 import { DEFAULT_REGION_TOOLS, REGION_TOOL_KEYS, RegionCard, RegionLayerList, RegionList, RegionToolState, WhatsHere, hereLine, sortedLayers } from './RegionsPanel';
 
 /** A path with long legs broken into great-circle pieces, so it curves correctly on the flat map. */
@@ -102,7 +103,7 @@ function cssVar(name: string) {
 }
 
 export function MapView() {
-  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus, trackRequest } = useApp();
+  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus, trackRequest, fixPreview, previewFix, platform } = useApp();
   const viewKey = `${VIEW_KEY}.${store.handle.id}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -154,6 +155,7 @@ export function MapView() {
   const [tick, setTick] = useState(0);
   const [calib, setCalib] = useState<{ imageId: Id; points: { px: number; py: number; lat: number; lng: number }[] } | null>(null);
   const markers = useRef<Marker[]>([]);
+  const paintRef = useRef<((g: CanvasRenderingContext2D, w: number, h: number, view: ViewState, opts: { pxRatio: number; exporting?: boolean; base?: boolean }) => Marker[]) | null>(null);
   const tiled = useRef(new Map<Id, { src: string; t: TiledImage }>());
   // ---- region layers (LY-1..LY-9) ----
   const lix = useMemo(() => new LayerIndex(world), [world.regionLayers, world.regions, world.settings.hemisphereForSeasons]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -241,12 +243,16 @@ export function MapView() {
     setView((v) => ({ centerLat: mapFocus.at.lat, centerLng: mapFocus.at.lng, scale: Math.min(Math.max(v.scale, 25), 160) }));
   }, [mapFocus]);
 
-  const terrain = working ?? world.terrain;
+  // ---- MK-23: a fix previewed on the map; MK-20: suggested terrain previewed before it is accepted ----
+  const fixAfter = useMemo(() => (fixPreview ? applyFix(world, fixPreview.fix, recordBase) : null), [fixPreview, world]);
+  const fixDiff = useMemo(() => (fixAfter ? changedFeatures(world, fixAfter) : null), [fixAfter, world]);
+  const [suggestion, setSuggestion] = useState<(BiomeSuggestion & { onlyUnpainted: boolean }) | null>(null);
+  const terrain = suggestion?.terrain ?? working ?? world.terrain;
   const reader = useMemo(() => new TerrainReader(terrain), [terrain]);
   const showTerrain = hasTerrain(terrain);
   const style: RenderStyle = useMemo(
-    () => ({ relief, climate: layers.climate, tilt: world.settings.axialTiltDeg, biomes: world.settings.biomes, dark: isDark() }),
-    [relief, layers.climate, world.settings.axialTiltDeg, world.settings.biomes],
+    () => ({ relief, climate: layers.climate, tilt: world.settings.axialTiltDeg, biomes: world.settings.biomes, dark: isDark(), parchment: world.settings.mapStyle === 'parchment' }),
+    [relief, layers.climate, world.settings.axialTiltDeg, world.settings.biomes, world.settings.mapStyle],
   );
   const sk = useMemo(() => styleKey(style), [style]);
   useEffect(() => {
@@ -297,21 +303,16 @@ export function MapView() {
   const flows = useMemo(() => riverFlows(world.mapFeatures, world.settings.radiusKm), [world.mapFeatures, world.settings.radiusKm]);
 
   // ---- drawing ----
-  useEffect(() => {
-    const cv = canvasRef.current!;
-    const dpr = window.devicePixelRatio || 1;
-    cv.width = size.w * dpr;
-    cv.height = size.h * dpr;
-    const g = cv.getContext('2d')!;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const { w, h } = size;
+  /** Paint the whole map into g (w × h CSS pixels). MK-14: also used, sharper, for exports. */
+  const paint = (g: CanvasRenderingContext2D, w: number, h: number, view: ViewState, opts: { pxRatio: number; exporting?: boolean; base?: boolean }): Marker[] => {
+    const ff = style.parchment ? 'Georgia, "Times New Roman", serif' : 'system-ui';
     g.fillStyle = cssVar('--map-sea');
     g.fillRect(0, 0, w, h);
     const offsets = wrapOffsets(view, w);
     const ms: Marker[] = [];
 
     // world extent: plain when nothing is painted yet, open ocean once there is terrain
-    const pal = style.dark ? PALETTE.dark : PALETTE.light;
+    const pal = paletteFor(style);
     for (const o of offsets) {
       const a = toScreen(view, w, h, { lat: 90, lng: -180 }, o);
       const b = toScreen(view, w, h, { lat: -90, lng: 180 }, o);
@@ -331,8 +332,9 @@ export function MapView() {
           g.drawImage(overview.canvas, a.x, a.y, 360 * view.scale, 180 * view.scale);
         }
       } else {
-        const res = tilePx <= 40 ? 30 : tilePx <= 110 ? 120 : tilePx <= 400 ? 240 : 480;
-        tileCache.current.beginFrame();
+        const devPx = tilePx * Math.max(1, opts.pxRatio / 1.5);
+        const res = devPx <= 40 ? 30 : devPx <= 110 ? 120 : devPx <= 400 ? 240 : 480;
+        tileCache.current.beginFrame(opts.exporting ? 1e9 : 30);
         const tl = toLatLng(view, w, h, 0, 0), br = toLatLng(view, w, h, w, h);
         const ty0 = Math.max(0, Math.floor((90 - tl.lat) / tg.tileDeg)), ty1 = Math.min(tg.tilesY - 1, Math.floor((90 - br.lat) / tg.tileDeg));
         const tx0 = Math.floor((tl.lng + 180) / tg.tileDeg), tx1 = Math.floor((br.lng + 180) / tg.tileDeg);
@@ -396,11 +398,14 @@ export function MapView() {
     if (layers.regions && world.regions.length) {
       drawRegionLayers(g, {
         ix: lix, day: moment, offsets, project: (p, o) => toScreen(view, w, h, p, o), scale: view.scale, w, h,
-        reader: showTerrain ? reader : undefined, labels: layers.labels, selected: mode === 'layers' ? regionSel : undefined,
-        flash: flash ? { ids: flash.ids, strength: flashStrength } : undefined,
+        reader: showTerrain ? reader : undefined, labels: layers.labels && !opts.base, selected: mode === 'layers' && !opts.exporting ? regionSel : undefined,
+        flash: flash && !opts.exporting ? { ids: flash.ids, strength: flashStrength } : undefined,
         activeLayer: mode === 'layers' ? regionLayer?.id : undefined, fg: cssVar('--fg'), bg: cssVar('--bg'),
       });
     }
+
+    // MK-14: the raster under an SVG export stops here; the rest is drawn as vectors
+    if (opts.base) { if (style.parchment) paintParchment(g, w, h); return ms; }
 
     // graticule (MK-3)
     if (layers.grid) {
@@ -408,7 +413,7 @@ export function MapView() {
       g.strokeStyle = cssVar('--map-grid');
       g.lineWidth = 1;
       g.fillStyle = cssVar('--map-grid-label');
-      g.font = '10px system-ui';
+      g.font = `10px ${ff}`;
       for (const o of offsets) {
         for (let lng = -180; lng <= 180; lng += step) {
           const a = toScreen(view, w, h, { lat: 90, lng }, o), b = toScreen(view, w, h, { lat: -90, lng }, o);
@@ -484,11 +489,26 @@ export function MapView() {
       });
     } else shapes.current = [];
 
+    // MK-23: what the previewed fix changes: old lines faded red, new ones green
+    if (fixDiff && !opts.exporting) {
+      g.save();
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      for (const o of offsets) {
+        for (const f of fixDiff.removed) { g.strokeStyle = 'rgba(200,60,40,0.7)'; g.lineWidth = 3; g.setLineDash([5, 4]); drawPath(f.points, o); }
+        for (const f of fixDiff.added) {
+          g.setLineDash([]);
+          g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 7; drawPath(f.points, o);
+          g.strokeStyle = '#2e9d4f'; g.lineWidth = 3.5; drawPath(f.points, o);
+        }
+      }
+      g.restore();
+    }
+
     // detail map frames (MP-4)
     if (layers.maps) {
       g.save();
       g.setLineDash([8, 5]);
-      g.font = '600 12px system-ui';
+      g.font = `600 12px ${ff}`;
       g.textBaseline = 'bottom';
       for (const m of world.detailMaps) {
         if (m.id === currentMap) continue;
@@ -535,7 +555,7 @@ export function MapView() {
           g.fillStyle = '#fff'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = col; g.stroke();
           if (layers.labels) {
             const label = `${i + 1}. ${fmt(st.start)}${st.end === OPEN_END ? ' –' : st.end - st.start >= 1 ? ` – ${fmt(st.end)}` : ''}`;
-            g.font = '600 11px system-ui'; g.textAlign = 'left'; g.textBaseline = 'top';
+            g.font = `600 11px ${ff}`; g.textAlign = 'left'; g.textBaseline = 'top';
             g.lineWidth = 3; g.strokeStyle = cssVar('--bg');
             g.strokeText(label, sp.x + 7, sp.y + 4 + (i % 2) * 12);
             g.fillStyle = col;
@@ -576,13 +596,13 @@ export function MapView() {
           const s = toScreen(view, w, h, p.location!, o);
           if (s.x < -50 || s.x > w + 50 || s.y < -20 || s.y > h + 20) continue;
           const isPick = pickFor === p.id;
-          g.font = `${SETTLEMENT_SIZE[p.kind] ?? 13}px system-ui`;
+          g.font = `${SETTLEMENT_SIZE[p.kind] ?? 13}px ${ff}`;
           g.textAlign = 'center';
           g.textBaseline = 'middle';
           g.fillStyle = isPick || (selected?.kind === 'place' && selected.id === p.id) ? cssVar('--accent') : fg;
           g.fillText(PLACE_ICON[p.kind], s.x, s.y);
           if (layers.labels && (view.scale > 6 || p.kind === 'city' || p.kind === 'capital')) {
-            g.font = `${p.kind === 'city' || p.kind === 'capital' ? 'bold ' : ''}${p.kind === 'capital' ? 14 : 12}px system-ui`;
+            g.font = `${p.kind === 'city' || p.kind === 'capital' ? 'bold ' : ''}${p.kind === 'capital' ? 14 : 12}px ${ff}`;
             g.textAlign = 'left';
             g.lineWidth = 3;
             g.strokeStyle = bg;
@@ -618,12 +638,12 @@ export function MapView() {
             g.strokeStyle = cssVar('--bg');
             g.stroke();
             g.fillStyle = '#fff';
-            g.font = '11px system-ui';
+            g.font = `11px ${ff}`;
             g.textAlign = 'center';
             g.textBaseline = 'middle';
             g.fillText(c.icon, s.x, s.y + 0.5);
             if (layers.labels && view.scale > 4) {
-              g.font = '11px system-ui';
+              g.font = `11px ${ff}`;
               g.textAlign = 'center';
               g.lineWidth = 3;
               g.strokeStyle = cssVar('--bg');
@@ -638,7 +658,7 @@ export function MapView() {
     }
 
     // measure (MP-10)
-    if (measure.length) {
+    if (measure.length && !opts.exporting) {
       g.strokeStyle = cssVar('--accent');
       g.lineWidth = 2;
       const pts: LatLng[] = [];
@@ -653,8 +673,11 @@ export function MapView() {
       }
     }
 
+    // MK-12: parchment grain and darker edges
+    if (style.parchment) paintParchment(g, w, h);
+
     // spot shown from a warning
-    if (focus) {
+    if (focus && !opts.exporting) {
       for (const o of offsets) {
         const sp = toScreen(view, w, h, focus, o);
         g.strokeStyle = cssVar('--accent');
@@ -681,13 +704,23 @@ export function MapView() {
     g.lineWidth = 2;
     g.beginPath(); g.moveTo(w - px - 20, h - 16); g.lineTo(w - 20, h - 16); g.stroke();
     g.fillStyle = cssVar('--fg');
-    g.font = '11px system-ui';
+    g.font = `11px ${ff}`;
     g.textAlign = 'center';
     g.fillText(`${km.toLocaleString()} km`, w - 20 - px / 2, h - 25);
     }
 
-    markers.current = ms;
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick]);
+    return ms;
+  };
+  paintRef.current = paint;
+  useEffect(() => {
+    const cv = canvasRef.current!;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = size.w * dpr;
+    cv.height = size.h * dpr;
+    const g = cv.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    markers.current = paint(g, size.w, size.h, view, { pxRatio: dpr });
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick, fixDiff]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -1440,6 +1473,58 @@ export function MapView() {
   };
 
   const selFeature = selected?.kind === 'feature' ? world.mapFeatures.find((f) => f.id === selected.id) : undefined;
+
+  // ---- MK-14: export the current view as a sharp PNG or as SVG ----
+  const fileBase = (world.settings.name.replace(/[^\w\- ]+/g, '') || 'map') + (currentMap ? `-${world.detailMaps.find((m) => m.id === currentMap)?.name.replace(/[^\w\- ]+/g, '') ?? ''}` : '');
+  const renderExport = async (k: number, base = false): Promise<HTMLCanvasElement> => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(size.w * k); c.height = Math.round(size.h * k);
+    const g = c.getContext('2d')!;
+    g.setTransform(k, 0, 0, k, 0, 0);
+    paintRef.current!(g, size.w, size.h, view, { pxRatio: k, exporting: true, base });
+    return c;
+  };
+  const exportPng = async (k: number) => {
+    const c = await renderExport(k);
+    const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/png'));
+    if (blob) await platform.saveBinaryFile(`${fileBase}.png`, new Uint8Array(await blob.arrayBuffer()));
+  };
+  const exportSvg = async () => {
+    const base = (await renderExport(2, true)).toDataURL('image/png');
+    const offsets = wrapOffsets(view, size.w);
+    const svg = mapToSvg({
+      w: size.w, h: size.h, base, project: (p, o) => toScreen(view, size.w, size.h, p, o), offsets, scale: view.scale,
+      features: layers.features ? world.mapFeatures.filter((f) => layerOn(f.layerId) && existsOn((d) => ix.win(d), f, moment)) : [],
+      flows, lix, day: moment, labels: layers.labels,
+      places: layers.places ? world.places.filter((p) => p.location && !p.isPlaceholder && !FEATURE_PLACE_KINDS.has(p.kind) && existsOn((d) => ix.win(d), p, moment) && (!p.parentId || view.scale > 60))
+        .map((p) => ({ p, icon: PLACE_ICON[p.kind], size: SETTLEMENT_SIZE[p.kind] ?? 13 })) : [],
+      serif: 'Georgia, "Times New Roman", serif', sans: world.settings.mapStyle === 'parchment' ? 'Georgia, serif' : 'Helvetica, Arial, sans-serif',
+      kmPerPx: (Math.PI * world.settings.radiusKm) / 180 / view.scale * Math.cos((view.centerLat * Math.PI) / 180),
+      title: world.settings.name,
+    });
+    await platform.saveTextFile(`${fileBase}.svg`, svg, 'image/svg+xml');
+  };
+
+  // ---- MK-20, MK-21 ----
+  const suggest = (onlyUnpainted: boolean) => {
+    const s = suggestBiomes(world.terrain, world.settings.biomes, { tiltDeg: world.settings.axialTiltDeg, radiusKm: world.settings.radiusKm, winds: world.settings.winds?.from ?? 'earth', onlyUnpainted });
+    if (!s.cells) { void ask.alert(onlyUnpainted ? 'Every piece of land already has a terrain type. Try "Suggest for all land" to see a full proposal.' : 'The suggestion matches the map as it is.'); return; }
+    setSuggestion({ ...s, onlyUnpainted });
+  };
+  useEffect(() => setSuggestion(null), [world.terrain]);
+  const coastDetail = hasCoastDetail(world.terrain);
+  const lineDetail = world.mapFeatures.some((f) => f.roughPoints);
+  const toggleDetail = () => {
+    if (coastDetail || lineDetail) store.update((w) => {
+      const terrain = removeCoastDetail(w.terrain);
+      return refreshAutoRivers({ ...removeDetailFromFeatures(w), terrain }, Object.keys(terrain.tiles).filter((k) => terrain.tiles[k] !== w.terrain.tiles[k]));
+    });
+    else store.update((w) => {
+      const terrain = addCoastDetail(w.terrain, 7);
+      // automatic rivers follow the new coastline (MK-25)
+      return refreshAutoRivers({ ...addDetailToFeatures(w), terrain }, Object.keys(terrain.tiles).filter((k) => terrain.tiles[k] !== w.terrain.tiles[k]));
+    });
+  };
   const selPlace = selected?.kind === 'place' ? world.places.find((p) => p.id === selected.id) : undefined;
   const selChar = selected?.kind === 'character' ? world.characters.find((c) => c.id === selected.id) : undefined;
   const selWhere = selChar ? whereIs(ix, selChar.id, moment) : undefined;
@@ -1452,7 +1537,8 @@ export function MapView() {
     if (e <= 0) return ` · sea, ${(-e).toLocaleString()} m deep`;
     const b = world.settings.biomes.find((x) => x.id === reader.biome(p));
     const band = BAND_INFO[climateBand(p.lat, e, world.settings.axialTiltDeg)].name;
-    return ` · ${e.toLocaleString()} m · ${band}, ~${Math.round(meanTemperatureC(p.lat, e))}°C${b ? ` · ${b.name}` : ''}`;
+    const ls = e > 0 ? localSeasons(p.lat, e, world.settings.axialTiltDeg) : undefined;
+    return ` · ${e.toLocaleString()} m · ${band}, ~${Math.round(meanTemperatureC(p.lat, e))}°C${b ? ` · ${b.name}` : ''}${ls ? ` · winter ~${Math.round(ls.winterDays / 30.4)} mo` : ''}`;
   }, [hover, reader, showTerrain, world.settings.biomes, world.settings.axialTiltDeg]);
 
   const hoverRegions = useMemo(() => (hover && layers.regions && world.regions.length ? hereLine(lix, { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }, moment) : ''), [hover, lix, moment, layers.regions, world.regions.length]);
@@ -1566,6 +1652,18 @@ export function MapView() {
           <DrawOptions state={draw} onChange={setDraw} biomes={world.settings.biomes} polygonPoints={poly.length} onFinishPolygon={() => finishPolygon()} onCancelPolygon={() => setPoly([])}
             draftPoints={draft.pts.length} onFinishDraft={() => finishDraft()} onCancelDraft={() => setDraft({ pts: [], stops: [] })} />
         )}
+        {mode === 'draw' && (
+          <div className="card">
+            <h3>Finishing touches</h3>
+            <p className="muted small">MK-20: proposes terrain types from the climate, distance to the sea, dry belts and rain shadows. You see it first, then accept or cancel.</p>
+            <div className="row wrap">
+              <button className="small" disabled={!hasTerrain(world.terrain)} onClick={() => suggest(true)}>Suggest terrain for bare land</button>
+              <button className="small" disabled={!hasTerrain(world.terrain)} onClick={() => suggest(false)}>Suggest for all land</button>
+            </div>
+            <p className="muted small">MK-21: natural wiggles for coastlines and hand-drawn rivers, lakes and areas. Can be removed again.</p>
+            <button className="small" disabled={!hasTerrain(world.terrain) && !world.mapFeatures.length} onClick={toggleDetail}>{coastDetail || lineDetail ? 'Remove detail' : 'Add detail'}</button>
+          </div>
+        )}
         {mode === 'draw' && <LayersCard active={drawLayer} setActive={setActiveLayer} />}
         {mode === 'draw' && !wizardOpen && <button className="small" onClick={() => { setWizardOpen(true); store.setSettings({ mapWizard: { ...(world.settings.mapWizard ?? { step: 0, done: [] }), closed: false } }); }}>Guide: first map, step by step</button>}
         {mode === 'layers' && selRegion && (
@@ -1586,6 +1684,36 @@ export function MapView() {
           }} />
         )}
         {mode === 'layers' && <RegionLayerList editing active={regionLayer?.id} setActive={(id) => { setRegionLayerPick(id); setRegionSel(undefined); setRegionDraft([]); }} />}
+        {fixPreview && (
+          <div className="card fix-card">
+            <h3>Preview: {FIX_LABEL[fixPreview.fix.kind].replace(/^./, (c) => c.toLowerCase())}</h3>
+            <p className="small">{fixPreview.message}</p>
+            {!fixAfter ? <p className="muted small">This fix can't be worked out on the map as it is now.</p>
+              : fixDiff && (fixDiff.added.length || fixDiff.removed.length)
+                ? <p className="muted small"><span className="swatch-line new" /> new line{fixDiff.removed.length ? <> · <span className="swatch-line old" /> line it replaces</> : null}. Nothing changes until you apply it.</p>
+                : <p className="muted small">This only marks the feature; nothing on the map moves.</p>}
+            <div className="row">
+              <button className="small primary" disabled={!fixAfter} onClick={() => { const fix = fixPreview.fix; store.update((w) => applyFix(w, fix, recordBase) ?? w); previewFix(undefined); }}>Apply</button>
+              <button className="small" onClick={() => previewFix(undefined)}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {suggestion && (
+          <div className="card fix-card">
+            <h3>Suggested terrain</h3>
+            <p className="small">{suggestion.cells.toLocaleString()} cells {suggestion.onlyUnpainted ? 'of bare land ' : ''}get a terrain type, shown on the map now:</p>
+            <ul className="plain small">
+              {[...suggestion.byBiome.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => {
+                const b = world.settings.biomes.find((x) => x.id === id);
+                return <li key={id}><span className="sw" style={{ background: b?.color, display: 'inline-block', width: 10, height: 10, borderRadius: 2, marginRight: 6 }} />{b?.name}: {Math.round((n / suggestion.cells) * 100)}%</li>;
+              })}
+            </ul>
+            <div className="row">
+              <button className="small primary" onClick={() => { const t = suggestion.terrain; store.update((w) => ({ ...w, terrain: t })); setSuggestion(null); }}>Accept</button>
+              <button className="small" onClick={() => setSuggestion(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
         {selFeature && <FeatureCard feature={selFeature} onClose={() => setSelected(null)} />}
         {selPlace && (
           <div className="card">
@@ -1638,6 +1766,14 @@ export function MapView() {
             <p className="muted small">Solid: travelled by the current date; dashed: still to come.</p>
           </div>
         )}
+        <div className="card">
+          <h3>Export this view</h3>
+          <div className="row wrap">
+            <button className="small" onClick={() => void exportPng(2)} title="MK-14: a sharp picture of what is on screen">PNG</button>
+            <button className="small" onClick={() => void exportPng(4)} title="Four times the screen resolution, for printing">PNG for print</button>
+            <button className="small" onClick={() => void exportSvg()} title="Rivers, roads, borders, places and labels as vectors over the painted map">SVG</button>
+          </div>
+        </div>
         <h3>Show</h3>
         {(Object.keys(layers) as (keyof Layers)[]).map((k) => (
           <label key={k} className="checkbox"><input type="checkbox" checked={layers[k]} onChange={(e) => setLayers({ ...layers, [k]: e.target.checked })} /> {LAYER_NAMES[k]}</label>

@@ -1,6 +1,6 @@
 /** Side-panel card for a selected map feature (river, lake, road, area): name, dates, river and lake options. */
 import type { MapFeature } from '../../core';
-import { polylineKm, traceRiver } from '../../core';
+import { featureWithDetail, featureWithoutDetail, polylineKm, snapMouths, traceRiver } from '../../core';
 import { ask } from '../components/Dialogs';
 import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
@@ -82,6 +82,8 @@ export function FeatureCard({ feature: f, onClose }: { feature: MapFeature; onCl
               <option value="intentional">Intentional, don't warn</option>
             </select>
           </label>
+          <label className="checkbox small"><input type="checkbox" checked={!!f.spring} onChange={(e) => set({ spring: e.target.checked || undefined })} /> Rises at a spring (a source anywhere is fine)</label>
+          <label className="checkbox small"><input type="checkbox" checked={!!f.crossingOk} onChange={(e) => set({ crossingOk: e.target.checked || undefined })} /> Crossing mountains or another river is intended (gorge, aqueduct)</label>
         </>
       )}
       {f.kind === 'lake' && (
@@ -107,6 +109,9 @@ export function FeatureCard({ feature: f, onClose }: { feature: MapFeature; onCl
             store.update((w) => ({ ...w, terrain: t.terrain, mapFeatures: w.mapFeatures.map((x) => (x.id === f.id ? { ...x, points: t.points, joinsId: t.joinsId, endsInBasin: t.endsInBasin || undefined, handEdited: undefined } : x)) }));
           }}>Trace again</button>
         )}
+        {f.roughPoints
+          ? <button className="small" title="MK-21: back to the line as drawn" onClick={() => store.update((w) => ({ ...w, mapFeatures: snapMouths(w.mapFeatures.map((x) => (x.id === f.id ? featureWithoutDetail(x) : x)), R) }))}>Remove detail</button>
+          : (f.kind !== 'river' || !f.auto) && f.kind !== 'road' && <button className="small" title="MK-21: give the line natural wiggles; can be removed again" onClick={() => store.update((w) => ({ ...w, mapFeatures: snapMouths(w.mapFeatures.map((x) => (x.id === f.id ? featureWithDetail(x, R) : x)), R) }))}>Add detail</button>}
         <button className="small danger" onClick={remove}>Delete</button>
       </div>
     </div>

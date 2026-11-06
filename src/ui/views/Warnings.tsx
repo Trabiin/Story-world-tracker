@@ -1,12 +1,12 @@
 /** CC-7: one panel for every warning. Warn, never block (D-9). */
 import { useState } from 'react';
 import { ask } from '../components/Dialogs';
-import { RULES, RuleId, Warning, formatDayNumber, fromDayNumber } from '../../core';
+import { FIX_LABEL, RULES, RuleId, Warning, formatDayNumber, fromDayNumber } from '../../core';
 import { nowIso } from '../../storage';
 import { useApp } from '../context';
 
 export function Warnings() {
-  const { world, store, warnings, edit, selected, showOnMap } = useApp();
+  const { world, store, warnings, edit, selected, showOnMap, previewFix } = useApp();
   const [showDismissed, setShowDismissed] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   const visible = warnings.filter((w) => (showDismissed || !w.dismissed) && (showInfo || w.severity === 'warning'));
@@ -57,6 +57,9 @@ export function Warnings() {
                       edit({ kind: 'journey', preset: { subject: w.fix!.journey.subject, originId: w.fix!.journey.originId, destinationId: w.fix!.journey.destinationId, departure: d, status: 'draft' } });
                     }}>Create draft journey</button>
                   )}
+                  {!w.dismissed && w.mapFixes?.map((f, i) => (
+                    <button key={f.kind} className={`small ${i === 0 ? 'primary' : ''}`} title="MK-23: shown on the map first; nothing changes until you apply it" onClick={() => previewFix({ fix: f, message: w.message, at: w.at })}>Fix: {FIX_LABEL[f.kind].replace(/^./, (c) => c.toLowerCase())}…</button>
+                  ))}
                   {w.dismissed ? <button className="small" onClick={() => undismiss(w)}>Not intentional</button> : <button className="small" onClick={() => dismiss(w)}>Mark intentional</button>}
                 </div>
               </li>

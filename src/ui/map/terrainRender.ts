@@ -13,6 +13,8 @@ export interface RenderStyle {
   tilt: number;
   biomes: Biome[];
   dark: boolean;
+  /** MK-12: hand-drawn parchment look instead of the clean flat one. */
+  parchment?: boolean;
 }
 
 type RGB = [number, number, number];
@@ -26,7 +28,21 @@ export function hexToRgb(hex: string): RGB {
 export const PALETTE = {
   light: { deep: hexToRgb('#8fb3c9'), shallow: hexToRgb('#bcd7e3'), coast: hexToRgb('#4f6672'), contour: hexToRgb('#6b5a45') },
   dark: { deep: hexToRgb('#1d3442'), shallow: hexToRgb('#2f5366'), coast: hexToRgb('#a9c3cf'), contour: hexToRgb('#d9c7a8') },
+  parchment: { deep: hexToRgb('#b9b394'), shallow: hexToRgb('#d3cba8'), coast: hexToRgb('#4a3826'), contour: hexToRgb('#7a5c3a') },
 };
+
+/** The palette for a style (MK-12). */
+export function paletteFor(s: { dark: boolean; parchment?: boolean }) {
+  return s.parchment ? PALETTE.parchment : s.dark ? PALETTE.dark : PALETTE.light;
+}
+
+/** MK-12: land colours washed towards old ink on paper, keeping light and dark. */
+function toParchment(r: number, g: number, b: number): [number, number, number] {
+  const l = 0.3 * r + 0.59 * g + 0.11 * b;
+  // sepia from the brightness, then keep a little of the hue
+  const sr = Math.min(255, l * 0.95 + 38), sg = Math.min(255, l * 0.85 + 28), sb = Math.min(255, l * 0.62 + 18);
+  return [sr * 0.78 + r * 0.22, sg * 0.78 + g * 0.22, sb * 0.78 + b * 0.22];
+}
 
 /** Colour for unpainted land by height (hypsometric tint). */
 const HEIGHT_STOPS: [number, RGB][] = [
@@ -52,7 +68,7 @@ function heightColor(e: number): RGB {
 }
 
 export function styleKey(s: RenderStyle): string {
-  return `${s.relief}|${s.climate ? 1 : 0}|${s.tilt}|${s.dark ? 1 : 0}|${s.biomes.map((b) => `${b.id}:${b.color}`).join(',')}`;
+  return `${s.relief}|${s.climate ? 1 : 0}|${s.tilt}|${s.dark ? 1 : 0}|${s.parchment ? 'p' : 'f'}|${s.biomes.map((b) => `${b.id}:${b.color}`).join(',')}`;
 }
 
 export interface Pixels {
@@ -68,7 +84,7 @@ export interface Pixels {
 export function renderTile(r: TerrainReader, tx: number, ty: number, res: number, style: RenderStyle): Pixels {
   const T = TILE_CELLS, W = T + 2;
   const g = r.g;
-  const pal = style.dark ? PALETTE.dark : PALETTE.light;
+  const pal = paletteFor(style);
   const biomeColor = new Map(style.biomes.map((b) => [b.id, hexToRgb(b.color)]));
   // Padded window of heights and types, one cell of border taken from neighbouring tiles.
   const E = new Float32Array(W * W), B = new Uint8Array(W * W);
@@ -156,6 +172,7 @@ export function renderTile(r: TerrainReader, tx: number, ty: number, res: number
         const ci = (ny + 1) * W + (nx + 1);
         if (E[ci] > 0 && (B[ci] || B[i00] || B[i10] || B[i01] || B[i11])) { cr = CR[ci]; cg = CG[ci]; cb = CB[ci]; }
       }
+      if (style.parchment && isLand) [cr, cg, cb] = toParchment(cr, cg, cb);
       const o = (py * res + px) * 4;
       out[o] = cr * s; out[o + 1] = cg * s; out[o + 2] = cb * s; out[o + 3] = 255;
       land[py * res + px] = isLand ? 1 : 0;
@@ -259,7 +276,7 @@ export class Overview {
 
   update(r: TerrainReader, style: RenderStyle, sk: string): boolean {
     const g = this.canvas.getContext('2d')!;
-    const pal = style.dark ? PALETTE.dark : PALETTE.light;
+    const pal = paletteFor(style);
     if (sk !== this.sk || r.g.cellDeg !== this.cellDeg) {
       this.sk = sk;
       this.cellDeg = r.g.cellDeg;

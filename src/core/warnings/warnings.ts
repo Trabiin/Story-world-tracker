@@ -6,11 +6,12 @@
 import { formatDayNumber } from '../dates';
 import type { LatLng } from '../globe';
 import type { Id, Journey, World } from '../model';
-import { describeClash, findBiomeClashes, hasTerrain } from '../terrain';
-import { checkRivers } from '../features';
+import { describeClash, findBiomeClashes, findRainShadows, hasTerrain, windName } from '../terrain';
+import { FixKind, checkRivers, checkWater } from '../features';
 import { OPEN_END, Segment, WorldIndex, nominalEnd, nominalStart } from '../whereabouts';
 
-export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate' | 'river-uphill' | 'river-dead-end' | 'river-split';
+export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate' | 'river-uphill' | 'river-dead-end' | 'river-split'
+  | 'lake-outlet' | 'river-crossing' | 'river-source' | 'settlement-water' | 'rain-shadow';
 
 export const RULES: Record<RuleId, { name: string; requirement: string; severity: 'warning' | 'info' }> = {
   'two-places': { name: 'In two places at once', requirement: 'CC-1', severity: 'warning' },
@@ -23,6 +24,11 @@ export const RULES: Record<RuleId, { name: string; requirement: string; severity
   'river-uphill': { name: 'River flows uphill', requirement: 'RC-1', severity: 'warning' },
   'river-dead-end': { name: 'River ends nowhere', requirement: 'RC-2', severity: 'warning' },
   'river-split': { name: 'River splits in two', requirement: 'RC-3', severity: 'warning' },
+  'lake-outlet': { name: 'Lake without one outlet', requirement: 'RC-4', severity: 'warning' },
+  'river-crossing': { name: 'River crosses mountains or another river', requirement: 'RC-5', severity: 'warning' },
+  'river-source': { name: 'River source in an unlikely spot', requirement: 'RC-6', severity: 'warning' },
+  'settlement-water': { name: 'Large town far from water', requirement: 'RC-11', severity: 'warning' },
+  'rain-shadow': { name: 'Lush land in a rain shadow', requirement: 'RC-9', severity: 'warning' },
 };
 
 export interface RecordRef {
@@ -47,6 +53,8 @@ export interface Warning {
   day?: number; // where on the timeline to jump to
   at?: LatLng; // where on the map to look (realism checks)
   fix?: { kind: 'create-journey'; journey: SuggestedJourney };
+  /** MK-23: one-click map fixes, previewed before they are applied. */
+  mapFixes?: FixKind[];
   dismissed?: { note: string; at: string };
 }
 
@@ -180,7 +188,34 @@ export function checkWorld(world: World): Warning[] {
     }
   }
   out.push(...checkTerrain(world));
-  for (const r of checkRivers(world)) out.push({ key: r.key, rule: r.rule, severity: 'warning', message: r.message, refs: [{ kind: 'feature', id: r.featureId }], at: r.at });
+  const terrainOn = hasTerrain(world.terrain);
+  for (const r of checkRivers(world)) {
+    const auto = world.mapFeatures.find((f) => f.id === r.featureId)?.auto;
+    const mapFixes: FixKind[] =
+      r.rule === 'river-uphill' ? [{ kind: 'retrace-river', riverId: r.featureId }]
+        : r.rule === 'river-dead-end' ? [...(terrainOn && auto ? [{ kind: 'retrace-river' as const, riverId: r.featureId }] : []), { kind: 'mark-basin', riverId: r.featureId }]
+          : [{ kind: 'mark-fork', riverId: r.featureId }];
+    out.push({ key: r.key, rule: r.rule, severity: 'warning', message: r.message, refs: [{ kind: 'feature', id: r.featureId }], at: r.at, mapFixes });
+  }
+  for (const r of checkWater(world)) {
+    const mapFixes: FixKind[] = [];
+    if (r.fix) mapFixes.push(r.fix);
+    if (r.fix?.kind === 'trace-outlet') mapFixes.push({ kind: 'mark-salt', lakeId: r.fix.lakeId });
+    if (r.rule === 'river-crossing' && r.fix?.kind === 'retrace-river') mapFixes.push({ kind: 'mark-crossing', riverId: r.fix.riverId });
+    if (r.rule === 'lake-outlet' && r.key.endsWith(':salt')) mapFixes.push({ kind: 'mark-salt', lakeId: r.featureId! });
+    out.push({ key: r.key, rule: r.rule, severity: 'warning', message: r.message, refs: r.featureId ? [{ kind: 'feature', id: r.featureId }] : r.placeId ? [{ kind: 'place', id: r.placeId }] : [], at: r.at, mapFixes: mapFixes.length ? mapFixes : undefined });
+  }
+  const winds = world.settings.winds;
+  if (terrainOn && winds?.check) {
+    for (const r of findRainShadows(world.terrain, world.settings.biomes, winds.from, world.settings.radiusKm)) {
+      const b = world.settings.biomes.find((x) => x.id === r.biomeId);
+      const area = r.areaKm2 >= 1000 ? Math.round(r.areaKm2 / 100) * 100 : Math.max(1, Math.round(r.areaKm2));
+      out.push({
+        key: r.key, rule: 'rain-shadow', severity: 'warning', refs: [], at: r.center,
+        message: `${b?.name ?? 'Lush terrain'} (about ${area.toLocaleString()} km²) lies downwind of mountains up to ${Math.round(r.ridgeM).toLocaleString()} m, with the wind from the ${windName(r.windFromDeg)}. The mountains catch the rain, so this side is usually dry: grassland, scrub or desert.`,
+      });
+    }
+  }
   const disabled = new Set(world.settings.disabledRules);
   const dismissed = new Map(world.dismissals.map((d) => [d.key, d]));
   // De-duplicate (group conflicts show once per member, which is intended; identical keys collapse).

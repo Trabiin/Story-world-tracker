@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
 import { RevealField } from '../components/RevealField';
-import { LayerIndex, OPEN_END, Place, PlaceKind, PlaceVisit, formatDayNumber, formatFuzzy, placeVisits, wrapLng, clampLat } from '../../core';
+import { LayerIndex, OPEN_END, TerrainReader, hasTerrain, localSeasons, Place, PlaceKind, PlaceVisit, formatDayNumber, formatFuzzy, placeVisits, wrapLng, clampLat } from '../../core';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
@@ -117,6 +117,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
         </div>
         <div>
           <RealmHistory p={p} />
+          <SeasonsHere p={p} />
           {children.length > 0 && (
             <>
               <h2>Inside {p.name}</h2>
@@ -219,6 +220,25 @@ function WhoWasHere({ p }: { p: Place }) {
           );
         })}
       </ul>
+    </>
+  );
+}
+
+/** RC-10: how long winter and summer last here, from latitude, height and the axial tilt. */
+function SeasonsHere({ p }: { p: Place }) {
+  const { world, ix } = useApp();
+  const at = ix.locationOf(p.id);
+  const info = useMemo(() => {
+    if (!at) return undefined;
+    const elev = hasTerrain(world.terrain) ? Math.max(0, new TerrainReader(world.terrain).elevation(at)) : 0;
+    return { elev, s: localSeasons(at.lat, elev, world.settings.axialTiltDeg) };
+  }, [at, world.terrain, world.settings.axialTiltDeg]);
+  if (!info) return null;
+  return (
+    <>
+      <h2>Seasons here</h2>
+      <p>{info.s.text}</p>
+      <p className="muted small">About {Math.round(info.s.meanC)} °C on average, {Math.round(info.s.meanC - info.s.swingC)} °C in midwinter and {Math.round(info.s.meanC + info.s.swingC)} °C in midsummer{info.elev ? `, at ${Math.round(info.elev).toLocaleString()} m` : ''}.</p>
     </>
   );
 }
