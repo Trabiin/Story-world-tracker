@@ -1,6 +1,6 @@
 /** Side-panel card for a selected map feature (river, lake, road, area): name, dates, river and lake options. */
 import type { MapFeature } from '../../core';
-import { polylineKm } from '../../core';
+import { polylineKm, traceRiver } from '../../core';
 import { ask } from '../components/Dialogs';
 import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
@@ -57,7 +57,7 @@ export function FeatureCard({ feature: f, onClose }: { feature: MapFeature; onCl
       </label>
       <p className="muted small">
         {f.shape === 'line' ? 'Length' : 'Shoreline'} about {Math.round(km).toLocaleString()} km
-        {f.auto ? ' · traced downhill automatically' : ''}
+        {f.auto ? (f.handEdited ? ' · traced automatically, then reshaped by hand' : ' · traced automatically; follows the land when it changes') : ''}
       </p>
       <p className="muted small">Drag the white squares on the map to reshape it. Shift-click a square to remove that point.</p>
       <label className="field"><span className="label">Exists from <span className="muted">(empty = always)</span></span>
@@ -100,6 +100,13 @@ export function FeatureCard({ feature: f, onClose }: { feature: MapFeature; onCl
       </label>
       <div className="row wrap">
         {f.placeId && <button className="small" onClick={() => go('places', f.placeId)}>Open place</button>}
+        {f.kind === 'river' && f.auto && (
+          <button className="small" title="Find the way downhill again from the same source" onClick={() => {
+            const t = traceRiver(world, f.points[0], f.id);
+            if (t.points.length < 2) return;
+            store.update((w) => ({ ...w, terrain: t.terrain, mapFeatures: w.mapFeatures.map((x) => (x.id === f.id ? { ...x, points: t.points, joinsId: t.joinsId, endsInBasin: t.endsInBasin || undefined, handEdited: undefined } : x)) }));
+          }}>Trace again</button>
+        )}
         <button className="small danger" onClick={remove}>Delete</button>
       </div>
     </div>

@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { ask } from './Dialogs';
 import { Backlinks } from './Backlinks';
-import { FuzzyDate, Journey, Stay, Subject, WorldIndex, formatDayNumber, formatFuzzy, fromDay } from '../../core';
+import { FuzzyDate, Journey, LatLng, Stay, Subject, WorldIndex, formatDayNumber, formatFuzzy, fromDay, routeThrough } from '../../core';
 import { recordBase } from '../../storage';
 import { useApp } from '../context';
 import { DateInput } from './DateInput';
@@ -83,7 +83,7 @@ export function StayEditor({ id, preset, onClose }: { id?: string; preset?: Part
 }
 
 export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: Partial<Journey>; onClose: () => void }) {
-  const { world, store } = useApp();
+  const { world, store, moment, go, startRoute } = useApp();
   const existing = world.journeys.find((j) => j.id === id);
   const [j, setJ] = useState<Journey>(
     () =>
@@ -100,8 +100,23 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
         ...preset,
       },
   );
-  const set = (p: Partial<Journey>) => setJ((x) => ({ ...x, ...p }));
+  // Changing where the journey goes makes a drawn route stale, so it is dropped.
+  const set = (p: Partial<Journey>) => setJ((x) => ({ ...x, ...p, ...('originId' in p || 'destinationId' in p || 'waypointIds' in p ? { route: undefined } : {}) }));
   const ix = useMemo(() => new WorldIndex(world), [world]);
+  const [via, setVia] = useState<string[] | null>(null);
+  const stops = (): LatLng[] | undefined => {
+    const pts = [j.originId, ...j.waypointIds, j.destinationId].map((id) => ix.locationOf(id));
+    return pts.every(Boolean) ? (pts as LatLng[]) : undefined;
+  };
+  const followRoads = () => {
+    const s = stops();
+    if (!s) return;
+    const day = j.departure ? ix.win(j.departure).earliest : moment;
+    const r = routeThrough(world, s, j.modeId, day, (d) => ix.win(d));
+    setVia(r.via);
+    if (!r.via.length) void ask.alert('No drawn roads, rivers or sea lanes help on this journey, so it stays a straight line.');
+    else setJ((x) => ({ ...x, route: r.points }));
+  };
   const km = j.originId && j.destinationId ? ix.journeyDistanceKm(j) : undefined;
   const days = j.originId && j.destinationId ? ix.suggestedTravelDays(j) : undefined;
   const suggested = days !== undefined && j.departure ? fromDay(ix.win(j.departure).earliest + days) : undefined;
@@ -142,8 +157,19 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
                 <option key={m.id} value={m.id}>{m.name} ({m.speedKmPerDay} km/day)</option>
               ))}
             </select>
-            <span className="muted">detour ×</span>
-            <input type="number" step={0.05} min={1} style={{ width: 70 }} value={j.detourFactor ?? world.settings.defaultDetourFactor} onChange={(e) => set({ detourFactor: Number(e.target.value) || undefined })} />
+            {!j.route && (
+              <>
+                <span className="muted">detour ×</span>
+                <input type="number" step={0.05} min={1} style={{ width: 70 }} value={j.detourFactor ?? world.settings.defaultDetourFactor} onChange={(e) => set({ detourFactor: Number(e.target.value) || undefined })} />
+              </>
+            )}
+          </div>
+        </Field>
+        <Field label="Route" hint={j.route ? `Drawn route, ${Math.round(km ?? 0)} km${via?.length ? ` along ${via.join(', ')}` : ''}.` : 'Straight line for now. Follow the drawn roads, rivers and sea lanes, or draw the route on the map.'}>
+          <div className="row wrap">
+            <button className="small" disabled={!stops()} onClick={followRoads} title="Ships follow sea lanes and rivers; flyers go straight">Follow roads</button>
+            <button className="small" disabled={!valid} onClick={() => { store.upsert('journeys', j); startRoute(j.id); go('map'); onClose(); }}>Draw on map</button>
+            {j.route && <button className="small" onClick={() => { setVia(null); setJ((x) => ({ ...x, route: undefined })); }}>Straight line</button>}
           </div>
         </Field>
         <Field label="Departs"><DateInput value={j.departure} allowEmpty={false} onChange={(departure) => departure && set({ departure })} /></Field>
@@ -153,7 +179,7 @@ export function JourneyEditor({ id, preset, onClose }: { id?: string; preset?: P
             missingPos ? 'Give both places a position on the map to get a suggested arrival.' :
             km !== undefined ? (
               <>
-                {Math.round(km)} km straight, ~{Math.round(km * ix.detourOf(j))} km travelled ≈ {days} day(s).{' '}
+                {j.route ? `${Math.round(km)} km along the route` : `${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km travelled`} ≈ {days} day(s).{' '}
                 {suggested && (
                   <>
                     Suggested arrival: <b>{formatFuzzy(suggested)}</b>{' '}

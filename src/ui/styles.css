@@ -306,3 +306,25 @@ blockquote.quote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--ac
 @media (max-width: 760px) {
   .globe-preview { right: 6px; top: 90px; transform: scale(0.8); transform-origin: top right; }
 }
+
+/* detail maps and drawing layers (MP-4, MK-13) */
+.maps-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.map-item summary { list-style: none; display: flex; align-items: baseline; gap: 4px; cursor: pointer; }
+.map-item summary::-webkit-details-marker { display: none; }
+.map-item > .stack { padding: 6px 0 8px 14px; gap: 4px; }
+.map-row { background: transparent; border-color: transparent; padding: 2px 6px; text-align: left; }
+.map-row.on { background: var(--accent); color: var(--accent-fg); }
+.layer-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.layer-row input[type='text'], .layer-row input:not([type]) { flex: 1; min-width: 0; }
+.layer-row > span:first-of-type { flex: 1; }
+.layer-row.on { font-weight: 600; }
+.layer-row .icon.off { opacity: 0.5; }
+.map-pick { max-width: 180px; }
+.map-crumb button.link { padding: 0; }
+
+/* first-map guide (MK-16) */
+.wizard h4 { margin: 8px 0 2px; }
+.wizard-steps { margin: 4px 0; padding-left: 20px; font-size: 13px; }
+.wizard-steps li.on { font-weight: 600; }
+.wizard-steps li.done button { color: var(--muted); }
+.wizard-nav { margin-top: 8px; }

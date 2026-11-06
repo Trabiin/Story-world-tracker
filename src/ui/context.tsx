@@ -25,6 +25,9 @@ export interface AppCtx {
   /** Map pick mode: the next map click sets this place's position. */
   pickFor: Id | undefined;
   startPick: (placeId: Id | undefined) => void;
+  /** WH-6: the journey whose route is being drawn on the map. */
+  routeFor: Id | undefined;
+  startRoute: (journeyId: Id | undefined) => void;
   /** Open the manuscript reader at a linked passage (ST-10). */
   openPassage: (manuscriptId: Id, linkId?: Id) => void;
   /** Passage to scroll to when the reader opens. */

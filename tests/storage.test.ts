@@ -28,6 +28,8 @@ describe('storage', () => {
     expect(w.mapFeatures.length).toBeGreaterThan(5);
     const back = await bytesToWorld(await worldToBytes(w));
     expect(back.mapFeatures).toEqual(w.mapFeatures);
+    expect(back.detailMaps).toEqual(w.detailMaps);
+    expect(back.detailMaps.length).toBe(2);
     const gj = JSON.parse(placesToGeoJson(w));
     const sallow = gj.features.find((f: { properties: { name: string } }) => f.properties.name === 'The Sallow');
     expect(sallow.geometry.type).toBe('LineString');

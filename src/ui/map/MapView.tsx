@@ -5,8 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ask } from '../components/Dialogs';
 import {
-  BAND_INFO, BrushParams, CLIMATE_BANDS, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
-  MapFeature, connectKm, touchKm, existsOn, featureAnchor, insideArea, nearestOnPolyline, polylineKm, riverFlows, traceDownhill, carveValley, uphillSegments,
+  BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
+  MapFeature, refreshAutoRivers, traceRiver, routeAlongFeatures, networkFor, fromDay, existsOn, featureAnchor, insideArea, nearestOnPolyline, riverFlows, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
   meanTemperatureC, pathLengthKm, whereIs, wrapLng,
 } from '../../core';
@@ -22,18 +22,32 @@ import { Overview, Relief, RenderStyle, SYMBOL_BLOCK, TileImageCache, autoSymbol
 import { drawCompass, drawSymbol } from './symbols';
 import { KIND_NAME, RIVER_COLOR, ScreenShape, drawFeatures, hitFeature, projectLine } from './featureRender';
 import { FeatureCard } from './FeatureCard';
+import { RouteCard } from './RouteCard';
+import { MapWizard } from './MapWizard';
+import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
+
+/** A path with long legs broken into great-circle pieces, so it curves correctly on the flat map. */
+function densify(pts: LatLng[], R: number): LatLng[] {
+  const out: LatLng[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (i === 0) { out.push(pts[0]); continue; }
+    const n = Math.min(64, Math.ceil(greatCircleKm(pts[i - 1], pts[i], R) / 60));
+    out.push(...(n > 1 ? interpolateGreatCircle(pts[i - 1], pts[i], n).slice(1) : [pts[i]]));
+  }
+  return out;
+}
 
 /** Map features never show as place markers; they are drawn as lines and areas. */
 const FEATURE_PLACE_KINDS = new Set(['river', 'lake', 'road', 'area']);
 const SETTLEMENT_SIZE: Record<string, number> = { capital: 18, city: 16, town: 13, village: 11 };
 
-type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw';
+type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw' | 'route';
 const DRAW_KEY = 'swt.draw';
 const LAYERS_KEY = 'swt.mapLayers';
-const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, climate: false, places: true, characters: true, routes: true, labels: true };
+const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, places: true, characters: true, routes: true, labels: true };
 type Layers = typeof DEFAULT_LAYERS;
 const LAYER_NAMES: Record<keyof Layers, string> = {
-  grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols', features: 'Rivers, lakes, roads and areas',
+  grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols', features: 'Rivers, lakes, roads and areas', maps: 'Detail map frames',
   climate: 'Climate zones', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels',
 };
 
@@ -86,7 +100,7 @@ function cssVar(name: string) {
 }
 
 export function MapView() {
-  const { world, store, ix, moment, pickFor, startPick, go, edit, mapFocus } = useApp();
+  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus } = useApp();
   const viewKey = `${VIEW_KEY}.${store.handle.id}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -96,6 +110,26 @@ export function MapView() {
   const [hover, setHover] = useState<LatLng | null>(null);
   const [selected, setSelected] = useState<{ kind: 'place' | 'character' | 'feature'; id: Id } | null>(null);
   const [measure, setMeasure] = useState<LatLng[]>([]);
+  /** MP-10: measure along drawn roads instead of straight. */
+  const [measureFollow, setMeasureFollow] = useState(false);
+  /** WH-6: the route being drawn for a journey; `marks` remembers where each click began, for undo. */
+  const [routeDraft, setRouteDraft] = useState<{ pts: LatLng[]; marks: number[] }>({ pts: [], marks: [] });
+  const [routeFollow, setRouteFollow] = useState(true);
+  /** MP-4: the detail map being looked at; none = the world. MK-13: the layer new drawing goes on. */
+  const mapKey = `swt.map.${store.handle.id}`;
+  const [currentMap, setCurrentMap] = useState<Id | undefined>(() => { try { return JSON.parse(localStorage.getItem(mapKey) ?? '{}').map; } catch { return undefined; } });
+  const [activeLayer, setActiveLayer] = useState<Id | undefined>(() => { try { return JSON.parse(localStorage.getItem(mapKey) ?? '{}').layer; } catch { return undefined; } });
+  useEffect(() => { try { localStorage.setItem(mapKey, JSON.stringify({ map: currentMap, layer: activeLayer })); } catch { /* ignore */ } }, [mapKey, currentMap, activeLayer]);
+  const hiddenLayers = useMemo(() => new Set(world.mapLayers.filter((l) => !l.visible).map((l) => l.id)), [world.mapLayers]);
+  const lockedLayers = useMemo(() => new Set(world.mapLayers.filter((l) => l.locked).map((l) => l.id)), [world.mapLayers]);
+  const layerOn = (id?: Id) => !id || !hiddenLayers.has(id);
+  const layerFree = (id?: Id) => !id || (!hiddenLayers.has(id) && !lockedLayers.has(id));
+  const drawLayer = activeLayer && world.mapLayers.some((l) => l.id === activeLayer) ? activeLayer : undefined;
+  /** MK-16: the first-map guide opens by itself on a world with nothing drawn yet. */
+  const [wizardOpen, setWizardOpen] = useState(() => !world.settings.mapWizard?.closed && !hasTerrain(world.terrain));
+  /** EU-2: a character marker being dragged to a new place. */
+  const charDrag = useRef<{ id: Id; x: number; y: number } | null>(null);
+  const [charDragAt, setCharDragAt] = useState<{ id: Id; from: { x: number; y: number }; x: number; y: number } | null>(null);
   const [layers, setLayers] = useState<Layers>(() => loadJson(LAYERS_KEY, DEFAULT_LAYERS));
   const [relief, setRelief] = useState<Relief>(() => (localStorage.getItem('swt.relief') as Relief) || 'hillshade');
   const [draw, setDraw] = useState<DrawState>(() => loadJson(DRAW_KEY, DEFAULT_DRAW));
@@ -121,6 +155,17 @@ export function MapView() {
   const tiled = useRef(new Map<Id, { src: string; t: TiledImage }>());
 
   useEffect(() => setMode(pickFor ? 'pick' : 'browse'), [pickFor]);
+  const routeJourney = routeFor ? world.journeys.find((j) => j.id === routeFor) : undefined;
+  useEffect(() => {
+    if (!routeFor) { setMode((m) => (m === 'route' ? 'browse' : m)); return; }
+    const j = world.journeys.find((q) => q.id === routeFor);
+    const start = j && ix.locationOf(j.originId);
+    if (!j || !start) { startRoute(undefined); return; }
+    setMode('route');
+    setRouteDraft(j.route?.length ? { pts: j.route, marks: [] } : { pts: [start], marks: [] });
+    setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeFor]);
   useEffect(() => {
     try { localStorage.setItem(viewKey, JSON.stringify(view)); } catch { /* ignore */ }
   }, [view, viewKey]);
@@ -176,15 +221,15 @@ export function MapView() {
   }, []);
 
   const characterPositions = useMemo(() => {
-    const out: { id: Id; pos: LatLng; journey?: { from: LatLng; to: LatLng } }[] = [];
+    const out: { id: Id; pos: LatLng; journey?: LatLng[] }[] = [];
     for (const c of world.characters) {
       if (c.archived) continue;
       const w = whereIs(ix, c.id, moment);
       if ((w.kind === 'stay' || w.kind === 'journey') && w.position) {
         let journey;
         if (w.kind === 'journey') {
-          const from = ix.locationOf(w.fromId), to = ix.locationOf(w.toId);
-          if (from && to) journey = { from, to };
+          const j = ix.journeys.get(w.segment.recordId);
+          journey = j ? ix.journeyPath(j) : undefined;
         }
         out.push({ id: c.id, pos: w.position, journey });
       }
@@ -340,6 +385,7 @@ export function MapView() {
     if (layers.symbols) {
       const kmPerDeg = (Math.PI * world.settings.radiusKm) / 180;
       for (const sym of world.mapSymbols) {
+        if (!layerOn(sym.layerId)) continue;
         const sz = Math.max(6, Math.min(70, (30 * sym.size / kmPerDeg) * view.scale));
         for (const o of offsets) {
           const sp = toScreen(view, w, h, sym.location, o);
@@ -364,12 +410,38 @@ export function MapView() {
 
     // drawn features (MP-6, MP-7), only while they exist (MP-9)
     if (layers.features) {
-      const visible = world.mapFeatures.filter((f) => existsOn((d) => ix.win(d), f, moment));
+      const visible = world.mapFeatures.filter((f) => layerOn(f.layerId) && existsOn((d) => ix.win(d), f, moment));
       shapes.current = drawFeatures(g, visible, {
         offsets, project: (p, o) => toScreen(view, w, h, p, o), scale: view.scale, flows, selected: selected?.kind === 'feature' ? selected.id : undefined,
         labels: layers.labels, fg: cssVar('--fg'), bg: cssVar('--bg'), w, h,
       });
     } else shapes.current = [];
+
+    // detail map frames (MP-4)
+    if (layers.maps) {
+      g.save();
+      g.setLineDash([8, 5]);
+      g.font = '600 12px system-ui';
+      g.textBaseline = 'bottom';
+      for (const m of world.detailMaps) {
+        if (m.id === currentMap) continue;
+        const east = m.east < m.west ? m.east + 360 : m.east;
+        for (const o of offsets) {
+          const a = toScreen(view, w, h, { lat: m.north, lng: m.west }, o), b = toScreen(view, w, h, { lat: m.south, lng: east }, o);
+          if (b.x < 0 || a.x > w || b.y < 0 || a.y > h || b.x - a.x < 12) continue;
+          g.strokeStyle = 'rgba(40,40,40,0.55)'; g.lineWidth = 1.2;
+          g.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+          if (b.x - a.x > 40) {
+            g.fillStyle = 'rgba(255,255,255,0.8)';
+            const tw = g.measureText(m.name).width;
+            g.fillRect(a.x, a.y - 16, tw + 8, 16);
+            g.fillStyle = '#333';
+            g.fillText(m.name, a.x + 4, a.y - 2);
+          }
+        }
+      }
+      g.restore();
+    }
 
     // journeys in progress
     if (layers.routes) {
@@ -379,7 +451,8 @@ export function MapView() {
         g.strokeStyle = col;
         g.setLineDash([6, 4]);
         g.lineWidth = 2;
-        for (const o of offsets) drawPath(interpolateGreatCircle(cp.journey.from, cp.journey.to, 48), o);
+        const path = densify(cp.journey, world.settings.radiusKm);
+        for (const o of offsets) drawPath(path, o);
         g.setLineDash([]);
       }
     }
@@ -511,7 +584,7 @@ export function MapView() {
     }
 
     markers.current = ms;
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment]);
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -539,6 +612,27 @@ export function MapView() {
         g.fillStyle = '#fff'; g.strokeStyle = '#b5562c'; g.lineWidth = 1.5;
         for (const p of sp.slice(0, pts.length)) { g.fillRect(p.x - 3.5, p.y - 3.5, 7, 7); g.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7); }
       }
+    }
+    if (mode === 'route' && routeDraft.pts.length) {
+      const col = routeJourney ? (ix.characters.get(routeJourney.subject.id)?.color ?? '#b5562c') : '#b5562c';
+      const pts = densify(hover ? [...routeDraft.pts, { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }] : routeDraft.pts, world.settings.radiusKm);
+      g.lineJoin = 'round';
+      for (const o of offsets) {
+        const sp = projectLine(pts, (p, oo) => toScreen(view, w, h, p, oo), o);
+        g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 6;
+        g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+        g.strokeStyle = col; g.lineWidth = 3;
+        g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke();
+      }
+    }
+    if (charDragAt) {
+      const c = ix.characters.get(charDragAt.id);
+      g.strokeStyle = c?.color ?? '#888'; g.lineWidth = 2; g.setLineDash([6, 4]);
+      g.beginPath(); g.moveTo(charDragAt.from.x, charDragAt.from.y); g.lineTo(charDragAt.x, charDragAt.y); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = c?.color ?? '#888';
+      g.beginPath(); g.arc(charDragAt.x, charDragAt.y, 9, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
     }
     if (mode !== 'draw') return;
     if (hover && isBrush(draw.tool)) {
@@ -613,7 +707,7 @@ export function MapView() {
         }
       }
     }
-  }, [hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts]);
+  }, [hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix]);
 
   // ---- interaction ----
   const drag = useRef<{ x: number; y: number; moved: boolean; v: ViewState } | null>(null);
@@ -678,16 +772,19 @@ export function MapView() {
     if (!st) return;
     stroke.current = null;
     if (st.raf) cancelAnimationFrame(st.raf);
+    const keys = st.ed.changedKeys;
     const next = st.ed.commit();
-    store.update((w) => ({ ...w, terrain: next }));
+    // MK-25: automatic rivers on the changed land find their way again, in the same undo step
+    store.update((w) => refreshAutoRivers({ ...w, terrain: next }, keys));
     setWorking(null);
   };
   const finishPolygon = (pts = poly) => {
     if (pts.length < 3) return;
     const ed = new TerrainEditor(world.terrain);
     fillPolygon(ed, pts, draw.polyMode, draw.biome);
+    const keys = ed.changedKeys;
     const next = ed.commit();
-    store.update((w) => ({ ...w, terrain: next }));
+    store.update((w) => refreshAutoRivers({ ...w, terrain: next }, keys));
     setPoly([]);
   };
 
@@ -720,7 +817,7 @@ export function MapView() {
     const base = recordBase();
     const name = f.name ?? defaultName(f.kind);
     const placeKind = f.kind === 'river' ? 'river' : f.kind === 'lake' || f.kind === 'sea' ? 'lake' : f.shape === 'line' ? 'road' : 'area';
-    const feature: MapFeature = { ...base, notes: '', ...f, name, placeId: undefined };
+    const feature: MapFeature = { ...base, notes: '', ...f, name, placeId: undefined, layerId: drawLayer };
     const place: Place = { ...recordBase(), name, aliases: [], kind: placeKind, location: featureAnchor(feature), notes: '', isPlaceholder: false };
     feature.placeId = place.id;
     store.update((w) => {
@@ -759,25 +856,13 @@ export function MapView() {
   };
   /** MK-19: trace a river downhill from a clicked source. */
   const autoRiver = (src: LatLng) => {
-    const R = world.settings.radiusKm;
-    const near = connectKm(world), touch = touchKm(world);
-    // a river that starts in a lake is its outlet, so only other lakes end it
-    const lakes = world.mapFeatures.filter((f) => f.kind === 'lake' && f.points.length >= 3 && !insideArea(src, f.points));
-    let joined: { f: MapFeature; point: LatLng } | null = null;
-    const t = traceDownhill(world.terrain, src, (p) => {
-      if (lakes.some((l) => insideArea(p, l.points))) return true;
-      const r = riverNear(p, undefined, touch);
-      if (r && polylineKm([src, p], R) > near) { joined = { f: r.f, point: r.point }; return true; }
-      return false;
-    });
+    const t = traceRiver(world, src);
     if (t.points.length < 2) {
       void ask.alert(reader.elevation(src) <= 0 ? 'That spot is under water. Click on land to start a river.' : 'There is no way downhill from here. Raise the ground around the source or pick another spot.');
       return;
     }
-    const j = joined as { f: MapFeature; point: LatLng } | null;
-    const points = j ? [...t.points, j.point] : t.points;
     // The river cuts its valley through low rims it spills over, in the same undo step.
-    addFeature({ shape: 'line', kind: 'river', points, auto: true, joinsId: j?.f.id, endsInBasin: t.endsIn === 'basin' }, carveValley(world.terrain, t.cells));
+    addFeature({ shape: 'line', kind: 'river', points: t.points, auto: true, joinsId: t.joinsId, endsInBasin: t.endsInBasin || undefined }, t.terrain);
   };
   const addSettlement = async (ll: LatLng) => {
     const name = await ask.prompt(`Name of the new ${draw.settlement}?`);
@@ -787,6 +872,19 @@ export function MapView() {
     setSelected({ kind: 'place', id: p.id });
   };
   useEffect(() => { if (!isDrawnFeature(draw.tool)) setDraft({ pts: [], stops: [] }); }, [draw.tool]);
+
+  // Route drawing keys: Enter finishes, Esc cancels, Backspace takes back the last click.
+  useEffect(() => {
+    if (mode !== 'route') return;
+    const down = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === 'Enter') { e.preventDefault(); finishRoute(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelRoute(); }
+      else if (e.key === 'Backspace') { e.preventDefault(); undoRoutePoint(); }
+    };
+    window.addEventListener('keydown', down);
+    return () => window.removeEventListener('keydown', down);
+  });
 
   // MK-26: keyboard shortcuts for every drawing tool.
   useEffect(() => {
@@ -813,11 +911,48 @@ export function MapView() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   });
 
+  // ---- journey routes (WH-6) and dragging characters (EU-2) ----
+  const routeDay = routeJourney ? ix.win(routeJourney.departure).earliest : moment;
+  const routeLeg = (a: LatLng, b: LatLng) =>
+    routeFollow && routeJourney
+      ? routeAlongFeatures(world, a, b, networkFor(routeJourney.modeId), (f) => existsOn((dd) => ix.win(dd), f, routeDay)).points.slice(1)
+      : [b];
+  const addRoutePoint = (p: LatLng) =>
+    setRouteDraft((r) => ({ pts: [...r.pts, ...routeLeg(r.pts[r.pts.length - 1], p)], marks: [...r.marks, r.pts.length] }));
+  const undoRoutePoint = () => setRouteDraft((r) => (r.marks.length ? { pts: r.pts.slice(0, r.marks[r.marks.length - 1]), marks: r.marks.slice(0, -1) } : r));
+  const finishRoute = () => {
+    const j = routeJourney;
+    if (!j) return;
+    const end = ix.locationOf(j.destinationId);
+    let pts = routeDraft.pts;
+    if (end && greatCircleKm(pts[pts.length - 1], end, world.settings.radiusKm) > 0.5) pts = [...pts, ...routeLeg(pts[pts.length - 1], end)];
+    if (pts.length >= 2) store.upsert('journeys', { ...j, route: pts });
+    startRoute(undefined);
+    setMode('browse');
+  };
+  const cancelRoute = () => { startRoute(undefined); setMode('browse'); };
+  const dropCharacter = async (characterId: Id, x: number, y: number) => {
+    const c = ix.characters.get(characterId);
+    const where = whereIs(ix, characterId, moment);
+    const originId = where.kind === 'stay' ? where.placeId : where.kind === 'journey' ? where.toId : undefined;
+    let destinationId = snapToPlace(x, y)?.placeId;
+    if (!destinationId) {
+      const name = await ask.prompt(`There is no place there. Name a new place for ${c?.name ?? 'them'} to travel to?`);
+      if (!name) return;
+      const raw = toLatLng(view, size.w, size.h, x, y);
+      const p: Place = { ...recordBase(), name, aliases: [], kind: 'village', location: { lat: clampLat(raw.lat), lng: wrapLng(raw.lng) }, notes: '', isPlaceholder: false };
+      store.upsert('places', p);
+      destinationId = p.id;
+    }
+    if (destinationId === originId) return;
+    edit({ kind: 'journey', preset: { subject: { kind: 'character', id: characterId }, originId: originId ?? '', destinationId, departure: fromDay(Math.floor(moment)) } });
+  };
+
   /** The vertex of the selected feature under a screen point. */
   const handleAt = (x: number, y: number): { f: MapFeature; idx: number } | null => {
     if (selected?.kind !== 'feature' || draft.pts.length) return null;
     const f = world.mapFeatures.find((q) => q.id === selected.id);
-    if (!f) return null;
+    if (!f || !layerFree(f.layerId)) return null;
     for (const o of wrapOffsets(view, size.w)) {
       const sp = projectLine(f.points, (p, oo) => toScreen(view, size.w, size.h, p, oo), o);
       for (let i = sp.length - 1; i >= 0; i--) if (Math.abs(sp[i].x - x) <= 6 && Math.abs(sp[i].y - y) <= 6) return { f, idx: i };
@@ -825,7 +960,7 @@ export function MapView() {
     return null;
   };
   const saveFeaturePoints = (f: MapFeature, points: LatLng[], stops?: (Id | null)[]) => {
-    const moved = { ...f, points, stops: f.stops ? stops : undefined };
+    const moved = { ...f, points, stops: f.stops ? stops : undefined, handEdited: f.auto ? true : undefined };
     const at = featureAnchor(moved);
     store.update((w) => ({
       ...w,
@@ -850,6 +985,10 @@ export function MapView() {
     if (mode === 'draw' && e.button === 0 && !space.current && isBrush(draw.tool)) {
       startStroke(e, llAt(x, y));
       return;
+    }
+    if (mode === 'browse' && e.button === 0 && !space.current) {
+      const m = hit(x, y);
+      if (m?.kind === 'character') { charDrag.current = { id: m.id, x: m.x, y: m.y }; drag.current = { x, y, moved: false, v: view }; return; }
     }
     if (mode === 'draw' && e.button === 0 && !space.current && (draw.tool === 'river' || draw.tool === 'line' || draw.tool === 'lake' || draw.tool === 'area')) {
       // Drag to draw freehand; a plain click adds one point (handled on release).
@@ -876,6 +1015,8 @@ export function MapView() {
     const d = drag.current;
     if (!d) return;
     if (Math.abs(x - d.x) + Math.abs(y - d.y) > 3) d.moved = true;
+    const cd = charDrag.current;
+    if (cd) { if (d.moved) setCharDragAt({ id: cd.id, from: { x: cd.x, y: cd.y }, x, y }); return; }
     const fh = freehand.current;
     if (fh && d.moved) {
       if (Math.hypot(x - fh.lastX, y - fh.lastY) >= 8) {
@@ -900,6 +1041,14 @@ export function MapView() {
     drag.current = null;
     const wasFreehand = freehand.current;
     freehand.current = null;
+    const cd = charDrag.current;
+    charDrag.current = null;
+    if (cd && d?.moved) {
+      setCharDragAt(null);
+      const { x, y } = local(e);
+      void dropCharacter(cd.id, x, y);
+      return;
+    }
     if (!d || d.moved) return;
     const { x, y } = local(e);
     if (mode === 'draw' && wasFreehand) { addDraftPoint(x, y); return; }
@@ -914,6 +1063,7 @@ export function MapView() {
         if (e.shiftKey) {
           let best: MapSymbol | undefined, bestD = 16 ** 2;
           for (const sym of world.mapSymbols) {
+            if (!layerFree(sym.layerId)) continue;
             for (const o of wrapOffsets(view, size.w)) {
               const sp = toScreen(view, size.w, size.h, sym.location, o);
               const dd = (sp.x - x) ** 2 + (sp.y - 6 - y) ** 2;
@@ -922,7 +1072,7 @@ export function MapView() {
           }
           if (best) store.removeMany([{ c: 'mapSymbols', id: best.id }]);
         } else {
-          store.upsert('mapSymbols', { ...recordBase(), kind: draw.symbol, location: ll, size: 1 });
+          store.upsert('mapSymbols', { ...recordBase(), kind: draw.symbol, location: ll, size: 1, layerId: drawLayer });
         }
       }
       return;
@@ -944,7 +1094,14 @@ export function MapView() {
       return;
     }
     if (mode === 'measure') {
-      setMeasure((m) => [...m, ll]);
+      if (measureFollow && measure.length) {
+        const leg = routeAlongFeatures(world, measure[measure.length - 1], ll, 'land', (f) => existsOn((dd) => ix.win(dd), f, moment));
+        setMeasure((m) => [...m, ...leg.points.slice(1)]);
+      } else setMeasure((m) => [...m, ll]);
+      return;
+    }
+    if (mode === 'route' && routeJourney) {
+      addRoutePoint(snapToPlace(x, y)?.ll ?? ll);
       return;
     }
     if (mode === 'calibrate' && calib) {
@@ -971,7 +1128,8 @@ export function MapView() {
       return;
     }
     const m = hit(x, y);
-    const f = m ? null : hitFeature(shapes.current, x, y);
+    const hf = m ? null : hitFeature(shapes.current, x, y);
+    const f = hf && layerFree(world.mapFeatures.find((q) => q.id === hf)?.layerId) ? hf : null;
     setSelected(m ? { kind: m.kind, id: m.id } : f ? { kind: 'feature', id: f } : null);
   };
   const onDouble = (e: React.MouseEvent) => {
@@ -985,7 +1143,9 @@ export function MapView() {
     }
     const { x, y } = local(e);
     const m = hit(x, y);
-    if (m?.kind === 'place') go('places', m.id);
+    const linked = m?.kind === 'place' ? world.detailMaps.find((dm) => dm.placeId === m.id) : undefined;
+    if (linked) openMap(linked);
+    else if (m?.kind === 'place') go('places', m.id);
     else if (m?.kind === 'character') go('characters', m.id);
   };
 
@@ -1036,6 +1196,12 @@ export function MapView() {
     const east = b.east < b.west ? b.east + 360 : b.east;
     setView(clampView({ centerLat: (b.north + b.south) / 2, centerLng: (b.west + east) / 2, scale: Math.min(size.w / (east - b.west), size.h / (b.north - b.south)) * 0.95 }));
   };
+  const openMap = (m: DetailMap | undefined) => {
+    setCurrentMap(m?.id);
+    if (m) frame(m);
+    else if (mainMap) frame(mainMap);
+  };
+  const shownMap = world.detailMaps.find((m) => m.id === currentMap);
   const currentBounds = () => {
     const tl = toLatLng(view, size.w, size.h, 0, 0), br = toLatLng(view, size.w, size.h, size.w, size.h);
     return { north: clampLat(tl.lat), south: clampLat(br.lat), west: wrapLng(tl.lng), east: wrapLng(Math.min(br.lng, tl.lng + 360)) };
@@ -1064,13 +1230,19 @@ export function MapView() {
         <canvas ref={overlayRef} className="map-overlay" style={{ width: size.w, height: size.h }} />
         <div className="map-toolbar">
           {(['browse', 'add-place', 'measure', 'draw'] as Mode[]).map((m) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); if (m !== 'measure') setMeasure([]); setPoly([]); startPick(undefined); }}
+            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); if (m !== 'measure') setMeasure([]); setPoly([]); startPick(undefined); if (routeFor) startRoute(undefined); }}
               title={m === 'draw' ? 'Draw the world: land, heights, terrain and symbols' : undefined}>
               {m === 'browse' ? 'Move' : m === 'add-place' ? '+ Place' : m === 'measure' ? 'Measure' : '✎ Draw map'}
             </button>
           ))}
           <button onClick={() => setView(fitPlaces(world.places, size.w, size.h))}>Fit places</button>
-          {mainMap && <button onClick={() => frame(mainMap)} title="Frame the main map (World settings)">Main map</button>}
+          {mainMap && <button onClick={() => openMap(undefined)} title="Frame the main map (World settings)">Main map</button>}
+          {world.detailMaps.length > 0 && (
+            <select className="map-pick" value={currentMap ?? ''} onChange={(e) => openMap(world.detailMaps.find((m) => m.id === e.target.value))} title="Open a continent, region or city map">
+              <option value="">World map</option>
+              {sortedMaps(world.detailMaps).map(({ m, depth }) => <option key={m.id} value={m.id}>{'\u00a0\u00a0'.repeat(depth)}{m.name}</option>)}
+            </select>
+          )}
           <button onClick={() => setView({ centerLat: 0, centerLng: 0, scale: Math.max(0.5, size.w / 380) })}>Whole globe</button>
           <button className={globe ? 'on' : ''} onClick={() => setGlobe(!globe)} title="Show the world as a sphere">Globe</button>
         </div>
@@ -1088,12 +1260,18 @@ export function MapView() {
         <div className="map-status">
           {mode === 'pick' && pickPlace && <b>Click the map to place {pickPlace.name}. </b>}
           {mode === 'add-place' && <b>Click the map where the new place is. </b>}
+          {shownMap && <span className="map-crumb"><button className="link" onClick={() => openMap(undefined)}>World</button> › <b>{shownMap.name}</b> · </span>}
+          {mode === 'route' && <b>Click along the way; Enter finishes at the destination. </b>}
+          {mode === 'browse' && charDragAt && <b>Drop on a place to start a journey there. </b>}
           {mode === 'calibrate' && calib && <b>Calibrating: click known spot {calib.points.length + 1} of 2 on the sketch. </b>}
           {mode === 'draw' && draw.tool === 'polygon' && <b>{poly.length === 0 ? 'Click the first corner. ' : `${poly.length} corner(s): double-click or Enter to fill. `}</b>}
           {mode === 'measure' && (
             <b>
               {measure.length < 2 ? 'Click points to measure. ' : `${Math.round(pathLengthKm(measure, world.settings.radiusKm)).toLocaleString()} km great-circle. `}
-              {measure.length > 0 && <button className="link" onClick={() => setMeasure([])}>clear</button>}
+              {measure.length > 0 && <button className="link" onClick={() => setMeasure([])}>clear</button>}{' '}
+              <label className="checkbox small" style={{ display: 'inline-flex' }} title="Each click measures along the drawn roads and trade routes">
+                <input type="checkbox" checked={measureFollow} onChange={(e) => setMeasureFollow(e.target.checked)} /> along roads
+              </label>
             </b>
           )}
           {hover && <span>{Math.abs(hover.lat).toFixed(2)}°{hover.lat >= 0 ? 'N' : 'S'}, {Math.abs(wrapLng(hover.lng)).toFixed(2)}°{wrapLng(hover.lng) >= 0 ? 'E' : 'W'}{hoverInfo}</span>}
@@ -1101,15 +1279,25 @@ export function MapView() {
         </div>
       </div>
       <aside className="map-side">
+        {mode === 'route' && routeJourney && (
+          <RouteCard
+            journey={routeJourney}
+            points={routeDraft.pts}
+            follow={routeFollow}
+            onFollow={setRouteFollow}
+            onUndo={undoRoutePoint}
+            onFinish={finishRoute}
+            onCancel={cancelRoute}
+            onClear={() => setRouteDraft((r) => ({ pts: r.pts.slice(0, 1), marks: [] }))}
+          />
+        )}
+        {mode === 'draw' && wizardOpen && <MapWizard onTool={(t) => setDraw((d) => ({ ...d, tool: t }))} onUpload={(f) => void addImage(f)} onClose={() => setWizardOpen(false)} />}
         {mode === 'draw' && (
           <DrawOptions state={draw} onChange={setDraw} biomes={world.settings.biomes} polygonPoints={poly.length} onFinishPolygon={() => finishPolygon()} onCancelPolygon={() => setPoly([])}
             draftPoints={draft.pts.length} onFinishDraft={() => finishDraft()} onCancelDraft={() => setDraft({ pts: [], stops: [] })} />
         )}
-        {mode === 'draw' && !showTerrain && (
-          <div className="card hint">
-            <b>Start with the coastline.</b> Pick <b>Land</b> (L) and paint, or use <b>Shape</b> (P) to click out a continent. Upload a sketch below to trace over it.
-          </div>
-        )}
+        {mode === 'draw' && <LayersCard active={drawLayer} setActive={setActiveLayer} />}
+        {mode === 'draw' && !wizardOpen && <button className="small" onClick={() => { setWizardOpen(true); store.setSettings({ mapWizard: { ...(world.settings.mapWizard ?? { step: 0, done: [] }), closed: false } }); }}>Guide: first map, step by step</button>}
         {selFeature && <FeatureCard feature={selFeature} onClose={() => setSelected(null)} />}
         {selPlace && (
           <div className="card">
@@ -1120,6 +1308,9 @@ export function MapView() {
               <button className="small" onClick={() => go('places', selPlace.id)}>Open</button>
               <button className="small" onClick={() => edit({ kind: 'stay', preset: { placeId: selPlace.id } })}>+ Stay here</button>
               <button className="small" onClick={() => { startPick(selPlace.id); }}>Move</button>
+              {world.detailMaps.filter((dm) => dm.placeId === selPlace.id).map((dm) => (
+                <button key={dm.id} className="small primary" onClick={() => openMap(dm)}>Open map: {dm.name}</button>
+              ))}
             </div>
           </div>
         )}
@@ -1128,7 +1319,11 @@ export function MapView() {
             <h3><span style={{ color: selChar.color }}>{selChar.icon}</span> {selChar.name}</h3>
             <p>
               {selWhere?.kind === 'stay' && <>At {ix.places.get(selWhere.placeId)?.name}</>}
-              {selWhere?.kind === 'journey' && <>Travelling {ix.places.get(selWhere.fromId)?.name} → {ix.places.get(selWhere.toId)?.name}, {Math.round(selWhere.progress * 100)}% · {Math.round(greatCircleKm(ix.locationOf(selWhere.fromId)!, ix.locationOf(selWhere.toId)!, world.settings.radiusKm))} km straight</>}
+              {selWhere?.kind === 'journey' && <>Travelling {ix.places.get(selWhere.fromId)?.name} → {ix.places.get(selWhere.toId)?.name}, {Math.round(selWhere.progress * 100)}% · {(() => {
+                const j = ix.journeys.get(selWhere.segment.recordId);
+                const km = j ? ix.journeyDistanceKm(j) : undefined;
+                return <>{km !== undefined ? `${Math.round(km)} km ${j?.route ? 'along its route' : 'straight'}` : ''} {j && <button className="link" onClick={() => startRoute(j.id)}>{j.route ? 'edit route' : 'draw route'}</button>}</>;
+              })()}</>}
             </p>
             <button className="small" onClick={() => go('characters', selChar.id)}>Open</button>
           </div>
@@ -1156,6 +1351,7 @@ export function MapView() {
             <span className="muted small">At sea level, from the equator. Every 1,000 m of height counts as about 9° nearer a pole. Edges follow the axial tilt ({world.settings.axialTiltDeg}°).</span>
           </div>
         )}
+        <DetailMapsCard current={currentMap} openMap={openMap} currentBounds={currentBounds} selectedPlaceId={selected?.kind === 'place' ? selected.id : undefined} />
         <h3>Main map</h3>
         <p className="muted small">{mainMap ? `Covers ${mainMap.north.toFixed(1)}° to ${mainMap.south.toFixed(1)}° latitude, ${mainMap.west.toFixed(1)}° to ${mainMap.east.toFixed(1)}° longitude.` : 'The main map is the whole globe.'}</p>
         <div className="row wrap">

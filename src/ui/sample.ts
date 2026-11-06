@@ -1,7 +1,7 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
 import {
-  Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Stay, World, carveValley, touchKm, exactDate as d, featureAnchor, insideArea,
-  makeAnchor, nearestOnPolyline, textHash, toDayNumber, traceDownhill,
+  Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Stay, World, exactDate as d, featureAnchor,
+  makeAnchor, textHash, toDayNumber, traceRiver,
 } from '../core';
 import { nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
@@ -119,22 +119,10 @@ export function sampleWorld(): World {
     w.mapFeatures.push(mf);
     return mf;
   };
-  const R = w.settings.radiusKm;
-  const river = (name: string, source: LatLng, extra: Partial<MapFeature> = {}) => {
-    const near = touchKm(w);
-    let joins: { f: MapFeature; point: LatLng } | undefined;
-    const t = traceDownhill(w.terrain, source, (p) => {
-      for (const f of w.mapFeatures) {
-        if (f.kind === 'lake' && insideArea(p, f.points) && !insideArea(source, f.points)) return true;
-        if (f.kind !== 'river') continue;
-        const n = nearestOnPolyline(p, f.points, R);
-        if (n && n.km < near) { joins = { f, point: n.point }; return true; }
-      }
-      return false;
-    });
-    w.terrain = carveValley(w.terrain, t.cells);
-    const j = joins as { f: MapFeature; point: LatLng } | undefined;
-    return feature({ shape: 'line', kind: 'river', name, points: j ? [...t.points, j.point] : t.points, auto: true, joinsId: j?.f.id, ...extra });
+  const river = (name: string, source: LatLng) => {
+    const t = traceRiver(w, source);
+    w.terrain = t.terrain;
+    return feature({ shape: 'line', kind: 'river', name, points: t.points, auto: true, joinsId: t.joinsId });
   };
   river('The Sallow', { lat: 49.0, lng: 11.0 });
   const mere = feature({
@@ -150,6 +138,15 @@ export function sampleWorld(): World {
   road('King\'s Road', 'road', varn, thornwick, ashford);
   road('Salt Road', 'road', thornwick, saltmere);
   road('Ember Way', 'trade-route', saltmere, ember);
+
+  // Detail maps (Phase 2c): the heartland region and the city of Varn, with its wall and keep.
+  keep.location = { lat: 48.212, lng: 11.497 };
+  const ring = Array.from({ length: 13 }, (_, i) => ({ lat: 48.2 + 0.03 * Math.sin((i / 12) * 2 * Math.PI), lng: 11.5 + 0.045 * Math.cos((i / 12) * 2 * Math.PI) }));
+  feature({ shape: 'line', kind: 'wall', name: 'Varn city wall', points: ring });
+  w.detailMaps.push(
+    { ...recordBase(), name: 'The Heartland', kind: 'region', north: 49.4, south: 45.2, west: 9.6, east: 15.4, notes: '' },
+    { ...recordBase(), name: 'Varn', kind: 'city', north: 48.25, south: 48.15, west: 11.42, east: 11.58, placeId: varn.id, notes: '' },
+  );
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;
