@@ -2,7 +2,7 @@
 import {
   Book, Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
   makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
-  Block, Run, TextComment, blocksToDoc, docToBlocks, docWords, addDays, dayKey,
+  Block, Run, TextComment, blocksToDoc, docToBlocks, docWords, addDays, dayKey, ProposalInput, addSuggestion, checkProposal,
 } from '../core';
 import { newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
@@ -308,5 +308,40 @@ export function sampleWorld(): World {
   t3.words = docWords(t3.doc);
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
-  return w;
+
+  // Phase 6c: three example suggestions from Claude (AI-3, AI-7, AI-8), so the Suggestions list can be tried in the preview.
+  const opts = { newId, now: nowIso };
+  const proposals: ProposalInput[] = [
+    {
+      title: 'Give Oren a reason to count carts',
+      reason: 'Your comment in chapter 1 asks for Oren to hesitate; this plants why in chapter 2 and gives him the nickname the market uses.',
+      changes: [
+        { op: 'text', sceneId: s3.id, find: 'and every one of them was late.', replace: 'and every one of them was late, which in Thornwick meant someone had been paid to make them so.' },
+        { op: 'update', collection: 'characters', id: oren.id, set: { aliases: ['the Counter'], notes: 'Counts carts because the late ones tell him who is being bribed.' } },
+      ],
+    },
+    {
+      title: 'A river and a forest for Emberhold',
+      reason: 'The checks flag Emberhold as a large city far from water. A river from the eastern hills past the city would fix that, and a forest on the slopes fits the climate. The checks show where the course of the river still needs work.',
+      changes: [
+        { op: 'create', collection: 'mapFeatures', record: { shape: 'line', kind: 'river', name: 'The Cinder', points: [{ lat: 45.7, lng: 18.6 }, { lat: 45.2, lng: 18.1 }, { lat: 44.62, lng: 17.6 }, { lat: 44.2, lng: 17.0 }] } },
+        { op: 'terrain', shape: 'area', points: [{ lat: 46.0, lng: 18.2 }, { lat: 46.0, lng: 19.2 }, { lat: 45.3, lng: 19.2 }, { lat: 45.3, lng: 18.2 }], terrainType: 'Forest' },
+      ],
+    },
+    {
+      title: 'What if Ash takes Saltmere in 1047?',
+      reason: 'A big change, so as a what-if scenario: the Empire of Ash takes the harbour and Kaela loses her hiding place.',
+      asScenario: { name: 'Ash takes Saltmere (1047)', description: 'Suggested by Claude.' },
+      changes: [
+        { op: 'border', regionId: ash.id, area: [{ lat: 45.95, lng: 12.2 }, { lat: 45.95, lng: 12.85 }, { lat: 45.35, lng: 12.85 }, { lat: 45.35, lng: 12.2 }], mode: 'add', from: '1/6/1047', neighbours: 'take', note: 'Saltmere falls to Ash' },
+        { op: 'create', collection: 'events', record: { name: 'Fall of Saltmere', kind: 'battle', start: '1/6/1047', placeId: saltmere.id } },
+      ],
+    },
+  ];
+  let out: World = w;
+  for (const p of proposals) {
+    const check = checkProposal(out, p, opts);
+    if (!check.errors.length) out = addSuggestion(out, p, check, opts).world;
+  }
+  return out;
 }

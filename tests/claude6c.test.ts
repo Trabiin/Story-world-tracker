@@ -199,6 +199,14 @@ describe('AI-3, AI-10 proposals are checked like the app\'s forms', () => {
   });
 });
 
+describe('sample world', () => {
+  it('has three example suggestions that all still fit', () => {
+    const w = W();
+    expect(w.suggestions.map((s) => s.title)).toEqual(['Give Oren a reason to count carts', 'A river and a forest for Emberhold', 'What if Ash takes Saltmere in 1047?']);
+    for (const s of w.suggestions) expect(checkProposal(w, s, opts).errors).toEqual([]);
+  });
+});
+
 describe('AI-8 proposals pass the warnings engine', () => {
   it('lists the new warnings a proposal would cause', () => {
     const w = W();
@@ -217,19 +225,19 @@ describe('AI-3 suggestions, AI-7 scenarios, AI-9 direct editing and undo', () =>
     let w = W();
     const p = proposal(w);
     const { world, suggestion } = addSuggestion(w, p, checkProposal(w, p, opts), opts);
-    expect(suggestion).toMatchObject({ number: 1, state: 'open', title: 'Give Oren a title' });
+    expect(suggestion).toMatchObject({ number: 4, state: 'open', title: 'Give Oren a title' });
     w = world;
     const done = acceptSuggestion(w, suggestion.id, opts);
     if ('errors' in done) throw new Error(done.errors.join());
     expect(byName(done.world.characters, 'Oren Hask').notes).toBe('Keeps the seals.');
-    expect(done.world.suggestions[0].state).toBe('accepted');
+    expect(done.world.suggestions.find((x) => x.id === suggestion.id)!.state).toBe('accepted');
     expect(done.world.claudeLog[done.world.claudeLog.length - 1]).toMatchObject({ kind: 'accepted', suggestionId: suggestion.id });
     const undone = undoLogEntry(done.world, done.entry.id);
     if ('error' in undone) throw new Error(undone.error);
     expect(byName(undone.world.characters, 'Oren Hask')).toEqual(byName(w.characters, 'Oren Hask'));
-    expect(undone.world.suggestions[0].state).toBe('open');
+    expect(undone.world.suggestions.find((x) => x.id === suggestion.id)!.state).toBe('open');
     const rejected = rejectSuggestion(w, suggestion.id, 'Not yet', 'now');
-    expect(rejected.suggestions[0]).toMatchObject({ state: 'rejected', note: 'Not yet' });
+    expect(rejected.suggestions.find((x) => x.id === suggestion.id)).toMatchObject({ state: 'rejected', note: 'Not yet' });
   });
 
   it('accepts change by change; a change that needs a skipped one is refused', () => {
@@ -244,10 +252,10 @@ describe('AI-3 suggestions, AI-7 scenarios, AI-9 direct editing and undo', () =>
     expect('errors' in bad && bad.errors.join()).toMatch(/no change creates/);
     const some = acceptSuggestion(w, suggestion.id, opts, [2]);
     if ('errors' in some) throw new Error(some.errors.join());
-    expect(some.world.suggestions[0]).toMatchObject({ state: 'open', acceptedChanges: [2] });
+    expect(some.world.suggestions.find((x) => x.id === suggestion.id)).toMatchObject({ state: 'open', acceptedChanges: [2] });
     const rest = acceptSuggestion(some.world, suggestion.id, opts);
     if ('errors' in rest) throw new Error(rest.errors.join());
-    expect(rest.world.suggestions[0].state).toBe('accepted');
+    expect(rest.world.suggestions.find((x) => x.id === suggestion.id)!.state).toBe('accepted');
     expect(rest.world.groups.some((g) => g.name === 'Night Watch')).toBe(true);
   });
 
@@ -342,7 +350,7 @@ describe('AI-10 round trip: each kind of change leaves every other record alone 
   it('suggestions and the activity log are saved in the world file', async () => {
     const p: ProposalInput = { title: 'Save me', changes: [{ op: 'create', collection: 'todos', record: { title: 'x' } }] };
     const { world } = addSuggestion(w, p, checkProposal(w, p, opts), opts);
-    const done = acceptSuggestion(world, world.suggestions[0].id, opts);
+    const done = acceptSuggestion(world, world.suggestions[world.suggestions.length - 1].id, opts);
     if ('errors' in done) throw new Error(done.errors.join());
     const back = (await loadWorldFile(await worldToBytes(done.world))).world;
     expect(back.suggestions).toEqual(done.world.suggestions);
