@@ -22,6 +22,19 @@ export interface FuzzyDate {
   part?: Part;
   /** "Approximately": widens the window by a margin that depends on precision. */
   approximate?: boolean;
+  /**
+   * TL-4: a date tied to another one ("three days after the battle", "before chapter 12").
+   * The year/month/day above are kept up to date from the anchor by resolveRelativeDates,
+   * so every other part of the app reads the date as usual.
+   */
+  rel?: RelativeAnchor;
+}
+
+/** TL-4: what a relative date hangs on, and how many days after (negative: before) its start. */
+export interface RelativeAnchor {
+  kind: 'event' | 'chapter' | 'scene';
+  id: string;
+  days: number;
 }
 
 export interface DayWindow {

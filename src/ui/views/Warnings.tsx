@@ -6,7 +6,7 @@ import { nowIso } from '../../storage';
 import { useApp } from '../context';
 
 export function Warnings() {
-  const { world, store, warnings, edit, selected, showOnMap, previewFix } = useApp();
+  const { world, store, warnings, edit, selected, showOnMap, previewFix, go } = useApp();
   const [showDismissed, setShowDismissed] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   const visible = warnings.filter((w) => (showDismissed || !w.dismissed) && (showInfo || w.severity === 'warning'));
@@ -25,7 +25,13 @@ export function Warnings() {
   };
   const openRef = (r: Warning['refs'][number]) => {
     if (r.kind === 'stay' || r.kind === 'journey') edit({ kind: r.kind, id: r.id });
+    else if (r.kind === 'scene') go('story', r.id);
+    else if (r.kind === 'event' || r.kind === 'secret') go('events', r.id);
+    else if (r.kind === 'place') go('places', r.id);
+    else if (r.kind === 'membership') { const m = world.memberships.find((x) => x.id === r.id); if (m) go('groups', m.groupId); }
   };
+  const OPENABLE = ['stay', 'journey', 'scene', 'event', 'secret', 'place', 'membership'];
+  const refLabel: Record<string, string> = { stay: 'stay', journey: 'journey', scene: 'scene', event: 'event', secret: 'secret', place: 'place', membership: 'group membership' };
   const active = warnings.filter((w) => !w.dismissed && w.severity === 'warning').length;
   return (
     <div className="page">
@@ -48,8 +54,8 @@ export function Warnings() {
                 <div className="row wrap">
                   {w.day !== undefined && <button className="small" onClick={() => store.setMoment(w.day!)}>Go to {formatDayNumber(w.day)}</button>}
                   {w.at && <button className="small" onClick={() => showOnMap(w.at!)}>Show on map</button>}
-                  {w.refs.filter((r) => r.kind === 'stay' || r.kind === 'journey').map((r, i) => (
-                    <button key={i} className="small" onClick={() => openRef(r)}>Open {r.kind}</button>
+                  {w.refs.filter((r) => OPENABLE.includes(r.kind)).map((r, i) => (
+                    <button key={i} className="small" onClick={() => openRef(r)}>Open {refLabel[r.kind]}</button>
                   ))}
                   {w.fix?.kind === 'create-journey' && (
                     <button className="small primary" onClick={() => {

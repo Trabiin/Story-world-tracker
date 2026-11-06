@@ -1,6 +1,6 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
 import {
-  Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Stay, World, exactDate as d, featureAnchor,
+  Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
   makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea,
 } from '../core';
 import { newId, nowIso } from '../storage';
@@ -186,6 +186,40 @@ export function sampleWorld(): World {
   region('layer-culture', 'Northern culture', '#2c9faf', poly([55, 3], [55, 24], [48.7, 24], [48.4, 3]));
   w.regionLayers = w.regionLayers.map((l) => (l.type === 'culture' || l.type === 'religion' ? { ...l, visible: false } : l));
   w.settings.layerPresets = [{ id: newId(), name: 'politics + religion', visibleLayerIds: ['layer-political', 'layer-religion'] }];
+
+  // Phase 4a: family and other relationships (CH-4, EU-11), world events (TL-5), a relative date (TL-4) and a secret (CH-8).
+  const aldric = char('Aldric Venn', '#6d597a', '✦', 'minor', [990, 6, 1]);
+  aldric.death = d(1039, 11, 2);
+  const sera = char('Sera Venn', '#b5838d', '✦', 'minor', [994, 2, 11]);
+  const bram = char('Bram Venn', '#e07a5f', '♞', 'minor', [1023, 8, 19]);
+  const tobin = char('Tobin Solt', '#588157', '✚', 'minor', [995, 4, 4]);
+  tobin.attributes = [{ id: crypto.randomUUID(), key: 'health', value: 'fever', start: d(1042, 5, 1), end: d(1042, 6, 1) }];
+  const rel = (a: Character, b: Character, kind: Relationship['kind'], extra: Partial<Relationship> = {}) =>
+    w.relationships.push({ ...recordBase(), aId: a.id, bId: b.id, kind, notes: '', ...extra });
+  rel(aldric, sera, 'spouse', { start: d(1018, 5, 1), end: aldric.death });
+  rel(aldric, kaela, 'parent'); rel(sera, kaela, 'parent');
+  rel(aldric, bram, 'parent'); rel(sera, bram, 'parent');
+  rel(tobin, mira, 'parent');
+  rel(oren, mira, 'mentor', { start: d(1040, 1, 1), notes: 'Taught her the salt trade' });
+  rel(kaela, oren, 'ally', { start: d(1042, 5, 7) });
+  rel(tamsin, kaela, 'rival', { notes: 'Both want the regent’s trust' });
+
+  const council: WorldEvent = { ...recordBase(), name: 'The Regent’s Council', kind: 'other', start: d(1042, 4, 27), placeId: hall.id, characterIds: [kaela.id], description: 'The regent decides to send the sealed letter south.' };
+  const fair: WorldEvent = { ...recordBase(), name: 'Thornwick Salt Fair', kind: 'festival', start: d(1030, 5, 6), end: d(1030, 5, 12), yearly: true, placeId: thornwick.id, characterIds: [], description: 'A week of salt trading every spring.' };
+  const eclipse: WorldEvent = { ...recordBase(), name: 'Eclipse over Saltmere', kind: 'eclipse', start: d(1042, 5, 20), placeId: saltmere.id, characterIds: [kaela.id, tamsin.id], description: 'The harbour goes dark at noon. Kaela and Tamsin both see it.' };
+  w.events.push(council, fair, eclipse);
+  // TL-4: Kaela leaves "the day after the Regent's Council"; move the council and her departure follows.
+  const after1 = { kind: 'event' as const, id: council.id, days: 1 };
+  w.stays[0] = { ...w.stays[0], departure: { ...d(1042, 4, 28), rel: after1 } };
+  w.journeys[0] = { ...w.journeys[0], departure: { ...d(1042, 4, 28), rel: after1 } };
+  w.secrets.push({
+    ...recordBase(), title: 'The sealed letter names the heir', description: 'The regent’s letter names Bram Venn as heir.', knowers: [
+      { id: crypto.randomUUID(), characterId: kaela.id, from: d(1042, 4, 27), how: 'handed the letter by the regent' },
+      { id: crypto.randomUUID(), characterId: tamsin.id, from: d(1042, 5, 3), how: 'overhears it in the keep' },
+      { id: crypto.randomUUID(), characterId: oren.id, from: d(1042, 5, 7), how: 'Kaela tells him at the market' },
+    ],
+  });
+  w.settings.timelineSky = { events: true, seasons: true, moon: true, holidays: true };
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
   return w;

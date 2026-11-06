@@ -50,6 +50,10 @@ export interface WorldSettings {
   mapStyle?: 'flat' | 'parchment';
   /** RC-11: how far a large town may be from water before it is flagged, in km. */
   settlementWaterKm?: number;
+  /** TL-5, TL-6: what the timeline shows above and behind the rows: world events, yearly holidays, seasons, moon phases. seasonsAt: a place whose latitude sets the season lengths (RC-10); absent = calendar seasons. */
+  timelineSky?: { events: boolean; seasons: boolean; seasonsAt?: Id; moon: boolean; holidays: boolean };
+  /** TL-6: the moon's cycle, from one known new moon (a day number). */
+  moon?: { periodDays: number; newMoonDay: number; name?: string };
 }
 
 /** LY-8: a named set of region layers to show together. */
@@ -93,7 +97,10 @@ export interface Character extends RecordBase {
   attributes?: CharacterAttribute[];
 }
 
-export const ATTRIBUTE_KEYS = ['title', 'allegiance', 'faction', 'culture', 'religion', 'health', 'possession'] as const;
+export const ATTRIBUTE_KEYS = ['title', 'allegiance', 'faction', 'culture', 'religion', 'health', 'possession', 'status'] as const;
+
+/** CH-7: a "status" attribute with this value marks the character as missing for its span. */
+export const STATUS_MISSING = 'missing';
 
 /** CH-3: e.g. title = "Captain of the Guard", 1040–1043. */
 export interface CharacterAttribute extends TimeSpan {
@@ -380,7 +387,7 @@ export interface PassageAnchor {
   heading: string; // nearest heading above the passage
 }
 
-export type LinkTargetKind = 'character' | 'place' | 'group' | 'stay' | 'journey' | 'book' | 'chapter' | 'scene';
+export type LinkTargetKind = 'character' | 'place' | 'group' | 'stay' | 'journey' | 'book' | 'chapter' | 'scene' | 'event';
 
 /** ST-9: a passage linked to a record. */
 export interface ManuscriptLink extends RecordBase {
@@ -397,6 +404,49 @@ export interface WarningDismissal {
   key: string; // stable warning key
   note: string;
   at: string;
+}
+
+/** TL-5: a named world event (battle, coronation, festival, eclipse…). */
+export type EventKind = 'battle' | 'coronation' | 'festival' | 'eclipse' | 'treaty' | 'disaster' | 'birth' | 'death' | 'wedding' | 'discovery' | 'other';
+
+export interface WorldEvent extends RecordBase, TimeSpan {
+  name: string;
+  kind: EventKind;
+  placeId?: Id;
+  characterIds: Id[];
+  /** TL-6: a holiday or festival held every year on the start date's day and month. */
+  yearly?: boolean;
+  description: string;
+}
+
+/** CH-4: relationship kinds. Directed ones read "a is parent of b", "a is mentor of b". */
+export type RelationKind = 'parent' | 'spouse' | 'sibling' | 'lover' | 'ally' | 'rival' | 'enemy' | 'friend' | 'mentor' | 'liege' | 'other';
+export const DIRECTED_RELATIONS: RelationKind[] = ['parent', 'mentor', 'liege'];
+
+export interface Relationship extends RecordBase, TimeSpan {
+  aId: Id;
+  bId: Id;
+  kind: RelationKind;
+  /** Free label for 'other', or a nuance ("half-sister", "sworn brother"). */
+  label?: string;
+  notes: string;
+}
+
+/** CH-8: a secret or piece of knowledge, and who learns it when. */
+export interface Secret extends RecordBase {
+  title: string;
+  description: string;
+  /** The world event it is about, if any (knowing of an event). */
+  eventId?: Id;
+  knowers: Knower[];
+}
+
+export interface Knower {
+  id: Id;
+  characterId: Id;
+  /** Absent = has always known. */
+  from?: FuzzyDate;
+  how: string;
 }
 
 export interface World {
@@ -423,6 +473,10 @@ export interface World {
   /** LY-1..LY-12: region layers (political, cultures, religions, …) and their regions. */
   regionLayers: RegionLayer[];
   regions: Region[];
+  /** TL-5 named world events, CH-4 relationships, CH-8 secrets. */
+  events: WorldEvent[];
+  relationships: Relationship[];
+  secrets: Secret[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

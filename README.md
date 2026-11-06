@@ -1,6 +1,6 @@
 # Story World Tracker
 
-A desktop app (Windows and macOS) for novelists: where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
+A Windows desktop app for novelists: where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
 
 The full requirements live in the project's `spec/requirements.md`; the approved architecture is in `spec/architecture.md`.
 
@@ -98,6 +98,17 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **Map styles** (MK-12): clean and flat, or hand-drawn parchment (World settings).
 - **Export** (MK-14): the map's side panel saves the current view as PNG, PNG for print (4×) or SVG with vector lines and labels.
 
+
+## Phase 4a: people and events
+
+- **World events** (TL-5, Events & secrets): battles, coronations, festivals, eclipses and more, with a date or span, a place and who takes part. Yearly festivals repeat on the timeline as holidays (TL-6).
+- **Relative dates** (TL-4): any date box takes "3 days after the Battle of Varn", "a week before chapter 4" or "before chapter 12". The date follows its anchor when it moves.
+- **Timeline sky** (TL-6): an events lane, moon phases (set the cycle in Settings), and seasons, either calendar seasons or as long as they really last at a chosen place's latitude.
+- **Relationships and family trees** (CH-4, EU-11): family, friends, rivals, mentors and more, with dates; the family tree draws itself from parent, spouse and sibling links.
+- **Status and knowledge** (CH-7, CH-8): every character page shows alive, dead, missing or whereabouts unknown on the current date, and which secrets they know by then.
+- **New checks**: activity before birth or after death (CC-4), visiting a place before it exists or after it is gone (CC-5), a scene's place that doesn't match a character's stay (CC-6), and learning of an event before it happens.
+- **Meetings & tools**: who met whom, nesting aware (VW-6); two or three characters side by side (EU-13); calculators for age, travel time and days between dates (EU-12).
+- World file format 7 (events, relationships, secrets). Older files open as before.
 ## Development
 
 ```bash
@@ -118,4 +129,4 @@ src-tauri     desktop shell (Tauri 2)
 
 ## Installers
 
-The **Desktop installers** workflow (Actions tab → Run workflow) builds a Windows `.exe`/`.msi` and a macOS `.dmg`, attached to the run. Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them. The macOS build is unsigned, so the first time, right-click the app and choose Open.
+The **Desktop installers** workflow (Actions tab → Run workflow) builds the Windows `.exe` and `.msi` installers, attached to the run. Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.

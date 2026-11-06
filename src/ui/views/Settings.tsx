@@ -1,9 +1,10 @@
 /** World settings, travel speeds (WH-7), backups (EU-17) and open exports (PL-4). */
 import { useMemo, useState } from 'react';
-import { BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM } from '../../core';
+import { EARTH_MOON, MOON_ICON, fromDay, moonPhases, toWindow, BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM } from '../../core';
 import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
 import { Field } from '../components/Modal';
+import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
 
 export function Settings() {
@@ -38,6 +39,8 @@ export function Settings() {
       </div>
 
       <MapSettings />
+
+      <MoonSettings />
 
       <h2>Travel speeds</h2>
       <table className="table">
@@ -196,6 +199,31 @@ function MapSettings() {
         </tbody>
       </table>
       <button disabled={nextBiomeId(s.biomes) < 0} onClick={() => store.setSettings({ biomes: [...s.biomes, { id: nextBiomeId(s.biomes), name: 'New terrain', color: '#9fb07a', bands: ['subtropical', 'temperate'] }] })}>+ Add terrain type</button>
+    </>
+  );
+}
+
+/** TL-6: the moon shown on the timeline. */
+function MoonSettings() {
+  const { world, store, moment } = useApp();
+  const m: NonNullable<typeof world.settings.moon> = world.settings.moon ?? EARTH_MOON;
+  const set = (p: Partial<typeof m>) => store.setSettings({ moon: { ...m, ...p } });
+  const next = moonPhases(moment, moment + Math.ceil(m.periodDays) + 1, m).filter((p) => p.phase === 'new' || p.phase === 'full').slice(0, 2);
+  return (
+    <>
+      <h2>Moon</h2>
+      <div className="form-grid">
+        <Field label="Name" hint="Shown on the timeline when the Moon option is on.">
+          <input value={world.settings.moon?.name ?? ''} placeholder="The moon" onChange={(e) => set({ name: e.target.value || undefined })} />
+        </Field>
+        <Field label="Days from new moon to new moon" hint="Earth's moon: 29.53.">
+          <input type="number" step={0.01} min={2} value={m.periodDays} onChange={(e) => set({ periodDays: Math.max(2, Number(e.target.value) || EARTH_MOON.periodDays) })} />
+        </Field>
+        <Field label="A date with a new moon" hint={next.length ? `Next: ${next.map((p) => `${MOON_ICON[p.phase]} ${p.phase} moon ${fromDay(p.day).day}/${fromDay(p.day).month}/${fromDay(p.day).year}`).join(', ')}` : undefined}>
+          <DateInput value={fromDay(m.newMoonDay)} allowEmpty={false} onChange={(d) => d && set({ newMoonDay: toWindow(d).earliest })} />
+        </Field>
+        {world.settings.moon && <div><button className="small" onClick={() => store.setSettings({ moon: undefined })}>Use Earth's moon</button></div>}
+      </div>
     </>
   );
 }

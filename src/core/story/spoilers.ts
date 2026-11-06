@@ -202,6 +202,19 @@ export function spoilerView(world: World, asOf: number): World {
   const chapterIds = new Set(chapters.map((c) => c.id));
   const books = world.books.filter((b) => chapters.some((c) => c.bookId === b.id));
   const scenes = world.scenes.filter((s) => chapterIds.has(s.chapterId));
+  // TL-5 events the story has reached; CH-4 relationships begun by then between known characters; CH-8 knowledge gained by then.
+  const events = world.events
+    .filter((e) => byHand(e) ?? (mentioned(e.id) || (!!e.start && startsBy(e.start))))
+    .map((e) => ({ ...e, characterIds: e.characterIds.filter((id) => charIds.has(id)), placeId: e.placeId && placeIds.has(e.placeId) ? e.placeId : undefined }));
+  const eventIds = new Set(events.map((e) => e.id));
+  const relationships = world.relationships
+    .filter((r) => charIds.has(r.aId) && charIds.has(r.bId) && (byHand(r) ?? startsBy(r.start)))
+    .map((r) => (r.end && !startsBy(r.end) ? { ...r, end: undefined } : r));
+  const secrets = world.secrets
+    .filter((sc) => byHand(sc) !== false && (!sc.eventId || eventIds.has(sc.eventId)))
+    .map((sc) => ({ ...sc, knowers: sc.knowers.filter((k) => charIds.has(k.characterId) && startsBy(k.from)) }))
+    .filter((sc) => sc.knowers.length > 0 || byHand(sc) === true);
+
   const keepTarget = (t: { kind: string; id: Id }) => {
     switch (t.kind) {
       case 'character': return charIds.has(t.id);
@@ -212,11 +225,12 @@ export function spoilerView(world: World, asOf: number): World {
       case 'chapter': return chapterIds.has(t.id);
       case 'scene': return scenes.some((s) => s.id === t.id);
       case 'book': return books.some((b) => b.id === t.id);
+      case 'event': return events.some((e) => e.id === t.id);
       default: return true;
     }
   };
   const linkAt = linkChapters(world);
   const links = world.links.filter((l) => keepTarget(l.target) && (linkAt.get(l) ?? Infinity) <= asOf);
 
-  return { ...world, characters, places, groups, memberships: keptMemberships, stays, journeys, regions, chapters, books, scenes, links };
+  return { ...world, characters, places, groups, memberships: keptMemberships, stays, journeys, regions, chapters, books, scenes, links, events, relationships, secrets };
 }

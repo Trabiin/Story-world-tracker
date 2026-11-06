@@ -9,6 +9,7 @@ import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
 import { ICONS, PALETTE, blankCharacter, placeName, splitList } from '../util';
+import { Knowledge, Relationships, StatusBadge } from './CharacterExtras';
 
 const IMPORTANCE: Importance[] = ['main', 'secondary', 'minor'];
 
@@ -84,8 +85,21 @@ function CharacterDetail({ c }: { c: Character }) {
     const stays = world.stays.filter((s) => s.subject.kind === 'character' && s.subject.id === c.id);
     const journeys = world.journeys.filter((j) => j.subject.kind === 'character' && j.subject.id === c.id);
     const mem = world.memberships.filter((m) => m.characterId === c.id);
-    if (!(await ask.confirm(`Delete ${c.name}? This also deletes ${stays.length} stay(s), ${journeys.length} journey(s) and ${mem.length} group membership(s). Consider archiving instead.`, { okLabel: 'Delete', danger: true }))) return;
-    store.removeMany([{ c: 'characters', id: c.id }, ...stays.map((s) => ({ c: 'stays' as const, id: s.id })), ...journeys.map((j) => ({ c: 'journeys' as const, id: j.id })), ...mem.map((m) => ({ c: 'memberships' as const, id: m.id }))]);
+    const rels = world.relationships.filter((r) => r.aId === c.id || r.bId === c.id);
+    if (!(await ask.confirm(`Delete ${c.name}? This also deletes ${stays.length} stay(s), ${journeys.length} journey(s), ${mem.length} group membership(s) and ${rels.length} relationship(s), and takes them out of events and secrets. Consider archiving instead.`, { okLabel: 'Delete', danger: true }))) return;
+    store.update((w) => {
+      const gone = (x: { id: string }, list: { id: string }[]) => list.some((y) => y.id === x.id);
+      return {
+        ...w,
+        characters: w.characters.filter((x) => x.id !== c.id),
+        stays: w.stays.filter((x) => !gone(x, stays)),
+        journeys: w.journeys.filter((x) => !gone(x, journeys)),
+        memberships: w.memberships.filter((x) => !gone(x, mem)),
+        relationships: w.relationships.filter((x) => !gone(x, rels)),
+        events: w.events.map((e) => (e.characterIds.includes(c.id) ? { ...e, characterIds: e.characterIds.filter((id) => id !== c.id) } : e)),
+        secrets: w.secrets.map((sc) => (sc.knowers.some((k) => k.characterId === c.id) ? { ...sc, knowers: sc.knowers.filter((k) => k.characterId !== c.id) } : sc)),
+      };
+    });
     select(undefined);
   };
   return (
@@ -93,6 +107,7 @@ function CharacterDetail({ c }: { c: Character }) {
       <div className="page-head">
         <h1><span style={{ color: c.color }}>{c.icon}</span> {c.name}</h1>
         <div className="row">
+          <StatusBadge id={c.id} />
           {age !== undefined && age >= 0 && <span className="muted">Age {age} on {formatDayNumber(moment)}</span>}
           {segs.length > 0 && <button onClick={() => showTrack(c.id)} title="VW-3: draw every stay and journey on the map">Show track on map</button>}
           <button onClick={() => set({ archived: !c.archived })}>{c.archived ? 'Unarchive' : 'Archive'}</button>
@@ -167,6 +182,8 @@ function CharacterDetail({ c }: { c: Character }) {
               })}
             </ol>
           )}
+          <Relationships c={c} />
+          <Knowledge c={c} />
           <Backlinks kind="character" id={c.id} />
           {world.regions.some((r) => r.ties.some((t) => t.characterId === c.id)) && (
             <>
