@@ -56,6 +56,9 @@ export function createEmptyWorld(name: string): World {
     detailMaps: [],
     regionLayers: defaultRegionLayers(unknown.createdAt),
     regions: [],
+    events: [],
+    relationships: [],
+    secrets: [],
     terrain: emptyTerrain(),
   };
 }

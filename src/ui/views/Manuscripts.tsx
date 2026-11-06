@@ -10,7 +10,7 @@ import { Field, Modal } from '../components/Modal';
 import { AppCtx, useApp } from '../context';
 import { placeName, sortByName, subjectName } from '../util';
 
-const KIND_LABEL: Record<LinkTargetKind, string> = { character: 'Character', place: 'Place', group: 'Group', stay: 'Stay', journey: 'Journey', book: 'Book', chapter: 'Chapter', scene: 'Scene' };
+const KIND_LABEL: Record<LinkTargetKind, string> = { character: 'Character', place: 'Place', group: 'Group', stay: 'Stay', journey: 'Journey', book: 'Book', chapter: 'Chapter', scene: 'Scene', event: 'World event' };
 
 export function targetOptions(world: AppCtx['world'], kind: LinkTargetKind): { id: Id; label: string }[] {
   switch (kind) {
@@ -22,6 +22,7 @@ export function targetOptions(world: AppCtx['world'], kind: LinkTargetKind): { i
     case 'book': return world.books.map((b) => ({ id: b.id, label: b.title }));
     case 'chapter': return world.chapters.map((c) => ({ id: c.id, label: `${world.books.find((b) => b.id === c.bookId)?.title ?? ''} · ${c.title}` }));
     case 'scene': return world.scenes.map((s) => ({ id: s.id, label: s.title }));
+    case 'event': return sortByName(world.events).map((e) => ({ id: e.id, label: e.name }));
   }
 }
 
@@ -36,6 +37,7 @@ export function useOpenTarget() {
     else if (t.kind === 'character') go('characters', t.id);
     else if (t.kind === 'place') go('places', t.id);
     else if (t.kind === 'group') go('groups', t.id);
+    else if (t.kind === 'event') go('events', t.id);
     else go('story', t.id);
   };
 }

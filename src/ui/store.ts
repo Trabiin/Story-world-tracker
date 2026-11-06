@@ -2,7 +2,7 @@
  * World state for the UI: immutable updates, undo/redo, debounced autosave, periodic backups.
  */
 import { useSyncExternalStore } from 'react';
-import type { World } from '../core';
+import { World, resolveRelativeDates } from '../core';
 import { COLLECTIONS, CollectionName, Snapshot, makeSnapshot, nowIso, pruneSnapshots, restoreSnapshot, worldToBytes } from '../storage';
 import type { Platform, WorldHandle } from './platform';
 
@@ -80,7 +80,8 @@ export class WorldStore {
       this.onBlocked?.();
       return;
     }
-    const next = fn(this.world);
+    // TL-4: dates tied to an event, chapter or scene follow it when it moves.
+    const next = undoable ? resolveRelativeDates(fn(this.world)) : fn(this.world);
     if (next === this.world) return;
     if (undoable) {
       this.past.push(this.world);

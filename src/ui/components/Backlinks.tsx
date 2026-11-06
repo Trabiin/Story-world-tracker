@@ -11,12 +11,13 @@ export function Backlinks({ kind, id, title = 'Mentioned in', only }: { kind: Li
     else if (b.kind === 'scene' || b.kind === 'chapter') go('story', b.id);
     else if (b.kind === 'stay' || b.kind === 'journey') edit({ kind: b.kind, id: b.id });
     else if (b.kind === 'place') go('places', b.id);
+    else if (b.kind === 'event') go('events', b.id);
     else if (b.kind === 'membership') {
       const m = world.memberships.find((x) => x.id === b.id);
       if (m) go(kind === 'group' ? 'characters' : 'groups', kind === 'group' ? m.characterId : m.groupId);
     }
   };
-  const order = ['passage', 'scene', 'chapter', 'stay', 'journey', 'membership', 'place'];
+  const order = ['passage', 'event', 'scene', 'chapter', 'stay', 'journey', 'membership', 'place'];
   const sorted = [...list].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   return (
     <section className="backlinks">

@@ -61,3 +61,30 @@ export function SubjectSelect({ world, value, onChange }: { world: World; value:
     </select>
   );
 }
+
+export function CharacterSelect({ world, value, onChange, placeholder = 'Choose a character…', exclude }: { world: World; value: Id | undefined; onChange: (id: Id | undefined) => void; placeholder?: string; exclude?: Id[] }) {
+  return (
+    <select value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+      <option value="">{placeholder}</option>
+      {sortByName(world.characters.filter((c) => !c.archived && !exclude?.includes(c.id))).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+  );
+}
+
+/** Several characters as removable chips plus a picker. */
+export function CharacterChips({ world, value, onChange, max }: { world: World; value: Id[]; onChange: (ids: Id[]) => void; max?: number }) {
+  return (
+    <div className="row wrap chips">
+      {value.map((id) => {
+        const c = world.characters.find((x) => x.id === id);
+        return (
+          <span key={id} className="chip" style={{ borderColor: c?.color }}>
+            <span style={{ color: c?.color }}>{c?.icon}</span> {c?.name ?? '?'}
+            <button className="icon" aria-label={`Remove ${c?.name}`} onClick={() => onChange(value.filter((x) => x !== id))}>×</button>
+          </span>
+        );
+      })}
+      {(!max || value.length < max) && <CharacterSelect world={world} value={undefined} placeholder="+ Add…" exclude={value} onChange={(id) => id && onChange([...value, id])} />}
+    </div>
+  );
+}

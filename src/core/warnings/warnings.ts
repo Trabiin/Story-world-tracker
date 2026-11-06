@@ -9,9 +9,11 @@ import type { Id, Journey, World } from '../model';
 import { describeClash, findBiomeClashes, findRainShadows, hasTerrain, windName } from '../terrain';
 import { FixKind, checkRivers, checkWater } from '../features';
 import { OPEN_END, Segment, WorldIndex, nominalEnd, nominalStart } from '../whereabouts';
+import { checkPeople } from '../people/checks';
 
 export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate' | 'river-uphill' | 'river-dead-end' | 'river-split'
-  | 'lake-outlet' | 'river-crossing' | 'river-source' | 'settlement-water' | 'rain-shadow';
+  | 'lake-outlet' | 'river-crossing' | 'river-source' | 'settlement-water' | 'rain-shadow'
+  | 'life-span' | 'place-existence' | 'scene-place' | 'knowledge-order';
 
 export const RULES: Record<RuleId, { name: string; requirement: string; severity: 'warning' | 'info' }> = {
   'two-places': { name: 'In two places at once', requirement: 'CC-1', severity: 'warning' },
@@ -29,10 +31,14 @@ export const RULES: Record<RuleId, { name: string; requirement: string; severity
   'river-source': { name: 'River source in an unlikely spot', requirement: 'RC-6', severity: 'warning' },
   'settlement-water': { name: 'Large town far from water', requirement: 'RC-11', severity: 'warning' },
   'rain-shadow': { name: 'Lush land in a rain shadow', requirement: 'RC-9', severity: 'warning' },
+  'life-span': { name: 'Active before birth or after death', requirement: 'CC-4', severity: 'warning' },
+  'place-existence': { name: 'Place visited when it does not exist', requirement: 'CC-5', severity: 'warning' },
+  'scene-place': { name: 'Scene place differs from the stay', requirement: 'CC-6', severity: 'warning' },
+  'knowledge-order': { name: 'Learns of an event before it happens', requirement: 'CH-8', severity: 'warning' },
 };
 
 export interface RecordRef {
-  kind: 'stay' | 'journey' | 'character' | 'place' | 'group' | 'feature';
+  kind: 'stay' | 'journey' | 'character' | 'place' | 'group' | 'feature' | 'scene' | 'event' | 'membership' | 'secret';
   id: Id;
 }
 
@@ -187,6 +193,7 @@ export function checkWorld(world: World): Warning[] {
       out.push({ key: `placeholder:${s.id}`, rule: 'placeholder', severity: 'info', message: `${subj} is somewhere unknown (${name(ix, 'place', s.placeId)}) from ${formatDayNumber(ix.win(s.arrival).earliest)}.`, refs: [{ kind: 'stay', id: s.id }], day: ix.win(s.arrival).earliest });
     }
   }
+  for (const p of checkPeople(world, ix)) out.push({ ...p, severity: 'warning' });
   out.push(...checkTerrain(world));
   const terrainOn = hasTerrain(world.terrain);
   for (const r of checkRivers(world)) {

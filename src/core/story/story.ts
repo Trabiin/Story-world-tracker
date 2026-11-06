@@ -29,7 +29,7 @@ export function outline(world: World) {
 }
 
 export interface Backlink {
-  kind: 'passage' | 'scene' | 'chapter' | 'stay' | 'journey' | 'membership' | 'place';
+  kind: 'passage' | 'scene' | 'chapter' | 'stay' | 'journey' | 'membership' | 'place' | 'event';
   id: Id;
   label: string;
   detail?: string;
@@ -51,6 +51,10 @@ export function backlinksFor(world: World, kind: LinkTargetKind, id: Id): Backli
   for (const s of world.scenes) {
     const hit = kind === 'character' ? s.povCharacterId === id || s.characterIds.includes(id) : kind === 'place' ? s.placeId === id : kind === 'chapter' ? s.chapterId === id : false;
     if (hit) out.push({ kind: 'scene', id: s.id, label: s.title || 'Untitled scene', detail: s.start ? formatFuzzy(s.start) : undefined });
+  }
+  for (const e of world.events) {
+    const hit = kind === 'character' ? e.characterIds.includes(id) : kind === 'place' ? e.placeId === id : false;
+    if (hit) out.push({ kind: 'event', id: e.id, label: e.name, detail: e.start ? formatFuzzy(e.start) : undefined });
   }
   for (const c of world.chapters) {
     if ((kind === 'character' && c.povCharacterId === id) || (kind === 'book' && c.bookId === id)) out.push({ kind: 'chapter', id: c.id, label: c.title || 'Untitled chapter', detail: kind === 'character' ? 'POV' : undefined });

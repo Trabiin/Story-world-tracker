@@ -3,13 +3,17 @@
  * Zoom from decades to days; fuzzy dates show as faded edges. Click the axis to set the current moment.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Id, OPEN_END, Segment, fromDayNumber, formatDayNumber, toDayNumber } from '../../core';
+import { EARTH_MOON, Id, MOON_ICON, OPEN_END, Segment, TerrainReader, eventIcon, fromDayNumber, formatDayNumber, hasTerrain, moonPhases, occurrences, seasonBands, toDayNumber } from '../../core';
 import { useApp } from '../context';
 import { worldDayRange } from '../util';
 
 const ROW_H = 30;
 const AXIS_H = 40;
 const LABEL_W = 170;
+/** TL-5/TL-6 lane under the date bar: moon phases on top, events below. */
+const SKY_H = 32;
+const SEASON_COLOR: Record<string, string> = { spring: '#7cc576', summer: '#f2c14e', autumn: '#d98236', winter: '#7fb2e5' };
+const DEFAULT_SKY = { events: true, seasons: false, moon: false, holidays: true };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 interface Row {
@@ -26,7 +30,7 @@ interface Hit {
   x1: number;
   y0: number;
   y1: number;
-  kind: 'stay' | 'journey';
+  kind: 'stay' | 'journey' | 'event';
   id: Id;
   label: string;
 }
@@ -48,6 +52,17 @@ export function Timeline() {
   const [showGroups, setShowGroups] = useState(false);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const hits = useRef<Hit[]>([]);
+  const sky = { ...DEFAULT_SKY, ...world.settings.timelineSky };
+  const setSky = (p: Partial<typeof sky>) => store.setSettings({ timelineSky: { ...sky, ...p } }, false);
+  const laneOn = (sky.events && world.events.length > 0) || sky.moon;
+  const top = AXIS_H + (laneOn ? SKY_H : 0);
+  // TL-6: season lengths from a chosen place's latitude and height (RC-10), else calendar seasons.
+  const seasonOpts = useMemo(() => {
+    const loc = sky.seasonsAt ? ix.locationOf(sky.seasonsAt) : undefined;
+    if (!loc) return { hemisphere: world.settings.hemisphereForSeasons };
+    const elevM = hasTerrain(world.terrain) ? Math.max(0, new TerrainReader(world.terrain).elevation(loc)) : 0;
+    return { hemisphere: world.settings.hemisphereForSeasons, lat: loc.lat, elevM, tiltDeg: world.settings.axialTiltDeg };
+  }, [sky.seasonsAt, ix, world.terrain, world.settings.hemisphereForSeasons, world.settings.axialTiltDeg]);
 
   useEffect(() => {
     const el = wrapRef.current!;
@@ -135,10 +150,27 @@ export function Timeline() {
 
     // rows
     const firstRow = Math.max(0, Math.floor(scrollY / ROW_H));
-    const lastRow = Math.min(rows.length - 1, Math.ceil((scrollY + h - AXIS_H) / ROW_H));
+    const lastRow = Math.min(rows.length - 1, Math.ceil((scrollY + h - top) / ROW_H));
+    // TL-6 seasons tint the background.
+    const seasonLabels: [string, number][] = [];
+    if (sky.seasons) {
+      for (const b of seasonBands(start, endDay, seasonOpts)) {
+        const x0 = Math.max(LABEL_W, xOf(b.from)), x1 = Math.min(w, xOf(b.to + 1));
+        if (x1 <= x0) continue;
+        g.fillStyle = SEASON_COLOR[b.season];
+        g.globalAlpha = 0.09;
+        g.fillRect(x0, top, x1 - x0, h - top);
+        g.globalAlpha = 0.85;
+        g.fillRect(x0, top - 4, x1 - x0, 4);
+        g.globalAlpha = 1;
+        if (x1 - x0 > 50) seasonLabels.push([b.season, x0 + 4]);
+      }
+    }
+    g.save();
+    g.beginPath(); g.rect(0, top, w, h - top); g.clip();
     for (let i = firstRow; i <= lastRow; i++) {
       const r = rows[i];
-      const y = AXIS_H + i * ROW_H - scrollY;
+      const y = top + i * ROW_H - scrollY;
       if (i % 2) { g.fillStyle = panel; g.globalAlpha = 0.5; g.fillRect(LABEL_W, y, w - LABEL_W, ROW_H); g.globalAlpha = 1; }
       for (const s of r.segs) {
         const open = s.end.latest === OPEN_END;
@@ -186,6 +218,61 @@ export function Timeline() {
       g.fillStyle = fg;
       g.fillText(r.name.length > 20 ? r.name.slice(0, 19) + '…' : r.name, 26, y + ROW_H / 2);
     }
+    g.restore();
+    g.fillStyle = muted; g.font = '10px system-ui';
+    for (const [name, x] of seasonLabels) g.fillText(name, x, h - 8);
+    // TL-5/TL-6 lane: moon phases and world events (yearly holidays repeat every year).
+    if (laneOn) {
+      g.fillStyle = bg;
+      g.fillRect(0, AXIS_H, w, SKY_H - (sky.seasons ? 4 : 0));
+      g.fillStyle = muted;
+      g.font = '11px system-ui';
+      g.fillText(sky.moon && sky.events && world.events.length ? 'Moon · events' : sky.moon ? (world.settings.moon?.name ?? 'Moon') : 'Events', 8, AXIS_H + SKY_H / 2);
+      if (sky.moon && pxPerDay >= 0.9) {
+        const moon = world.settings.moon ?? EARTH_MOON;
+        for (const ph of moonPhases(Math.floor(start), Math.ceil(endDay), moon)) {
+          if (pxPerDay < 3 && ph.phase !== 'full' && ph.phase !== 'new') continue;
+          const x = xOf(ph.day + 0.5), y = AXIS_H + 8, r = 4.5;
+          if (x < LABEL_W + 6) continue;
+          // Drawn discs: new = dark, full = light ring, quarters = half lit (lit side to the right when waxing, northern view).
+          g.strokeStyle = fg; g.fillStyle = fg; g.lineWidth = 1;
+          g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2);
+          if (ph.phase === 'new') g.fill(); else g.stroke();
+          if (ph.phase === 'first-quarter' || ph.phase === 'last-quarter') {
+            g.beginPath();
+            if (ph.phase === 'first-quarter') g.arc(x, y, r, Math.PI / 2, Math.PI * 1.5); else g.arc(x, y, r, -Math.PI / 2, Math.PI / 2);
+            g.closePath(); g.fill();
+          }
+          hs.push({ x0: x - 6, x1: x + 6, y0: AXIS_H, y1: AXIS_H + 15, kind: 'event', id: '', label: `${MOON_ICON[ph.phase]} ${ph.phase.replace('-', ' ')} moon\n${formatDayNumber(ph.day)}` });
+        }
+      }
+      if (sky.events) {
+        const y = AXIS_H + (sky.moon ? 22 : SKY_H / 2);
+        let labelEnd = -Infinity;
+        for (const o of occurrences(world, Math.floor(start), Math.ceil(endDay))) {
+          if (o.repeat !== undefined && !sky.holidays) continue;
+          const x0 = xOf(o.from), x1 = xOf(o.to + 1);
+          if (x1 < LABEL_W || x0 > w) continue;
+          g.fillStyle = cssVar('--accent');
+          g.globalAlpha = o.repeat !== undefined ? 0.55 : 1;
+          if (x1 - x0 > 8) g.fillRect(Math.max(LABEL_W, x0), y - 3, Math.min(w, x1) - Math.max(LABEL_W, x0), 6);
+          const icon = eventIcon(o.event.kind);
+          g.font = '12px system-ui';
+          const ix0 = Math.max(LABEL_W + 2, x0 - 6);
+          g.fillStyle = fg;
+          g.fillText(icon, ix0, y);
+          const label = o.event.name;
+          g.font = '11px system-ui';
+          const tw = g.measureText(label).width;
+          if (ix0 + 16 > labelEnd) { g.fillText(label, ix0 + 16, y); labelEnd = ix0 + 16 + tw + 8; }
+          g.globalAlpha = 1;
+          const fmt = o.from === o.to ? formatDayNumber(o.from) : `${formatDayNumber(o.from)} – ${formatDayNumber(o.to)}`;
+          hs.push({ x0: ix0 - 2, x1: Math.max(ix0 + 14, x1), y0: y - 8, y1: y + 8, kind: 'event', id: o.event.id, label: `${icon} ${o.event.name}${o.repeat !== undefined ? ' (yearly)' : ''}\n${fmt}${o.event.placeId ? `\nat ${ix.places.get(o.event.placeId)?.name ?? '?'}` : ''}` });
+        }
+      }
+      g.strokeStyle = line;
+      g.beginPath(); g.moveTo(0, top); g.lineTo(w, top); g.stroke();
+    }
     // axis background over rows
     g.fillStyle = bg;
     g.globalAlpha = 0.92;
@@ -207,14 +294,14 @@ export function Timeline() {
       g.fillText(formatDayNumber(moment), Math.min(mx + 4, w - 70), 8);
     }
     hits.current = hs;
-  }, [size, rows, start, pxPerDay, scrollY, moment, flagged, ix, world.groups]);
+  }, [size, rows, start, pxPerDay, scrollY, moment, flagged, ix, world.groups, world.events, world.settings.moon, top, laneOn, sky.events, sky.moon, sky.seasons, sky.holidays, seasonOpts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const drag = useRef<{ x: number; y: number; start: number; scrollY: number; moved: boolean } | null>(null);
   const local = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
-  const maxScroll = Math.max(0, rows.length * ROW_H - (size.h - AXIS_H));
+  const maxScroll = Math.max(0, rows.length * ROW_H - (size.h - top));
 
   const onWheel = (e: React.WheelEvent) => {
     const { x } = local(e);
@@ -255,14 +342,15 @@ export function Timeline() {
     const p = local(e);
     if (p.y < AXIS_H && p.x > LABEL_W) { store.setMoment(Math.floor(dayOf(p.x))); return; }
     if (p.x < LABEL_W) {
-      const i = Math.floor((p.y - AXIS_H + scrollY) / ROW_H);
+      const i = Math.floor((p.y - top + scrollY) / ROW_H);
       const r = rows[i];
       if (r) go(r.kind === 'character' ? 'characters' : 'groups', r.id);
       return;
     }
     const hit = hits.current.find((hh) => p.x >= hh.x0 && p.x <= hh.x1 && p.y >= hh.y0 && p.y <= hh.y1);
-    if (hit) edit({ kind: hit.kind, id: hit.id });
-    else store.setMoment(Math.floor(dayOf(p.x)));
+    if (hit?.kind === 'event') { if (hit.id) go('events', hit.id); }
+    else if (hit) edit({ kind: hit.kind, id: hit.id });
+    else if (p.y >= top) store.setMoment(Math.floor(dayOf(p.x)));
   };
 
   const zoomTo = (days: number) => {
@@ -287,6 +375,16 @@ export function Timeline() {
             <option value="all">All characters</option><option value="main">Main</option><option value="secondary">Secondary</option><option value="minor">Minor</option>
           </select>
           <label className="checkbox"><input type="checkbox" checked={showGroups} onChange={(e) => setShowGroups(e.target.checked)} /> Group rows</label>
+          <label className="checkbox" title="TL-5"><input type="checkbox" checked={sky.events} onChange={(e) => setSky({ events: e.target.checked })} /> Events</label>
+          {sky.events && world.events.some((x) => x.yearly) && <label className="checkbox" title="TL-6: yearly festivals and holidays, every year"><input type="checkbox" checked={sky.holidays} onChange={(e) => setSky({ holidays: e.target.checked })} /> Holidays</label>}
+          <label className="checkbox" title="TL-6"><input type="checkbox" checked={sky.moon} onChange={(e) => setSky({ moon: e.target.checked })} /> Moon</label>
+          <label className="checkbox" title="TL-6"><input type="checkbox" checked={sky.seasons} onChange={(e) => setSky({ seasons: e.target.checked })} /> Seasons</label>
+          {sky.seasons && (
+            <select value={sky.seasonsAt ?? ''} onChange={(e) => setSky({ seasonsAt: e.target.value || undefined })} title="TL-6: season lengths follow this place's latitude and height (RC-10)">
+              <option value="">Calendar seasons ({world.settings.hemisphereForSeasons})</option>
+              {world.places.filter((p) => !p.isPlaceholder && ix.locationOf(p.id) && ['city', 'town', 'village', 'capital', 'castle', 'port', 'region'].includes(p.kind)).sort((a, b) => a.name.localeCompare(b.name)).map((p) => <option key={p.id} value={p.id}>Seasons as in {p.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
       <div className="timeline-canvas" ref={wrapRef}>
@@ -294,7 +392,7 @@ export function Timeline() {
         {tip && <div className="tooltip" style={{ left: tip.x + 12, top: tip.y + 12 }}>{tip.text.split('\n').map((l, i) => <div key={i}>{l}</div>)}</div>}
         {rows.length === 0 && <div className="empty overlay">No characters to show yet.</div>}
       </div>
-      <p className="muted pad small">Scroll to zoom, drag to pan, click the date bar to set the current moment, click a block to edit. Faded edges show uncertain dates; red outlines have warnings; dashed blocks come from a group.</p>
+      <p className="muted pad small">Scroll to zoom, drag to pan, click the date bar to set the current moment, click a block to edit, click an event to open it. Faded edges show uncertain dates; red outlines have warnings; dashed blocks come from a group.</p>
     </div>
   );
 }

@@ -14,6 +14,8 @@ import { WorldStore, useStore } from './store';
 import { defaultMoment } from './util';
 import { Characters } from './views/Characters';
 import { Groups } from './views/Groups';
+import { Events } from './views/Events';
+import { People } from './views/People';
 import { Places } from './views/Places';
 import { Layers } from './views/Layers';
 import { Settings } from './views/Settings';
@@ -28,6 +30,8 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'story', label: 'Books & scenes', key: '4' },
   { view: 'manuscripts', label: 'Manuscripts', key: '5' },
   { view: 'characters', label: 'Characters', key: '6' },
+  { view: 'events', label: 'Events & secrets', key: '' },
+  { view: 'people', label: 'Meetings & tools', key: '' },
   { view: 'places', label: 'Places', key: '7' },
   { view: 'layers', label: 'Realms & layers', key: '' },
   { view: 'groups', label: 'Groups', key: '8' },
@@ -52,14 +56,14 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   // Filter only when records change, not on every playback frame.
   const filtered = useMemo<World | undefined>(
     () => (readerAt === undefined ? undefined : spoilerView(full, readerAt)),
-    [readerAt, full.characters, full.places, full.groups, full.memberships, full.stays, full.journeys, full.regions, full.chapters, full.books, full.scenes, full.links, full.manuscripts, full.mapFeatures, full.settings.hemisphereForSeasons], // eslint-disable-line react-hooks/exhaustive-deps
+    [readerAt, full.characters, full.places, full.groups, full.memberships, full.stays, full.journeys, full.regions, full.chapters, full.books, full.scenes, full.links, full.manuscripts, full.mapFeatures, full.events, full.relationships, full.secrets, full.settings.hemisphereForSeasons], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const world = useMemo(() => (filtered ? { ...filtered, settings: full.settings } : full), [filtered, full]);
   store.readOnly = readerAt !== undefined;
   store.onBlocked = () => void ask.alert("This is the reader's view, so editing is off. Switch the view back to Author to make changes.");
   const ix = useMemo(() => new WorldIndex(world), [world]);
   // Warnings ignore the current moment, so recompute only when records change.
-  const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.mapFeatures, world.settings.biomes, world.settings.axialTiltDeg, world.settings.winds, world.settings.settlementWaterKm]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.mapFeatures, world.settings.biomes, world.settings.axialTiltDeg, world.settings.winds, world.settings.settlementWaterKm, world.scenes, world.chapters, world.events, world.secrets]); // eslint-disable-line react-hooks/exhaustive-deps
   const warnings = useMemo(() => checkWorld(recordsKey), [recordsKey]);
   const moment = defaultMoment(world, ix);
   const [view, setView] = useState<View>(() => (localStorage.getItem('swt.view') as View) || 'who');
@@ -183,6 +187,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'places' && <Places />}
           {view === 'layers' && <Layers />}
           {view === 'groups' && <Groups />}
+          {view === 'events' && <Events />}
+          {view === 'people' && <People />}
           {view === 'warnings' && <Warnings />}
           {view === 'settings' && <Settings />}
         </main>

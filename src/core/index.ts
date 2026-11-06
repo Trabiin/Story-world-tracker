@@ -9,3 +9,5 @@ export * from './story';
 export * from './terrain';
 export * from './features';
 export * from './layers';
+export * from './events';
+export * from './people';
