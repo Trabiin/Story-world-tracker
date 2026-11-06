@@ -1,4 +1,4 @@
-/** PL-4: open export formats. JSON for everything, GeoJSON (lat/long) for map features. */
+/** PL-4: open export formats. JSON for everything, GeoJSON (lat/long) for map features and layer regions. */
 import { World, WorldIndex } from '../core';
 import { normalizeWorld } from './newWorld';
 import { TerrainJson, terrainFromJson, terrainToJson } from './terrainCodec';
@@ -66,6 +66,29 @@ export function placesToGeoJson(world: World): string {
         end: f.end ?? null,
         notes: f.notes,
       },
+    });
+  }
+  // LY-6: each border version of each region, with the dates it applies.
+  for (const r of world.regions) {
+    const layer = world.regionLayers.find((l) => l.id === r.layerId);
+    r.versions.forEach((v, i) => {
+      if (!v.area.length) return;
+      features.push({
+        type: 'Feature',
+        id: `${r.id}:${v.id}`,
+        geometry: { type: 'MultiPolygon', coordinates: v.area },
+        properties: {
+          name: r.name,
+          layer: layer?.name ?? null,
+          layerType: layer?.type ?? null,
+          regionId: r.id,
+          color: r.color,
+          start: v.start ?? r.start ?? null,
+          end: r.versions[i + 1]?.start ?? r.end ?? null,
+          intensity: v.intensity ?? null,
+          note: v.note ?? null,
+        },
+      });
     });
   }
   return JSON.stringify({ type: 'FeatureCollection', features, properties: { world: world.settings.name, radiusKm: world.settings.radiusKm } }, null, 2);

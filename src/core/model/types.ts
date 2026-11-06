@@ -40,6 +40,15 @@ export interface WorldSettings {
   mapWizard?: { step: number; done: number[]; closed?: boolean };
   /** MK-7: editable terrain types. */
   biomes: Biome[];
+  /** LY-8: saved combinations of visible region layers ("politics + religion"). */
+  layerPresets?: LayerPreset[];
+}
+
+/** LY-8: a named set of region layers to show together. */
+export interface LayerPreset {
+  id: Id;
+  name: string;
+  visibleLayerIds: Id[];
 }
 
 export interface TravelMode {
@@ -229,6 +238,77 @@ export interface MapFeature extends RecordBase, TimeSpan {
   notes: string;
 }
 
+/** LY-1, LY-11: what a region layer is about. Political decides which realm a place belongs to (DM-2, LY-2). */
+export type RegionLayerType =
+  | 'political' | 'culture' | 'religion' | 'language' | 'trade'
+  | 'population' | 'resources' | 'influence' | 'military' | 'danger' | 'magic' | 'known-world' | 'history' | 'disasters' | 'notes' | 'other';
+
+/** [longitude, latitude] pairs, outer ring first then holes, as in GeoJSON (RFC 7946). Longitudes may run past ±180 so a region can cross the date line. */
+export type GeoRing = [number, number][];
+export type GeoPolygon = GeoRing[];
+export type GeoMultiPolygon = GeoPolygon[];
+
+/** LY-1..LY-8: a themed set of regions, switched on and off together. */
+export interface RegionLayer extends RecordBase {
+  name: string;
+  type: RegionLayerType;
+  /** LY-3: regions may overlap (culture, religion). Political layers keep borders apart. */
+  overlaps: boolean;
+  /** LY-7 style. */
+  color: string;
+  fill: 'solid' | 'hatch' | 'none';
+  borderStyle: 'solid' | 'dashed' | 'dotted' | 'none';
+  opacity: number;
+  labels: boolean;
+  /** Fill and borders stop at the coastline (LY-5 "snap to coastlines"). */
+  onlyOnLand: boolean;
+  /** Political layers: colour each region by its top realm (empire, kingdom) or by itself. */
+  colorBy?: 'top' | 'own';
+  /** LY-8 controls. */
+  visible: boolean;
+  locked: boolean;
+  order: number;
+}
+
+/** LY-6: the shape of a region from a date until the next version starts. */
+export interface RegionVersion {
+  id: Id;
+  /** Absent = from the region's beginning. */
+  start?: FuzzyDate;
+  area: GeoMultiPolygon;
+  /** LY-4: 0–100, e.g. 70 = "70% followers of the Sun Faith". Absent = 100. */
+  intensity?: number;
+  /** What happened on this date, e.g. "Conquered by the Empire of Ash". */
+  note?: string;
+}
+
+/** LY-2: a duchy inside a kingdom, or a vassal of an empire, for a span of time. */
+export interface RegionOverlord extends TimeSpan {
+  id: Id;
+  regionId: Id;
+  relation: 'part' | 'vassal';
+}
+
+/** LY-10, CH-3: a character tied to a region, e.g. a ruler or a high priest. */
+export interface RegionTie extends TimeSpan {
+  id: Id;
+  characterId: Id;
+  role: string;
+}
+
+/** LY-1..LY-12: a realm, culture, religion, language area or any other region on a layer. */
+export interface Region extends RecordBase, TimeSpan {
+  layerId: Id;
+  name: string;
+  color: string;
+  /** Sorted by start date; the first one usually has no start. */
+  versions: RegionVersion[];
+  overlords: RegionOverlord[];
+  ties: RegionTie[];
+  /** LY-10: the encyclopedia entry (rulers, tenets, history). */
+  entry: string;
+}
+
 /** ST-1: series → books → chapters → scenes. */
 export interface Book extends RecordBase {
   title: string;
@@ -326,6 +406,9 @@ export interface World {
   mapFeatures: MapFeature[];
   mapLayers: MapLayer[];
   detailMaps: DetailMap[];
+  /** LY-1..LY-12: region layers (political, cultures, religions, …) and their regions. */
+  regionLayers: RegionLayer[];
+  regions: Region[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

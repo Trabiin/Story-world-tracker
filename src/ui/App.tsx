@@ -14,6 +14,7 @@ import { defaultMoment } from './util';
 import { Characters } from './views/Characters';
 import { Groups } from './views/Groups';
 import { Places } from './views/Places';
+import { Layers } from './views/Layers';
 import { Settings } from './views/Settings';
 import { Timeline } from './views/Timeline';
 import { Warnings } from './views/Warnings';
@@ -27,6 +28,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'manuscripts', label: 'Manuscripts', key: '5' },
   { view: 'characters', label: 'Characters', key: '6' },
   { view: 'places', label: 'Places', key: '7' },
+  { view: 'layers', label: 'Realms & layers', key: '' },
   { view: 'groups', label: 'Groups', key: '8' },
   { view: 'warnings', label: 'Warnings', key: '9' },
   { view: 'settings', label: 'Settings', key: '0' },
@@ -118,7 +120,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
         </header>
         <nav className="sidebar">
           {NAV.map((n) => (
-            <button key={n.view} className={view === n.view ? 'active' : ''} onClick={() => go(n.view)} title={`Alt+${n.key}`}>
+            <button key={n.view} className={view === n.view ? 'active' : ''} onClick={() => go(n.view)} title={n.key ? `Alt+${n.key}` : undefined}>
               {n.label}
               {n.view === 'warnings' && openWarnings > 0 && <span className="badge">{openWarnings}</span>}
             </button>
@@ -136,6 +138,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'manuscripts' && <Manuscripts />}
           {view === 'characters' && <Characters />}
           {view === 'places' && <Places />}
+          {view === 'layers' && <Layers />}
           {view === 'groups' && <Groups />}
           {view === 'warnings' && <Warnings />}
           {view === 'settings' && <Settings />}
