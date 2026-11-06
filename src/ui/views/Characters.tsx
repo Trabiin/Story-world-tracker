@@ -1,6 +1,7 @@
 /** CH-1, CH-2, CH-6, EU-9: characters list and profile, with their whereabouts chain. */
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
+import { RevealField } from '../components/RevealField';
 import { ATTRIBUTE_KEYS, Character, CharacterAttribute, Importance, ageOn, attributesOn, formatDayNumber, formatFuzzy, fromDayNumber, nominalStart } from '../../core';
 import { Backlinks } from '../components/Backlinks';
 import { recordBase } from '../../storage';
@@ -68,7 +69,7 @@ export function Characters() {
 }
 
 function CharacterDetail({ c }: { c: Character }) {
-  const { world, store, ix, moment, edit, warnings, select, go } = useApp();
+  const { world, store, ix, moment, edit, warnings, select, go, showTrack } = useApp();
   const set = (p: Partial<Character>) => store.upsert('characters', { ...c, ...p });
   const segs = useMemo(() => ix.segmentsFor(c.id), [ix, c.id]);
   const mine = warnings.filter((w) => w.characterId === c.id && !w.dismissed);
@@ -93,6 +94,7 @@ function CharacterDetail({ c }: { c: Character }) {
         <h1><span style={{ color: c.color }}>{c.icon}</span> {c.name}</h1>
         <div className="row">
           {age !== undefined && age >= 0 && <span className="muted">Age {age} on {formatDayNumber(moment)}</span>}
+          {segs.length > 0 && <button onClick={() => showTrack(c.id)} title="VW-3: draw every stay and journey on the map">Show track on map</button>}
           <button onClick={() => set({ archived: !c.archived })}>{c.archived ? 'Unarchive' : 'Archive'}</button>
           <button className="danger" onClick={remove}>Delete</button>
         </div>
@@ -121,6 +123,7 @@ function CharacterDetail({ c }: { c: Character }) {
           <Attributes c={c} set={set} />
           <Field label="Short description"><textarea rows={2} value={c.description} onChange={(e) => set({ description: e.target.value })} /></Field>
           <Field label="Notes"><textarea rows={5} value={c.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
+          <RevealField value={c.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
           <Field label="Portrait">
             <div className="row">
               {c.portrait && <img src={c.portrait} className="portrait" alt="" />}

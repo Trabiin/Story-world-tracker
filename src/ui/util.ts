@@ -1,4 +1,4 @@
-import { CANON, Character, FuzzyDate, Id, Subject, World, WorldIndex, midpoint, toDayNumber } from '../core';
+import { CANON, Character, FuzzyDate, Id, LayerIndex, Subject, World, WorldIndex, midpoint, toDayNumber } from '../core';
 
 export const PALETTE = ['#d1495b', '#2e86ab', '#edae49', '#3c9d5d', '#8e5ea2', '#e07a5f', '#00798c', '#b5838d', '#6d597a', '#588157', '#bc6c25', '#4361ee'];
 export const ICONS = ['●', '■', '▲', '◆', '★', '✚', '♛', '⚔', '✦', '☾', '☀', '♞'];
@@ -49,6 +49,11 @@ export function worldDayRange(world: World, ix: WorldIndex): [number, number] {
       if (c.birth) days.push(ix.win(c.birth).earliest);
       if (c.death) days.push(ix.win(c.death).latest);
     }
+  }
+  // Border changes (LY-6) count too, so playback reaches conquests after the last stay.
+  if (days.length) {
+    const lix = new LayerIndex(world);
+    for (const d of lix.changeDays()) if (Number.isFinite(d)) days.push(d);
   }
   if (!days.length) {
     const m = defaultMoment(world, ix);

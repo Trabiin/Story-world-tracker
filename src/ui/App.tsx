@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Id, LatLng, WorldIndex, checkWorld } from '../core';
+import { Id, LatLng, World, WorldIndex, checkWorld, readingChoices, spoilerView } from '../core';
+import { ask } from './components/Dialogs';
 import { CommandBar } from './components/CommandBar';
 import { JourneyEditor, StayEditor } from './components/EntryEditors';
 import { MomentBar } from './components/MomentBar';
@@ -35,7 +36,27 @@ const NAV: { view: View; label: string; key: string }[] = [
 ];
 
 export function App({ store, platform, onClose }: { store: WorldStore; platform: Platform; onClose: () => void }) {
-  const world = useStore(store);
+  const full = useStore(store);
+  // EU-8: the reader's view shows the world only as the reader knows it at the end of a chapter.
+  const readerKey = `swt.reader.${store.handle.id}`;
+  const [asOf, setAsOfState] = useState<number | undefined>(() => {
+    try { const v = localStorage.getItem(readerKey); return v === null || v === '' ? undefined : Number(v); } catch { return undefined; }
+  });
+  const choices = useMemo(() => readingChoices(full), [full.books, full.chapters]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastChapter = choices.length ? Math.max(...choices.map((c) => c.value)) : -1;
+  const readerAt = asOf === undefined || lastChapter < 0 ? undefined : Math.min(asOf, lastChapter);
+  const setAsOf = (v: number | undefined) => {
+    setAsOfState(v);
+    try { localStorage.setItem(readerKey, v === undefined ? '' : String(v)); } catch { /* ignore */ }
+  };
+  // Filter only when records change, not on every playback frame.
+  const filtered = useMemo<World | undefined>(
+    () => (readerAt === undefined ? undefined : spoilerView(full, readerAt)),
+    [readerAt, full.characters, full.places, full.groups, full.memberships, full.stays, full.journeys, full.regions, full.chapters, full.books, full.scenes, full.links, full.manuscripts, full.mapFeatures, full.settings.hemisphereForSeasons], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const world = useMemo(() => (filtered ? { ...filtered, settings: full.settings } : full), [filtered, full]);
+  store.readOnly = readerAt !== undefined;
+  store.onBlocked = () => void ask.alert("This is the reader's view, so editing is off. Switch the view back to Author to make changes.");
   const ix = useMemo(() => new WorldIndex(world), [world]);
   // Warnings ignore the current moment, so recompute only when records change.
   const recordsKey = useMemo(() => ({ ...world, settings: { ...world.settings, currentMoment: undefined } }), [world.characters, world.places, world.groups, world.memberships, world.stays, world.journeys, world.dismissals, world.settings.disabledRules, world.settings.travelModes, world.settings.radiusKm, world.settings.defaultDetourFactor, world.settings.hemisphereForSeasons, world.terrain, world.mapFeatures, world.settings.biomes, world.settings.axialTiltDeg]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -50,6 +71,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [quick, setQuick] = useState(false);
   const [focusLink, setFocusLink] = useState<Id | undefined>();
   const [mapFocus, setMapFocus] = useState<{ at: LatLng; n: number } | undefined>();
+  const [trackRequest, setTrackRequest] = useState<{ id: Id; n: number } | undefined>();
 
   const go = useCallback((v: View, id?: Id) => {
     setView(v);
@@ -92,6 +114,11 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
     startRoute: setRouteFor,
     focusLink,
     mapFocus,
+    trackRequest,
+    showTrack: (id: Id) => {
+      setTrackRequest((t) => ({ id, n: (t?.n ?? 0) + 1 }));
+      go('map');
+    },
     showOnMap: (at: LatLng) => {
       setMapFocus((f) => ({ at, n: (f?.n ?? 0) + 1 }));
       go('map');
@@ -111,6 +138,12 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           <button className="world-name" onClick={() => go('settings')} title="World settings">{world.settings.name}</button>
           <MomentBar />
           <div className="topbar-right">
+            {choices.length > 0 && (
+              <select className={`reader-select ${readerAt !== undefined ? 'on' : ''}`} value={readerAt ?? ''} onChange={(e) => setAsOf(e.target.value === '' ? undefined : Number(e.target.value))} title="EU-8: show the world as the reader knows it at the end of a chapter or book. Editing is off while this is on.">
+                <option value="">Author view</option>
+                {choices.map((c, i) => <option key={i} value={c.value}>{c.book ? `Reader: ${c.label}` : `Reader: after ${c.label}`}</option>)}
+              </select>
+            )}
             <button className="icon" disabled={!store.canUndo} onClick={() => store.undo()} title="Undo (Ctrl+Z)">↶</button>
             <button className="icon" disabled={!store.canRedo} onClick={() => store.redo()} title="Redo (Ctrl+Shift+Z)">↷</button>
             <span className={`save-state ${store.saveState}`} title={store.saveError}>{saveLabel}</span>
@@ -130,7 +163,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
             <button onClick={() => setEditor({ kind: 'journey' })}>+ Journey</button>
           </div>
         </nav>
-        <main className="main">
+        <main className={`main ${readerAt !== undefined ? 'reader-on' : ''}`}>
+          {readerAt !== undefined && <div className="reader-banner">Reader's view: only what the reader knows after “{choices.find((c) => c.value === readerAt && !c.book)?.label}”. Editing is off. <button className="link" onClick={() => setAsOf(undefined)}>Back to Author view</button></div>}
           {view === 'who' && <WhoIsWhere />}
           {view === 'timeline' && <Timeline />}
           {view === 'map' && <MapView />}

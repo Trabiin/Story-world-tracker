@@ -8,6 +8,7 @@ import { newId } from '../../storage';
 import { ask } from '../components/Dialogs';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
+import { RevealField } from '../components/RevealField';
 import { useApp } from '../context';
 import { BorderHistory, RegionLayerList, sortedLayers } from '../map/RegionsPanel';
 import { PLACE_ICON } from './Places';
@@ -111,6 +112,7 @@ function RegionPage({ r, ix }: { r: Region; ix: LayerIndex }) {
           <Field label={political ? 'Encyclopedia: rulers, laws, history' : 'Encyclopedia: tenets, customs, history'}>
             <textarea rows={10} value={r.entry} onChange={(e) => set({ entry: e.target.value })} placeholder={political ? 'Founded by … The crown passes to …' : 'Believers hold that …'} />
           </Field>
+          <RevealField value={r.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
         </div>
         <div>
           {political && (

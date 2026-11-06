@@ -1,6 +1,7 @@
 /** CH-5, DM-5: groups that travel together; time-bound membership. */
 import { Group, Membership, formatFuzzy } from '../../core';
 import { ask } from '../components/Dialogs';
+import { RevealField } from '../components/RevealField';
 import { recordBase } from '../../storage';
 import { DateInput } from '../components/DateInput';
 import { Backlinks } from '../components/Backlinks';
@@ -65,6 +66,7 @@ function GroupDetail({ g }: { g: Group }) {
             </div>
           </Field>
           <Field label="Description"><textarea rows={3} value={g.description} onChange={(e) => set({ description: e.target.value })} /></Field>
+          <RevealField value={g.revealedIn} onChange={(revealedIn) => set({ revealedIn })} />
           <h2>Members</h2>
           <p className="muted">Members follow the group's stays and journeys between their join and leave dates. A member's own entries win where both exist.</p>
           <table className="table">

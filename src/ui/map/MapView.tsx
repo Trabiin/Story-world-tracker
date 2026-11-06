@@ -8,7 +8,7 @@ import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
   MapFeature, refreshAutoRivers, traceRiver, routeAlongFeatures, networkFor, fromDay, existsOn, featureAnchor, insideArea, nearestOnPolyline, riverFlows, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
-  meanTemperatureC, pathLengthKm, whereIs, wrapLng, LayerIndex, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon,
+  meanTemperatureC, pathLengthKm, whereIs, wrapLng, LayerIndex, characterTrack, OPEN_END, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon,
 } from '../../core';
 import { newId, recordBase } from '../../storage';
 import { fileToDataUrl } from '../views/Characters';
@@ -102,7 +102,7 @@ function cssVar(name: string) {
 }
 
 export function MapView() {
-  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus } = useApp();
+  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus, trackRequest } = useApp();
   const viewKey = `${VIEW_KEY}.${store.handle.id}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -169,6 +169,47 @@ export function MapView() {
   const [strokePreview, setStrokePreview] = useState<LatLng[]>([]);
   const [whatsHere, setWhatsHere] = useState<LatLng | null>(null);
   const regionEditable = !!selRegion && !lix.layer(selRegion.layerId)?.locked;
+  // ---- VW-2, LY-6: when the date crosses a border change, the changed regions glow and the change is named ----
+  const prevVersions = useRef<Map<Id, number> | null>(null);
+  const prevMoment = useRef(moment);
+  const [flash, setFlash] = useState<{ ids: Set<Id>; text: string; day: number; t0: number } | null>(null);
+  const [flashTick, setFlashTick] = useState(0);
+  useEffect(() => {
+    const now = new Map<Id, number>();
+    for (const r of lix.regions.values()) now.set(r.id, lix.exists(r, moment) ? lix.versionIndexAt(r, moment) : -2);
+    const prev = prevVersions.current;
+    const from = prevMoment.current;
+    prevVersions.current = now;
+    prevMoment.current = moment;
+    if (!prev) return;
+    const changed = [...now].filter(([id, v]) => prev.has(id) && prev.get(id) !== v && lix.layer(lix.regions.get(id)!.layerId)?.visible).map(([id]) => id);
+    if (!changed.length) return;
+    const notes = changed.map((id) => { const r = lix.regions.get(id)!; const v = lix.versionAt(r, moment); return v?.note; }).filter(Boolean) as string[];
+    const text = notes.length ? [...new Set(notes)].join(' · ') : `Borders change: ${changed.map((id) => lix.regions.get(id)!.name).join(', ')}`;
+    // Name the day the change happened, not the frame that crossed it.
+    const lo = Math.min(from, moment), hi = Math.max(from, moment);
+    const days = lix.changeDays().filter((d) => d > lo && d <= hi);
+    const day = days.length ? (moment >= from ? days[days.length - 1] : days[0]) : moment;
+    setFlash({ ids: new Set(changed), text, day, t0: performance.now() });
+  }, [moment, lix]);
+  useEffect(() => {
+    if (!flash) return;
+    let raf = 0;
+    const tick = () => {
+      if (performance.now() - flash.t0 > 3000) { setFlash(null); return; }
+      setFlashTick((t) => t + 1);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [flash]);
+  const flashStrength = flash ? Math.max(0, 1 - (performance.now() - flash.t0) / 3000) : 0;
+  // ---- VW-3: character tracks ----
+  const tracksKey = `swt.tracks.${store.handle.id}`;
+  const [tracks, setTracks] = useState<Id[]>(() => { try { return JSON.parse(localStorage.getItem(tracksKey) ?? '[]'); } catch { return []; } });
+  useEffect(() => { try { localStorage.setItem(tracksKey, JSON.stringify(tracks)); } catch { /* ignore */ } }, [tracks, tracksKey]);
+  useEffect(() => { if (trackRequest) setTracks((t) => (t.includes(trackRequest.id) ? t : [...t, trackRequest.id])); }, [trackRequest]);
+  const trackData = useMemo(() => tracks.filter((id) => ix.characters.has(id)).map((id) => ({ id, ...characterTrack(ix, id) })), [tracks, ix]);
 
   useEffect(() => setMode(pickFor ? 'pick' : 'browse'), [pickFor]);
   const routeJourney = routeFor ? world.journeys.find((j) => j.id === routeFor) : undefined;
@@ -356,6 +397,7 @@ export function MapView() {
       drawRegionLayers(g, {
         ix: lix, day: moment, offsets, project: (p, o) => toScreen(view, w, h, p, o), scale: view.scale, w, h,
         reader: showTerrain ? reader : undefined, labels: layers.labels, selected: mode === 'layers' ? regionSel : undefined,
+        flash: flash ? { ids: flash.ids, strength: flashStrength } : undefined,
         activeLayer: mode === 'layers' ? regionLayer?.id : undefined, fg: cssVar('--fg'), bg: cssVar('--bg'),
       });
     }
@@ -465,6 +507,42 @@ export function MapView() {
           }
         }
       }
+      g.restore();
+    }
+
+    // VW-3: whole tracks of chosen characters, with dates at each stop
+    for (const t of trackData) {
+      const col = ix.characters.get(t.id)?.color ?? '#888';
+      g.save();
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      for (const leg of t.legs) {
+        const path = densify(leg.path, world.settings.radiusKm);
+        const done = leg.end <= moment;
+        g.globalAlpha = done ? 0.95 : 0.55;
+        g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 5; g.setLineDash([]);
+        for (const o of offsets) drawPath(path, o);
+        g.strokeStyle = col; g.lineWidth = 2.5; g.setLineDash(done ? [] : [6, 5]);
+        for (const o of offsets) drawPath(path, o);
+      }
+      g.setLineDash([]);
+      g.globalAlpha = 1;
+      const fmt = (n: number) => formatDayNumber(n);
+      t.stops.forEach((st, i) => {
+        for (const o of offsets) {
+          const sp = toScreen(view, w, h, st.at, o);
+          if (sp.x < -100 || sp.x > w + 100 || sp.y < -40 || sp.y > h + 40) continue;
+          g.beginPath(); g.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+          g.fillStyle = '#fff'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = col; g.stroke();
+          if (layers.labels) {
+            const label = `${i + 1}. ${fmt(st.start)}${st.end === OPEN_END ? ' –' : st.end - st.start >= 1 ? ` – ${fmt(st.end)}` : ''}`;
+            g.font = '600 11px system-ui'; g.textAlign = 'left'; g.textBaseline = 'top';
+            g.lineWidth = 3; g.strokeStyle = cssVar('--bg');
+            g.strokeText(label, sp.x + 7, sp.y + 4 + (i % 2) * 12);
+            g.fillStyle = col;
+            g.fillText(label, sp.x + 7, sp.y + 4 + (i % 2) * 12);
+          }
+        }
+      });
       g.restore();
     }
 
@@ -609,7 +687,7 @@ export function MapView() {
     }
 
     markers.current = ms;
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode]);
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -1445,6 +1523,7 @@ export function MapView() {
             onPick={(p) => setView((v) => ({ ...v, centerLat: p.lat, centerLng: p.lng }))}
           />
         )}
+        {flash && <div className="map-banner" style={{ opacity: Math.min(1, flashStrength * 2) }}>{formatDayNumber(flash.day)}: {flash.text}</div>}
         <div className="map-status">
           {mode === 'pick' && pickPlace && <b>Click the map to place {pickPlace.name}. </b>}
           {mode === 'add-place' && <b>Click the map where the new place is. </b>}
@@ -1534,7 +1613,29 @@ export function MapView() {
                 return <>{km !== undefined ? `${Math.round(km)} km ${j?.route ? 'along its route' : 'straight'}` : ''} {j && <button className="link" onClick={() => startRoute(j.id)}>{j.route ? 'edit route' : 'draw route'}</button>}</>;
               })()}</>}
             </p>
-            <button className="small" onClick={() => go('characters', selChar.id)}>Open</button>
+            <div className="row wrap">
+              <button className="small" onClick={() => go('characters', selChar.id)}>Open</button>
+              <button className={`small${tracks.includes(selChar.id) ? ' primary' : ''}`} onClick={() => setTracks((t) => (t.includes(selChar.id) ? t.filter((x) => x !== selChar.id) : [...t, selChar.id]))}>
+                {tracks.includes(selChar.id) ? 'Hide track' : 'Show track'}
+              </button>
+            </div>
+          </div>
+        )}
+        {trackData.length > 0 && (
+          <div className="card">
+            <h3>Tracks</h3>
+            {trackData.map((t) => {
+              const c = ix.characters.get(t.id)!;
+              return (
+                <div key={t.id} className="row">
+                  <span className="sw" style={{ background: c.color }} />
+                  <button className="link grow" style={{ textAlign: 'left' }} onClick={() => setSelected({ kind: 'character', id: c.id })}>{c.name}</button>
+                  <span className="muted small">{t.stops.length} {t.stops.length === 1 ? "stop" : "stops"}</span>
+                  <button className="icon" title="Hide track" onClick={() => setTracks((x) => x.filter((id) => id !== t.id))}>×</button>
+                </div>
+              );
+            })}
+            <p className="muted small">Solid: travelled by the current date; dashed: still to come.</p>
           </div>
         )}
         <h3>Show</h3>
