@@ -36,6 +36,8 @@ export interface WorldSettings {
   axialTiltDeg: number;
   /** MK-2: the part of the globe the main map frames. Absent = the whole globe. */
   mainMap?: { north: number; south: number; west: number; east: number };
+  /** MK-16: where the first-map guide is; steps can be done, skipped and revisited. */
+  mapWizard?: { step: number; done: number[]; closed?: boolean };
   /** MK-7: editable terrain types. */
   biomes: Biome[];
 }
@@ -138,6 +140,8 @@ export interface Journey extends RecordBase {
   arrival?: FuzzyDate; // absent = use suggested arrival
   modeId: Id;
   detourFactor?: number; // overrides world default
+  /** WH-6: the route drawn on the map, origin to destination. Its length replaces straight distance × detour. */
+  route?: LatLng[];
   purpose: string;
   notes: string;
 }
@@ -166,6 +170,29 @@ export interface MapSymbol extends RecordBase {
   location: LatLng;
   /** Size multiplier, 1 = normal. */
   size: number;
+  /** MK-13: the drawing layer it belongs to; none = the base layer. */
+  layerId?: Id;
+}
+
+/** MK-13: a drawing layer that groups features and symbols, so they can be hidden or locked together. */
+export interface MapLayer extends RecordBase {
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  order: number;
+}
+
+/** MP-4: a detail map (continent, region or city) pinned to world coordinates by its edges. */
+export interface DetailMap extends RecordBase {
+  name: string;
+  kind: 'continent' | 'region' | 'city';
+  north: number;
+  south: number;
+  west: number;
+  east: number;
+  /** The place it maps; clicking that place opens it. */
+  placeId?: Id;
+  notes: string;
 }
 
 /** MP-6: line features. */
@@ -195,6 +222,10 @@ export interface MapFeature extends RecordBase, TimeSpan {
   /** Lakes (MK-9): salt lake with no outlet, and the outlet river. */
   salt?: boolean;
   outletId?: Id;
+  /** An automatic river whose line was reshaped by hand: it is no longer re-traced (MK-25). */
+  handEdited?: boolean;
+  /** MK-13: the drawing layer it belongs to; none = the base layer. */
+  layerId?: Id;
   notes: string;
 }
 
@@ -293,6 +324,8 @@ export interface World {
   mapSymbols: MapSymbol[];
   /** MP-6, MP-7: drawn rivers, roads, lakes and other features. */
   mapFeatures: MapFeature[];
+  mapLayers: MapLayer[];
+  detailMaps: DetailMap[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
 }

@@ -4,7 +4,7 @@
  */
 import { greatCircleKm, interpolateGreatCircle, type LatLng } from '../globe';
 import type { Id, MapFeature, World } from '../model';
-import { Terrain, TerrainEditor, TerrainReader, cellCenter, cellOf, hasTerrain, wrapX } from '../terrain';
+import { TILE_CELLS, Terrain, TerrainEditor, TerrainReader, cellCenter, cellOf, grid, hasTerrain, wrapX } from '../terrain';
 import { pointInPolygon } from '../terrain/brushes';
 
 // ---------- geometry ----------
@@ -474,3 +474,98 @@ export function uphillSegments(terrain: Terrain, pts: LatLng[], R: number): Set<
   return out;
 }
 
+
+// ---------- MK-19 + MK-25: automatic rivers as features ----------
+
+export interface TracedRiver {
+  points: LatLng[];
+  joinsId?: Id;
+  endsInBasin: boolean;
+  /** The terrain with the river's valley cut in. */
+  terrain: Terrain;
+}
+
+/**
+ * Trace an automatic river from a source on the world's terrain: it ends at the sea, in a lake
+ * (other than one it starts in), where it touches another river (which it then joins), or in a
+ * basin. Returns the terrain with its valley cut.
+ */
+export function traceRiver(world: World, source: LatLng, exclude?: Id): TracedRiver {
+  const R = world.settings.radiusKm;
+  const touch = touchKm(world), near = connectKm(world);
+  const lakes = world.mapFeatures.filter((f) => f.kind === 'lake' && f.points.length >= 3 && !insideArea(source, f.points));
+  const rivers = world.mapFeatures.filter((f) => f.kind === 'river' && f.id !== exclude && f.points.length >= 2);
+  let joined: { f: MapFeature; point: LatLng } | undefined;
+  const t = traceDownhill(world.terrain, source, (p) => {
+    if (lakes.some((l) => insideArea(p, l.points))) return true;
+    if (greatCircleKm(source, p, R) <= near) return false; // don't join a river right at the source
+    for (const f of rivers) {
+      const n = nearestOnPolyline(p, f.points, R);
+      if (n && n.km < touch) { joined = { f, point: n.point }; return true; }
+    }
+    return false;
+  });
+  const j = joined as { f: MapFeature; point: LatLng } | undefined;
+  return {
+    points: j ? [...t.points, j.point] : t.points,
+    joinsId: j?.f.id,
+    endsInBasin: t.endsIn === 'basin',
+    terrain: carveValley(world.terrain, t.cells),
+  };
+}
+
+/** Keys of the terrain tiles a line passes through (its points, which are at most a few cells apart). */
+function tilesOf(cellDeg: number, pts: LatLng[]): Set<string> {
+  const g = grid(cellDeg);
+  const out = new Set<string>();
+  for (const p of pts) {
+    const { gx, gy } = cellOf(g, p);
+    out.add(`${Math.floor(gx / TILE_CELLS)},${Math.floor(gy / TILE_CELLS)}`);
+  }
+  return out;
+}
+
+/**
+ * MK-25: after the land changes, re-trace every automatic river (not reshaped by hand) that runs
+ * through a changed tile, and the rivers that join one of those. Main rivers go first so
+ * tributaries find them. Returns the updated world, or the same world when nothing moved.
+ */
+export function refreshAutoRivers(world: World, changedTiles: Iterable<string>): World {
+  const changed = new Set(changedTiles);
+  if (!changed.size) return world;
+  const auto = world.mapFeatures.filter((f) => f.kind === 'river' && f.auto && !f.handEdited && f.points.length >= 2);
+  const redo = new Set(auto.filter((f) => [...tilesOf(world.terrain.cellDeg, densePoints(f.points))].some((k) => changed.has(k))).map((f) => f.id));
+  // tributaries of re-traced rivers follow
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const f of auto) if (!redo.has(f.id) && f.joinsId && redo.has(f.joinsId)) { redo.add(f.id); grew = true; }
+  }
+  if (!redo.size) return world;
+  const depth = (f: MapFeature, seen = 0): number => (f.joinsId && seen < 20 ? 1 + depth(world.mapFeatures.find((x) => x.id === f.joinsId) ?? f, seen + 1) : 0);
+  const order = auto.filter((f) => redo.has(f.id)).sort((a, b) => depth(a) - depth(b));
+  let w = world;
+  for (const f of order) {
+    const t = traceRiver(w, f.points[0], f.id);
+    if (t.points.length < 2) continue;
+    w = {
+      ...w,
+      terrain: t.terrain,
+      mapFeatures: w.mapFeatures.map((x) => (x.id === f.id ? { ...x, points: t.points, joinsId: t.joinsId, endsInBasin: t.endsInBasin || undefined } : x)),
+    };
+  }
+  return w;
+}
+
+/** Extra points along long segments, so a line's tiles include those it crosses between points. */
+function densePoints(pts: LatLng[]): LatLng[] {
+  const out: LatLng[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (i) {
+      const a = pts[i - 1], b = pts[i];
+      const n = Math.ceil(Math.max(Math.abs(b.lat - a.lat), Math.abs(b.lng - a.lng)) / 1);
+      for (let k = 1; k < n; k++) out.push({ lat: a.lat + ((b.lat - a.lat) * k) / n, lng: a.lng + ((b.lng - a.lng) * k) / n });
+    }
+    out.push(pts[i]);
+  }
+  return out;
+}

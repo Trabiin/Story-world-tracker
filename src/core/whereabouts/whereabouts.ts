@@ -29,6 +29,7 @@ export class WorldIndex {
   readonly places = new Map<Id, Place>();
   readonly characters = new Map<Id, Character>();
   private staysBySubject = new Map<string, Stay[]>();
+  readonly journeys = new Map<Id, Journey>();
   private journeysBySubject = new Map<string, Journey[]>();
   private membershipsByCharacter = new Map<Id, Membership[]>();
   private segmentCache = new Map<Id, Segment[]>();
@@ -40,6 +41,7 @@ export class WorldIndex {
       if (l) l.push(v); else m.set(k, [v]);
     };
     for (const s of world.stays) add(this.staysBySubject, `${s.subject.kind}:${s.subject.id}`, s);
+    for (const j of world.journeys) this.journeys.set(j.id, j);
     for (const j of world.journeys) add(this.journeysBySubject, `${j.subject.kind}:${j.subject.id}`, j);
     for (const m of world.memberships) add(this.membershipsByCharacter, m.characterId, m);
   }
@@ -96,17 +98,26 @@ export class WorldIndex {
     return this.world.settings.travelModes.find((m) => m.id === modeId)?.speedKmPerDay ?? 30;
   }
 
-  /** Straight great-circle route through waypoints (WH-8 until drawn routes exist). */
-  journeyDistanceKm(j: Journey): number | undefined {
-    const ids = [j.originId, ...j.waypointIds, j.destinationId];
-    const pts = ids.map((id) => this.locationOf(id));
+  /** The path a journey follows: its drawn route (WH-6), else straight through its waypoints. */
+  journeyPath(j: Journey): LatLng[] | undefined {
+    if (j.route && j.route.length >= 2) return j.route;
+    const pts = [j.originId, ...j.waypointIds, j.destinationId].map((id) => this.locationOf(id));
     if (pts.some((p) => !p)) return undefined;
+    return pts as LatLng[];
+  }
+
+  /** Length of the journey's path: the drawn route, or great-circle legs through waypoints (WH-8). */
+  journeyDistanceKm(j: Journey): number | undefined {
+    const pts = this.journeyPath(j);
+    if (!pts) return undefined;
     let sum = 0;
-    for (let i = 1; i < pts.length; i++) sum += greatCircleKm(pts[i - 1]!, pts[i]!, this.world.settings.radiusKm);
+    for (let i = 1; i < pts.length; i++) sum += greatCircleKm(pts[i - 1], pts[i], this.world.settings.radiusKm);
     return sum;
   }
 
+  /** A drawn route already follows the roads, so it needs no detour allowance. */
   detourOf(j: Journey): number {
+    if (j.route && j.route.length >= 2) return 1;
     return j.detourFactor ?? this.world.settings.defaultDetourFactor ?? DEFAULT_DETOUR_FACTOR;
   }
 
@@ -217,12 +228,24 @@ export function whereIs(ix: WorldIndex, characterId: Id, day: number): Whereabou
   const a = nominalStart(s);
   const b = nominalEnd(s);
   const progress = b > a ? (day - a) / (b - a) : 1;
-  const from = ix.locationOf(s.placeId);
-  const to = ix.locationOf(s.destinationId!);
-  let position: LatLng | undefined;
-  if (from && to) {
-    const pts = interpolateGreatCircle(from, to, 64);
-    position = pts[Math.round(progress * 64)];
-  }
+  const j = ix.journeys.get(s.recordId);
+  const path = j ? ix.journeyPath(j) : undefined;
+  const position = path ? pointAlong(path, Math.max(0, Math.min(1, progress)), ix.world.settings.radiusKm) : undefined;
   return { kind: 'journey', fromId: s.placeId, toId: s.destinationId!, progress, segment: s, position };
+}
+
+/** The point a fraction of the way along a path, measured in great-circle km. */
+export function pointAlong(pts: LatLng[], fraction: number, R: number): LatLng {
+  if (pts.length === 1) return pts[0];
+  const legs = pts.slice(1).map((p, i) => greatCircleKm(pts[i], p, R));
+  let left = fraction * legs.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < legs.length; i++) {
+    if (left <= legs[i] || i === legs.length - 1) {
+      const t = legs[i] ? Math.min(1, left / legs[i]) : 0;
+      const n = 32;
+      return interpolateGreatCircle(pts[i], pts[i + 1], n)[Math.round(t * n)];
+    }
+    left -= legs[i];
+  }
+  return pts[pts.length - 1];
 }

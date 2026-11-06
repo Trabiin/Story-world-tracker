@@ -44,6 +44,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [command, setCommand] = useState(false);
   const [pickFor, setPickFor] = useState<Id | undefined>();
+  const [routeFor, setRouteFor] = useState<Id | undefined>();
   const [quick, setQuick] = useState(false);
   const [focusLink, setFocusLink] = useState<Id | undefined>();
   const [mapFocus, setMapFocus] = useState<{ at: LatLng; n: number } | undefined>();
@@ -85,6 +86,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
     closeWorld,
     pickFor,
     startPick: setPickFor,
+    routeFor,
+    startRoute: setRouteFor,
     focusLink,
     mapFocus,
     showOnMap: (at: LatLng) => {

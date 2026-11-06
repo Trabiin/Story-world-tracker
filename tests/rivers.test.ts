@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MapFeature, TerrainEditor, carveValley, TerrainReader, applyDab, checkRivers, checkWorld, emptyTerrain, nearestOnPolyline, profile, riverFlows,
+  MapFeature, TerrainEditor, carveValley, refreshAutoRivers, traceRiver, TerrainReader, applyDab, checkRivers, checkWorld, emptyTerrain, nearestOnPolyline, profile, riverFlows,
   traceDownhill, uphillSegments, uphillStretches,
 } from '../src/core';
 import { world } from './fixtures';
@@ -118,5 +118,25 @@ describe('rivers', () => {
     // trib joins on the segment 10°E → 6°E, so it counts from vertex 2 on
     expect(main[2] - main[1]).toBeCloseTo(320 + trib[1], -1);
     expect(nearestOnPolyline({ lat: 44.5, lng: 8 }, fs[0].points, R)!.km).toBeCloseTo(55.6, 0);
+  });
+
+  it('automatic rivers find their way again when the land changes (MK-25), hand-shaped ones stay', () => {
+    const w = slopedWorld();
+    const t = traceRiver(w, { lat: 47, lng: 12 });
+    w.terrain = t.terrain;
+    w.mapFeatures = [river('auto', [], { points: t.points, auto: true }), river('shaped', [], { points: t.points.map((p) => ({ lat: p.lat + 0.5, lng: p.lng })), auto: true, handEdited: true })];
+    const shapedBefore = w.mapFeatures[1].points;
+    // raise a 1,500 m ridge across the river's way at 6°E
+    const ed = new TerrainEditor(w.terrain);
+    for (let gy = 800; gy < 1000; gy++) for (let gx = 3700; gx < 3704; gx++) ed.setCell(gx, gy, 1500);
+    const keys = ed.changedKeys;
+    w.terrain = ed.commit();
+    expect(checkRivers(w).map((i) => i.rule)).toContain('river-uphill');
+    const after = refreshAutoRivers(w, keys);
+    expect(after.mapFeatures[0].points).not.toEqual(t.points);
+    expect(after.mapFeatures[1].points).toBe(shapedBefore);
+    expect(checkRivers(after).filter((i) => i.featureId === 'auto')).toHaveLength(0);
+    // nothing changed under the river: same world back
+    expect(refreshAutoRivers(after, ['0,0'])).toBe(after);
   });
 });

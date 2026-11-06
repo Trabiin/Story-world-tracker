@@ -58,6 +58,16 @@ Still in **✎ Draw map**, the lower part of the tool palette draws features. Ea
 - **River checks** in Warnings, with Show on map: rivers that flow uphill (RC-1), dead ends that don't reach the sea, a lake, another river or a marked basin (RC-2), and rivers that split, unless it's a delta or marked intentional (RC-3).
 - Places as GeoJSON now exports rivers and roads as lines and lakes and areas as polygons.
 
+## Phase 2c: routes, detail maps and the first-map guide
+
+- **Journey routes**: in a journey, **Follow roads** routes it along the drawn roads and trade routes (ships take sea lanes and rivers, flyers go straight), or **Draw on map** to click the way yourself; each click can follow the roads to the next one. A route's length replaces the straight distance and detour factor, so travel time and the impossible-travel check use the real way. Characters move along their route as the date changes.
+- **Drag a character** on the map onto a place (or anywhere, to make a new place) to start a journey there, with the travel time suggested.
+- **Measure** has an "along roads" option.
+- **Detail maps**: zoom in and make a continent, region or city map of the view. Maps sit on the same globe, show as dashed frames on larger maps, and a map linked to a place opens from that place (button, or double-click the place). The sample world has a region map and a city map of Varn.
+- **Drawing layers**: features and symbols go on the chosen layer; layers can be hidden or locked.
+- **First-map guide**: opens by itself on an empty world in ✎ Draw map. Seven steps (sketch, globe, coastline, mountains, rivers, terrain, settlements); any step can be skipped and revisited.
+- **Everything stays editable**: automatic rivers re-trace themselves when you paint the land under them (in the same undo step), unless you reshaped them by hand; **Trace again** re-runs one. Climate zones and checks always follow the current map.
+
 ## Development
 
 ```bash

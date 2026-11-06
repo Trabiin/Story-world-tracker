@@ -159,7 +159,7 @@ export function checkJourney(ix: WorldIndex, j: Journey): Warning[] {
     key: `impossible-travel:${j.id}`,
     rule: 'impossible-travel',
     severity: 'warning',
-    message: `${subjectName} travels ${route} (${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km by road) by ${mode} in at most ${maxDays + 1} day(s), but it needs about ${Math.ceil(neededDays)}.`,
+    message: `${subjectName} travels ${route} (${j.route ? `${Math.round(km)} km along its route` : `${Math.round(km)} km straight, ~${Math.round(km * ix.detourOf(j))} km by road`}) by ${mode} in at most ${maxDays + 1} day(s), but it needs about ${Math.ceil(neededDays)}.`,
     refs: [{ kind: 'journey', id: j.id }],
     day: dep.earliest,
   }];
