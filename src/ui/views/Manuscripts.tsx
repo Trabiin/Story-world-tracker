@@ -11,7 +11,7 @@ import { AppCtx, useApp } from '../context';
 import { placeName, sortByName, subjectName } from '../util';
 import { ImportDialog } from '../writing/ImportDialog';
 
-const KIND_LABEL: Record<LinkTargetKind, string> = { character: 'Character', place: 'Place', group: 'Group', stay: 'Stay', journey: 'Journey', book: 'Book', chapter: 'Chapter', scene: 'Scene', event: 'World event' };
+const KIND_LABEL: Record<LinkTargetKind, string> = { character: 'Character', place: 'Place', group: 'Group', stay: 'Stay', journey: 'Journey', book: 'Book', chapter: 'Chapter', scene: 'Scene', event: 'World event', region: 'Realm or region' };
 
 export function targetOptions(world: AppCtx['world'], kind: LinkTargetKind): { id: Id; label: string }[] {
   switch (kind) {
@@ -24,6 +24,7 @@ export function targetOptions(world: AppCtx['world'], kind: LinkTargetKind): { i
     case 'chapter': return world.chapters.map((c) => ({ id: c.id, label: `${world.books.find((b) => b.id === c.bookId)?.title ?? ''} · ${c.title}` }));
     case 'scene': return world.scenes.map((s) => ({ id: s.id, label: s.title }));
     case 'event': return sortByName(world.events).map((e) => ({ id: e.id, label: e.name }));
+    case 'region': return sortByName(world.regions).map((r) => ({ id: r.id, label: r.name }));
   }
 }
 
@@ -39,6 +40,7 @@ export function useOpenTarget() {
     else if (t.kind === 'place') go('places', t.id);
     else if (t.kind === 'group') go('groups', t.id);
     else if (t.kind === 'event') go('events', t.id);
+    else if (t.kind === 'region') go('layers', t.id);
     else go('story', t.id);
   };
 }

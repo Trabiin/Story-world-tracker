@@ -1,6 +1,7 @@
-/** EU-15: the home page: what changed lately, what needs attention, and what is still loose. */
+/** EU-15: the home page: what changed lately, what needs attention, and what is still loose. SR-1: the series dashboard on top. */
 import { useMemo } from 'react';
-import { RefKind, formatDayNumber, looseEnds, recentChanges, unlinkedChapters } from '../../core';
+import { RefKind, SCENE_STAGES, STAGE_COLOR, STAGE_LABEL, dayKey, formatDayNumber, looseEnds, recentChanges, seriesDashboard, unlinkedChapters } from '../../core';
+import { GoalBar, StageBar, WritingCalendar, deadlineText } from '../writing/Goals';
 import { useOpenRef } from '../components/Refs';
 import { useApp } from '../context';
 
@@ -50,6 +51,7 @@ export function Home() {
         {stat(world.scenes.length, 'scene', 'scenes')}
         {stat(world.stays.length + world.journeys.length, 'stay or journey', 'stays and journeys')}
       </div>
+      {world.books.length > 0 && <SeriesDashboard />}
       <div className="home-grid">
         <section className="card">
           <div className="section-head"><h2>Warnings</h2><button className="small" onClick={() => go('warnings')}>All warnings</button></div>
@@ -104,5 +106,44 @@ export function Home() {
         )}
       </div>
     </div>
+  );
+}
+
+/** SR-1: every book with its stage, words, progress to goal, deadline and open to-dos; WR-12 today's words and the calendar. */
+function SeriesDashboard() {
+  const { world, go } = useApp();
+  const today = dayKey();
+  const d = useMemo(() => seriesDashboard(world, today), [world, today]);
+  const n = (x: number) => x.toLocaleString('en-US');
+  return (
+    <section className="card series-card">
+      <div className="section-head"><h2>The series</h2><button className="small" onClick={() => go('write')}>Write</button></div>
+      <table className="table series-table">
+        <thead><tr><th>Book</th><th>Scenes by stage</th><th className="num">Words</th><th>Progress to goal</th><th>Deadline</th><th className="num">Open to-dos</th></tr></thead>
+        <tbody>
+          {d.books.map((b) => (
+            <tr key={b.book.id}>
+              <td><button className="link" onClick={() => go('story', b.book.id)}>{b.book.title}</button>{b.stage && <div className="muted small">{STAGE_LABEL[b.stage]}{b.scenes ? ` · ${b.scenes} ${b.scenes === 1 ? 'scene' : 'scenes'}` : ''}</div>}</td>
+              <td><StageBar stages={b.stages} total={b.scenes} /></td>
+              <td className="num">{n(b.words)}</td>
+              <td>{b.goal ? <><GoalBar value={b.words} goal={b.goal} /><span className="muted small">{Math.round((b.fraction ?? 0) * 100)}% of {n(b.goal)}</span></> : <button className="link small" onClick={() => go('story', b.book.id)}>Set a goal</button>}</td>
+              <td className={b.daysLeft !== undefined && b.daysLeft < 0 ? 'warn-text small' : 'small'}>{b.deadline ? deadlineText(b) : <span className="muted">none</span>}</td>
+              <td className="num">{b.todos ? <button className="link" onClick={() => go('todos')}>{b.todos}{b.plotHoles ? ` (${b.plotHoles} plot ${b.plotHoles === 1 ? 'hole' : 'holes'})` : ''}</button> : <span className="muted">0</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot><tr><td><b>Series</b></td><td /><td className="num"><b>{n(d.words)}</b></td><td colSpan={3} /></tr></tfoot>
+      </table>
+      <div className="stage-legend">{SCENE_STAGES.map((s) => <span key={s}><span className="stage-dot" style={{ background: STAGE_COLOR[s] }} />{STAGE_LABEL[s]}</span>)}</div>
+      <div className="series-today">
+        <div>
+          <div className="muted small">Today</div>
+          <div className="goal-row"><b>{n(Math.max(0, d.today))}</b> <span className="muted">{d.dailyGoal ? `of ${n(d.dailyGoal)} words` : 'words'}</span></div>
+          {d.dailyGoal ? <GoalBar value={d.today} goal={d.dailyGoal} /> : <span className="muted small">Set a daily goal on the Write page's Goals tab.</span>}
+          {d.streak > 0 && <div className="small">{d.streak} {d.streak === 1 ? 'day' : 'days'} in a row</div>}
+        </div>
+        <div><div className="muted small">Words per day</div><WritingCalendar world={world} weeks={26} /></div>
+      </div>
+    </section>
   );
 }

@@ -108,13 +108,13 @@ export class WorldStore {
 
   /**
    * WR-2, WR-6: scene text has its own undo (in the editor) and its own history, so world undo and
-   * redo keep the text as it is now. Text of scenes that come back (an undone delete) comes back too.
+   * redo keep the text as it is now (and the WR-12 words-per-day log with it). Text of scenes that come back (an undone delete) comes back too.
    */
   private keepText(target: World): World {
     const cur = this.world;
     const ids = new Set(cur.sceneTexts.map((t) => t.id));
     const back = target.sceneTexts.filter((t) => !ids.has(t.id));
-    return { ...target, sceneTexts: back.length ? [...cur.sceneTexts, ...back] : cur.sceneTexts, sceneVersions: cur.sceneVersions, settings: { ...target.settings, currentMoment: cur.settings.currentMoment } };
+    return { ...target, sceneTexts: back.length ? [...cur.sceneTexts, ...back] : cur.sceneTexts, sceneVersions: cur.sceneVersions, writingDays: cur.writingDays, settings: { ...target.settings, currentMoment: cur.settings.currentMoment } };
   }
 
   undo() {

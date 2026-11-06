@@ -1,6 +1,7 @@
-/** ST-1, ST-2: series → books → chapters → scenes, with POV and in-world dates. */
+/** ST-1, ST-2: series → books → chapters → scenes, with POV and in-world dates. WR-12 book goals, WR-13 scene stages. */
 import { useMemo, useState } from 'react';
-import { Book, Chapter, Id, Scene, formatFuzzy, outline, scenePlace, scenePov } from '../../core';
+import { Book, Chapter, Id, STAGE_LABEL, Scene, bookProgress, formatFuzzy, outline, scenePlace, scenePov } from '../../core';
+import { DayInput, GoalBar, StageBar, StageDot, StageSelect, deadlineText } from '../writing/Goals';
 import { recordBase } from '../../storage';
 import { Backlinks } from '../components/Backlinks';
 import { DateInput } from '../components/DateInput';
@@ -69,7 +70,7 @@ export function Story() {
                   <div className={`outline-item chapter ${c.id === selected ? 'active' : ''}`} onClick={() => select(c.id)}>{c.title}</div>
                   {scenes.map((s) => (
                     <div key={s.id} className={`outline-item scene ${s.id === selected ? 'active' : ''} ${s.status === 'draft' ? 'draft' : ''}`} onClick={() => select(s.id)}>
-                      {s.title} {s.start && <span className="muted small">{formatFuzzy(s.start)}</span>}
+                      <StageDot stage={s.stage} /> {s.title} {s.start && <span className="muted small">{formatFuzzy(s.start)}</span>}
                     </div>
                   ))}
                   <button className="link add-line scene" onClick={() => addScene(c.id)}>+ scene</button>
@@ -127,6 +128,7 @@ function CharacterSelect({ value, onChange, none = '(none)' }: { value?: Id; onC
 function BookDetail({ b }: { b: Book }) {
   const { world, store, select } = useApp();
   const set = (p: Partial<Book>) => store.upsert('books', { ...b, ...p });
+  const progress = useMemo(() => bookProgress(world, b.id), [world, b.id]);
   const remove = async () => {
     const chapters = world.chapters.filter((c) => c.bookId === b.id);
     const scenes = world.scenes.filter((s) => chapters.some((c) => c.id === s.chapterId));
@@ -139,6 +141,14 @@ function BookDetail({ b }: { b: Book }) {
       <div className="page-head"><h1>{b.title}</h1><div className="row"><Reorder list={world.books} item={b} collection="books" /><button className="danger" onClick={remove}>Delete</button></div></div>
       <div className="form-grid">
         <Field label="Title"><input value={b.title} onChange={(e) => set({ title: e.target.value })} /></Field>
+        <Field label="Word goal" hint={progress ? `${progress.words.toLocaleString('en-US')} words so far${progress.goal ? ` (${Math.round((progress.fraction ?? 0) * 100)}%)` : ''}.` : undefined}>
+          <input type="number" min={0} step={1000} value={b.wordGoal ?? ''} placeholder="none" onChange={(e) => set({ wordGoal: Math.max(0, Math.round(Number(e.target.value) || 0)) || undefined })} />
+          {progress?.goal ? <GoalBar value={progress.words} goal={progress.goal} /> : null}
+        </Field>
+        <Field label="Deadline" hint={progress?.deadline ? deadlineText(progress) : 'The real-world date you want it finished by.'}>
+          <DayInput value={b.deadline} onChange={(deadline) => set({ deadline })} />
+        </Field>
+        {progress && progress.scenes > 0 && <Field label="Scenes by stage" hint={`${progress.scenes} scenes; every scene has reached at least “${progress.stage ? STAGE_LABEL[progress.stage] : ''}”.`}><StageBar stages={progress.stages} total={progress.scenes} /></Field>}
         <Field label="Notes"><textarea rows={6} value={b.notes} onChange={(e) => set({ notes: e.target.value })} /></Field>
       </div>
       <Backlinks kind="book" id={b.id} title="Linked" />
@@ -199,6 +209,7 @@ function SceneDetail({ s }: { s: Scene }) {
       <div className="page-head"><h1>{s.title}</h1><div className="row"><button className="primary" onClick={() => go('write', s.id)} title="WR-1: write this scene">Write</button><Reorder list={siblings} item={s} collection="scenes" /><button className="danger" onClick={remove}>Delete</button></div></div>
       <div className="form-grid">
         <Field label="Title"><input value={s.title} onChange={(e) => set({ title: e.target.value })} /></Field>
+        <Field label="Stage" hint="WR-13: idea, outlined, first draft, revised or final."><StageSelect value={s.stage} onChange={(stage) => set({ stage })} /></Field>
         <Field label="Chapter">
           <select value={s.chapterId} onChange={(e) => set({ chapterId: e.target.value })}>
             {outline(world).flatMap(({ book, chapters }) => chapters.map(({ chapter }) => <option key={chapter.id} value={chapter.id}>{book.title} · {chapter.title}</option>))}
