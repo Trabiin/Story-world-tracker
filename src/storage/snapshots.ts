@@ -26,8 +26,8 @@ export async function makeSnapshot(world: World, label: string): Promise<Snapsho
   // Map images are large and rarely change; keep their settings but not their pixels.
   // Terrain is kept as references to tiles stored once in the world file.
   const terrain = await encodeTerrain(world.terrain);
-  // Scene versions (WR-6) and the words-per-day log (WR-12) are histories of their own and stay out of world versions.
-  const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })), sceneVersions: [], writingDays: [], terrain };
+  // Scene versions (WR-6), the words-per-day log (WR-12) and the Claude activity log (AI-9) are histories of their own and stay out of world versions.
+  const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })), sceneVersions: [], writingDays: [], claudeLog: [], terrain };
   const json = new TextEncoder().encode(JSON.stringify(lean));
   return { id: crypto.randomUUID(), at: new Date().toISOString(), label, summary: summarize(world), data: await gzip(json), terrainRefs: manifestHashes(terrain) };
 }
@@ -44,7 +44,10 @@ export async function restoreSnapshot(s: Snapshot, current: World): Promise<Worl
     .filter((m) => m.dataUrl);
   w.sceneVersions = current.sceneVersions;
   w.writingDays = current.writingDays;
-  w.settings = { ...w.settings, currentMoment: current.settings.currentMoment, backupFolder: current.settings.backupFolder };
+  // AI-3, AI-9: Claude's proposals and its activity log are kept as they are now, and so is the Claude setup.
+  w.suggestions = current.suggestions;
+  w.claudeLog = current.claudeLog;
+  w.settings = { ...w.settings, currentMoment: current.settings.currentMoment, backupFolder: current.settings.backupFolder, claude: current.settings.claude };
   return w;
 }
 

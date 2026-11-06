@@ -62,6 +62,19 @@ export interface WorldSettings {
   characterTemplates?: CharacterTemplate[];
   /** WR-3, WR-5, WR-8: how the writing page looks and what goes on an exported title page. */
   writing?: WritingSettings;
+  /** AI-1..AI-9: the Claude integration for this world. Absent = off (AI-6). */
+  claude?: ClaudeSettings;
+}
+
+/** AI-6: Claude is off by default and switched on per world. */
+export interface ClaudeSettings {
+  enabled: boolean;
+  /** AI-9: Claude may apply changes itself instead of proposing them. Off by default. */
+  directEdit?: boolean;
+  /** AI-1: the Claude folder (the live, read-only copy of the world). Absent = the default place. */
+  folder?: string;
+  /** AI-2: shared secret the local connector must present, so only Claude Code set up by the app can reach this world. */
+  token?: string;
 }
 
 /** WR-3, WR-5, WR-8, EU-18. */
@@ -706,8 +719,68 @@ export interface World {
   sceneVersions: SceneVersion[];
   /** WR-12: words written on each real-world day. Shared by every scenario; world undo leaves it alone. */
   writingDays: WritingDay[];
+  /** AI-3: changes Claude proposed, waiting to be accepted or rejected. Shared by every scenario. */
+  suggestions: ClaudeSuggestion[];
+  /** AI-9: what Claude changed (or what was accepted from it), newest last. */
+  claudeLog: ClaudeLogEntry[];
   /** MK-4..MK-7: painted land, height and terrain types. */
   terrain: Terrain;
+}
+
+/**
+ * AI-3, AI-10: one change Claude proposes. Records use the same field names as the World data model
+ * (see core/claude/schema.ts). New records take ids starting "new:" so other changes in the same
+ * proposal can point at them; the app replaces them with real ids when the change is applied.
+ */
+export type ClaudeChange =
+  | { op: 'create'; collection: string; record: Record<string, unknown> }
+  | { op: 'update'; collection: string; id: Id; set: Record<string, unknown> }
+  /** EU-20: 'remove' also deletes what cannot live without the record (only with cascade: true); reassignTo hands its links to another record first. */
+  | { op: 'delete'; collection: string; id: Id; cascade?: boolean; reassignTo?: Id }
+  /** WR-1: replace one passage (find must occur exactly once) or, without find, the whole scene text. */
+  | { op: 'text'; sceneId: Id; find?: string; replace: string }
+  /** MK-4..MK-7: paint land, water, a height or a terrain type inside an area or along a line. */
+  | { op: 'terrain'; shape: 'area' | 'line'; points: LatLng[]; widthKm?: number; land?: 'land' | 'water'; heightM?: number; terrainType?: string }
+  /** LY-6: add land to a region (or take it away) from a date, as a border change. */
+  | { op: 'border'; regionId: Id; area: LatLng[]; mode: 'add' | 'remove'; from?: string; until?: string; neighbours?: 'take' | 'stop'; note?: string };
+
+/** AI-3, AI-7, AI-8: a proposal from Claude. */
+export interface ClaudeSuggestion {
+  id: Id;
+  /** Shown as #n in the list. */
+  number: number;
+  createdAt: string;
+  title: string;
+  /** Claude's reason, shown with the proposal. */
+  reason: string;
+  /** The scenario the changes are for (canon unless Claude names one). */
+  scenarioId: Id;
+  /** AI-7: accept as a new what-if scenario with this name instead of changing canon. */
+  asScenario?: { name: string; description: string };
+  changes: ClaudeChange[];
+  /** AI-8: new warnings the changes would cause, worked out when the proposal arrived. */
+  newWarnings: string[];
+  state: 'open' | 'accepted' | 'rejected';
+  /** Changes accepted one by one (indexes into changes). */
+  acceptedChanges?: number[];
+  resolvedAt?: string;
+  /** Why it was rejected, told back to Claude. */
+  note?: string;
+}
+
+/** AI-9: one entry of the Claude activity log. before/after hold every record the change touched, so it can be undone. */
+export interface ClaudeLogEntry {
+  id: Id;
+  at: string;
+  /** direct: Claude applied it (AI-9). accepted: the writer accepted a suggestion. */
+  kind: 'direct' | 'accepted';
+  title: string;
+  suggestionId?: Id;
+  scenarioId: Id;
+  touched: { collection: string; id: Id; before?: unknown; after?: unknown }[];
+  /** The terrain was painted (undo through version history, or while the app is open). */
+  terrain?: boolean;
+  undone?: boolean;
 }
 
 /** EU-14: what a to-do or plot hole can point at. */
