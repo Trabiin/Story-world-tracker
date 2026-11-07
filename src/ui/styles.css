@@ -660,3 +660,36 @@ button.small.on { background: var(--accent); color: var(--accent-fg); }
 }
 .day-input { width: 110px; }
 .day-input.bad { border-color: var(--danger); }
+
+/* ---- AI-1..AI-9: Ask Claude ---- */
+.swatch-line.claude { border-top-color: #7e57c2; }
+.claude-pill { border: 1px solid #7e57c2; color: #7e57c2; background: transparent; border-radius: 12px; padding: 2px 10px; font-size: 12px; white-space: nowrap; }
+.claude-pill:hover { background: rgba(126, 87, 194, 0.1); }
+.sidebar .claude-count { background: #7e57c2; color: #fff; }
+.claude-page { max-width: 980px; }
+.claude-setup, .claude-suggestions, .claude-activity { display: flex; flex-direction: column; gap: 12px; }
+.claude-setup code { word-break: break-all; }
+.claude-chat { display: flex; flex-direction: column; gap: 10px; height: calc(100vh - 170px); min-height: 360px; }
+.chat-log { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--panel); }
+.chat-msg { white-space: pre-wrap; line-height: 1.45; max-width: 85%; }
+.chat-msg.you { align-self: flex-end; background: rgba(126, 87, 194, 0.12); border-radius: 10px; padding: 6px 10px; }
+.chat-msg.claude { align-self: flex-start; }
+.chat-msg.tool { color: var(--muted); font-size: 12px; }
+.chat-msg.error { color: var(--danger); }
+.chat-input { display: flex; flex-direction: column; gap: 6px; }
+.chat-input textarea { width: 100%; resize: vertical; font: inherit; }
+.suggestion { border-left: 4px solid #7e57c2; }
+.suggestion.accepted { border-left-color: #2e9d4f; opacity: 0.85; }
+.suggestion.rejected { border-left-color: var(--muted); opacity: 0.7; }
+.suggestion-head h3 { margin-right: 4px; }
+.suggestion .changes { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.suggestion .changes li.done { opacity: 0.6; }
+.suggestion .changes li > input[type=checkbox] { margin-right: 6px; }
+.suggestion .change { display: inline-block; width: calc(100% - 30px); vertical-align: top; }
+.change-table { margin-top: 4px; font-size: 12px; }
+.change-table td:first-child { color: var(--muted); width: 120px; }
+.change-table td.was { text-decoration: line-through; color: var(--muted); }
+.change-table td.will { background: rgba(39, 174, 96, 0.12); }
+.claude-warn { border-left: 3px solid var(--warn); padding: 4px 8px; background: rgba(201, 138, 18, 0.08); }
+.claude-stale { border-left: 3px solid var(--danger); padding: 4px 8px; background: rgba(192, 57, 43, 0.08); }
+.claude-warn ul, .claude-stale ul { margin: 2px 0 0; padding-left: 18px; }

@@ -33,7 +33,7 @@ export class WorldStore {
   private lastSnapshotAt = 0;
   private snapshotWorld: World | null = null;
 
-  constructor(public world: World, public handle: WorldHandle, private platform: Platform, public snapshots: Snapshot[] = []) {
+  constructor(public world: World, public handle: WorldHandle, public readonly platform: Platform, public snapshots: Snapshot[] = []) {
     this.snapshotWorld = world;
     this.lastSnapshotAt = snapshots[0] ? Date.parse(snapshots[0].at) : 0;
   }
@@ -114,7 +114,14 @@ export class WorldStore {
     const cur = this.world;
     const ids = new Set(cur.sceneTexts.map((t) => t.id));
     const back = target.sceneTexts.filter((t) => !ids.has(t.id));
-    return { ...target, sceneTexts: back.length ? [...cur.sceneTexts, ...back] : cur.sceneTexts, sceneVersions: cur.sceneVersions, writingDays: cur.writingDays, settings: { ...target.settings, currentMoment: cur.settings.currentMoment } };
+    // AI-3: proposals that arrived since stay (an undone accept puts its proposal back to open); AI-9: the activity log is history.
+    const had = new Set(target.suggestions.map((s) => s.id));
+    const arrived = cur.suggestions.filter((s) => !had.has(s.id));
+    return {
+      ...target, sceneTexts: back.length ? [...cur.sceneTexts, ...back] : cur.sceneTexts, sceneVersions: cur.sceneVersions, writingDays: cur.writingDays,
+      suggestions: arrived.length ? [...target.suggestions, ...arrived] : target.suggestions, claudeLog: cur.claudeLog,
+      settings: { ...target.settings, currentMoment: cur.settings.currentMoment, claude: cur.settings.claude },
+    };
   }
 
   undo() {

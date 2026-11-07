@@ -27,6 +27,9 @@ import { Home } from './views/Home';
 import { SearchPage } from './views/SearchPage';
 import { Todos } from './views/Todos';
 import { Write } from './views/Write';
+import { AskClaude } from './views/AskClaude';
+import { ClaudeHub } from './claude/ClaudeHub';
+import type { ClaudePreview } from './context';
 
 const NAV: { view: View; label: string; key: string }[] = [
   { view: 'home', label: 'Home', key: '' },
@@ -44,6 +47,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'groups', label: 'Groups', key: '8' },
   { view: 'warnings', label: 'Warnings', key: '9' },
   { view: 'todos', label: 'To-dos', key: '' },
+  { view: 'claude', label: 'Ask Claude', key: '' },
   { view: 'settings', label: 'Settings', key: '0' },
 ];
 
@@ -104,6 +108,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [mapFocus, setMapFocus] = useState<{ at: LatLng; n: number } | undefined>();
   const [trackRequest, setTrackRequest] = useState<{ id: Id; n: number } | undefined>();
   const [fixPreview, setFixPreview] = useState<FixPreview | undefined>();
+  const [claudePreview, setClaudePreview] = useState<ClaudePreview | undefined>();
 
   const go = useCallback((v: View, id?: Id) => {
     setView(v);
@@ -135,6 +140,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
 
   const openWarnings = warnings.filter((w) => !w.dismissed && w.severity === 'warning').length;
   const openTodos = world.todos.filter((t) => !t.done).length;
+  const openSuggestions = stored.suggestions.filter((x) => x.state === 'open').length;
   const ctx = {
     store, world, ix, warnings, platform, moment, view, go,
     scenarioId,
@@ -161,6 +167,11 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
         go('map');
       }
     },
+    claudePreview,
+    previewSuggestion: (p: ClaudePreview | undefined) => {
+      setClaudePreview(p);
+      if (p) go('map');
+    },
     showTrack: (id: Id) => {
       setTrackRequest((t) => ({ id, n: (t?.n ?? 0) + 1 }));
       go('map');
@@ -185,6 +196,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           <MomentBar />
           <ViewControls />
           <div className="topbar-right">
+            {stored.settings.claude?.enabled && <button className="claude-pill" onClick={() => go('claude')} title="AI-6: Claude can read this world (through the Claude folder and the connector). Only what Claude reads is sent to Anthropic.">Claude on</button>}
             {choices.length > 0 && (
               <select className={`reader-select ${readerAt !== undefined ? 'on' : ''}`} value={readerAt ?? ''} onChange={(e) => setAsOf(e.target.value === '' ? undefined : Number(e.target.value))} title="EU-8: show the world as the reader knows it at the end of a chapter or book. Editing is off while this is on.">
                 <option value="">Author view</option>
@@ -204,6 +216,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
               {n.label}
               {n.view === 'warnings' && openWarnings > 0 && <span className="badge">{openWarnings}</span>}
               {n.view === 'todos' && openTodos > 0 && <span className="count">{openTodos}</span>}
+              {n.view === 'claude' && openSuggestions > 0 && <span className="count claude-count" title="Suggestions waiting">{openSuggestions}</span>}
             </button>
           ))}
           <div className="sidebar-actions">
@@ -231,11 +244,13 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'people' && <People />}
           {view === 'warnings' && <Warnings />}
           {view === 'settings' && <Settings />}
+          {view === 'claude' && <AskClaude />}
         </main>
         {editor?.kind === 'stay' && <StayEditor key={editorN} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
         {editor?.kind === 'journey' && <JourneyEditor key={editorN} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
         {command && <CommandBar onClose={() => setCommand(false)} />}
         {quick && <QuickAdd onClose={() => setQuick(false)} />}
+        <ClaudeHub />
       </div>
     </Ctx.Provider>
   );

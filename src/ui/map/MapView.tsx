@@ -9,6 +9,7 @@ import {
   MapFeature, refreshAutoRivers, traceRiver, routeAlongFeatures, networkFor, fromDay, existsOn, featureAnchor, insideArea, nearestOnPolyline, riverFlows, uphillSegments,
   applyDab, bandEdges, clampLat, climateBand, dabsBetween, fillPolygon, formatDayNumber, greatCircleKm, hasTerrain, interpolateGreatCircle,
   meanTemperatureC, pathLengthKm, applyFix, changedFeatures, FIX_LABEL, suggestBiomes, addCoastDetail, removeCoastDetail, hasCoastDetail, addDetailToFeatures, removeDetailFromFeatures, localSeasons, BiomeSuggestion, whereIs, wrapLng, LayerIndex, characterTrack, OPEN_END, areaOwners, editRegionArea, polygonFromPoints, strokeArea, GeoMultiPolygon, incidentAt,
+  checkProposal, scenarioView, CANON,
 } from '../../core';
 import { newId, recordBase } from '../../storage';
 import { fileToDataUrl } from '../views/Characters';
@@ -16,6 +17,7 @@ import { PLACE_ICON } from '../views/Places';
 import { useApp } from '../context';
 import { TiledImage, TILE } from './tiles';
 import { ViewState, boundsFromTwoPoints, toLatLng, toScreen, wrapOffsets } from './projection';
+import { claudeOpts, acceptInStore } from '../claude/actions';
 import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
 import { GlobePreview } from './GlobePreview';
 import { Overview, Relief, RenderStyle, SYMBOL_BLOCK, TileImageCache, autoSymbols, hexToRgb, paletteFor, styleKey } from './terrainRender';
@@ -103,7 +105,7 @@ function cssVar(name: string) {
 }
 
 export function MapView() {
-  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus, trackRequest, fixPreview, previewFix, platform } = useApp();
+  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus, trackRequest, fixPreview, previewFix, platform, claudePreview, previewSuggestion } = useApp();
   const viewKey = `${VIEW_KEY}.${store.handle.id}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -247,7 +249,25 @@ export function MapView() {
   const fixAfter = useMemo(() => (fixPreview ? applyFix(world, fixPreview.fix, recordBase) : null), [fixPreview, world]);
   const fixDiff = useMemo(() => (fixAfter ? changedFeatures(world, fixAfter) : null), [fixAfter, world]);
   const [suggestion, setSuggestion] = useState<(BiomeSuggestion & { onlyUnpainted: boolean }) | null>(null);
-  const terrain = suggestion?.terrain ?? working ?? world.terrain;
+  // AI-3: a suggestion from Claude shown as a ghost: new lines violet, replaced ones red, new borders dashed, new places as rings.
+  const claudeSug = claudePreview ? store.world.suggestions.find((x) => x.id === claudePreview.suggestionId && x.state === 'open') : undefined;
+  const claudeGhost = useMemo(() => {
+    if (!claudeSug) return null;
+    const pending = claudeSug.changes.map((_, i) => i).filter((i) => !(claudeSug.acceptedChanges ?? []).includes(i));
+    const c = checkProposal(store.world, { ...claudeSug, changes: pending.map((i) => claudeSug.changes[i]), asScenario: claudeSug.acceptedChanges?.length ? undefined : claudeSug.asScenario }, claudeOpts);
+    if (c.errors.length || !c.result) return { errors: c.errors, added: undefined, removed: [], regions: [], places: [], terrain: undefined, warnings: [] };
+    const after = scenarioView(c.result.world, c.scenarioId ?? CANON);
+    const old = new Map(world.mapFeatures.map((f) => [f.id, f]));
+    const added = after.mapFeatures.filter((f) => old.get(f.id)?.points !== f.points);
+    const now = new Set(after.mapFeatures.map((f) => f.id));
+    const removed = world.mapFeatures.filter((f) => !now.has(f.id) || added.some((a) => a.id === f.id));
+    const oldR = new Map(world.regions.map((r) => [r.id, r]));
+    const regions = after.regions.filter((r) => oldR.get(r.id)?.versions !== r.versions);
+    const oldP = new Map(world.places.map((pl) => [pl.id, pl]));
+    const places = after.places.filter((pl) => pl.location && oldP.get(pl.id)?.location !== pl.location && !after.mapFeatures.some((f) => f.placeId === pl.id));
+    return { errors: [] as string[], added, removed, regions, places, terrain: c.result.terrain ? after.terrain : undefined, warnings: c.newWarnings };
+  }, [claudeSug, store.world, world]);
+  const terrain = suggestion?.terrain ?? claudeGhost?.terrain ?? working ?? world.terrain;
   const reader = useMemo(() => new TerrainReader(terrain), [terrain]);
   const showTerrain = hasTerrain(terrain);
   const style: RenderStyle = useMemo(
@@ -503,6 +523,34 @@ export function MapView() {
       }
       g.restore();
     }
+    if (claudeGhost?.added && !opts.exporting) {
+      const ghost = { ...claudeGhost, added: claudeGhost.added };
+      g.save();
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      const lix2 = new LayerIndex({ ...world, regions: ghost.regions });
+      for (const o of offsets) {
+        for (const f of ghost.removed) { g.strokeStyle = 'rgba(200,60,40,0.75)'; g.lineWidth = 3; g.setLineDash([5, 4]); drawPath(f.shape === 'area' ? [...f.points, f.points[0]] : f.points, o); }
+        for (const f of ghost.added) {
+          const pts = f.shape === 'area' ? [...f.points, f.points[0]] : f.points;
+          g.setLineDash([]);
+          g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 7; drawPath(pts, o);
+          g.strokeStyle = '#7e57c2'; g.lineWidth = 3.5; drawPath(pts, o);
+        }
+        g.setLineDash([9, 5]);
+        for (const r of ghost.regions) {
+          const v = lix2.versionAt(r, moment) ?? r.versions[r.versions.length - 1];
+          if (!v) continue;
+          for (const poly of v.area) for (const ring of poly) { g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 5; drawPath(ring.map(([lng, lat]) => ({ lat, lng })), o); g.strokeStyle = '#7e57c2'; g.lineWidth = 2.5; drawPath(ring.map(([lng, lat]) => ({ lat, lng })), o); }
+        }
+        g.setLineDash([]);
+        for (const pl of ghost.places) {
+          const sp = toScreen(view, w, h, pl.location!, o);
+          g.beginPath(); g.arc(sp.x, sp.y, 7, 0, Math.PI * 2); g.strokeStyle = '#7e57c2'; g.lineWidth = 3; g.stroke();
+          g.fillStyle = '#7e57c2'; g.font = `600 12px ${ff}`; g.fillText(pl.name, sp.x + 10, sp.y + 4);
+        }
+      }
+      g.restore();
+    }
 
     // detail map frames (MP-4)
     if (layers.maps) {
@@ -739,7 +787,7 @@ export function MapView() {
     const g = cv.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     markers.current = paint(g, size.w, size.h, view, { pxRatio: dpr });
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick, fixDiff]);
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick, fixDiff, claudeGhost]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -1714,6 +1762,20 @@ export function MapView() {
             <div className="row">
               <button className="small primary" disabled={!fixAfter} onClick={() => { const fix = fixPreview.fix; store.update((w) => applyFix(w, fix, recordBase) ?? w); previewFix(undefined); }}>Apply</button>
               <button className="small" onClick={() => previewFix(undefined)}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {claudePreview && (
+          <div className="card fix-card">
+            <h3>Claude's suggestion{claudeSug ? ` #${claudeSug.number}: ${claudeSug.title}` : ''}</h3>
+            {!claudeSug ? <p className="muted small">This suggestion is no longer open.</p>
+              : claudeGhost?.errors.length ? <p className="small error">It no longer fits the world as it is now: {claudeGhost.errors.join(' ')}</p>
+                : <p className="muted small"><span className="swatch-line claude" /> new or changed{claudeGhost?.removed?.length ? <> · <span className="swatch-line old" /> what it replaces</> : null}{claudeGhost?.regions?.length ? ' · dashed: new borders on the date shown' : ''}{claudeGhost?.terrain ? ' · the painted map shows the change' : ''}. Nothing changes until you accept it.</p>}
+            {claudeGhost?.warnings?.length ? <p className="small claude-warn">The checks would flag: {claudeGhost.warnings.join(' | ')}</p> : null}
+            <div className="row">
+              {claudeSug && <button className="small primary" disabled={!!claudeGhost?.errors.length} onClick={async () => { const e = await acceptInStore(store, claudeSug); if (e) void ask.alert(e.join('\n')); else previewSuggestion(undefined); }}>Accept</button>}
+              <button className="small" onClick={() => { previewSuggestion(undefined); go('claude'); }}>Back to suggestions</button>
+              <button className="small" onClick={() => previewSuggestion(undefined)}>Close</button>
             </div>
           </div>
         )}

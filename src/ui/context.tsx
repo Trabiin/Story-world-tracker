@@ -3,7 +3,7 @@ import type { FixKind, Id, LatLng, ViewFilter, Warning, World, WorldIndex } from
 import type { Platform } from './platform';
 import type { WorldStore } from './store';
 
-export type View = 'who' | 'timeline' | 'map' | 'story' | 'manuscripts' | 'characters' | 'places' | 'layers' | 'groups' | 'warnings' | 'settings' | 'events' | 'people' | 'home' | 'search' | 'todos' | 'write';
+export type View = 'who' | 'timeline' | 'map' | 'story' | 'manuscripts' | 'characters' | 'places' | 'layers' | 'groups' | 'warnings' | 'settings' | 'events' | 'people' | 'home' | 'search' | 'todos' | 'write' | 'claude';
 
 export type EditorTarget =
   | { kind: 'stay'; id?: Id; preset?: Record<string, unknown> }
@@ -49,6 +49,13 @@ export interface AppCtx {
   setFilter: (f: ViewFilter) => void;
   /** The world before the VW-7 filter (scenario, drafts and reader's view applied). */
   unfiltered: World;
+  /** AI-3: a Claude suggestion shown on the map as a ghost before it is accepted. */
+  claudePreview: ClaudePreview | undefined;
+  previewSuggestion: (p: ClaudePreview | undefined) => void;
+}
+
+export interface ClaudePreview {
+  suggestionId: Id;
 }
 
 export interface FixPreview {

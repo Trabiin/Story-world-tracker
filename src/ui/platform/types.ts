@@ -35,6 +35,30 @@ export interface Platform {
   writeTextCopies?(worldName: string, files: { path: string[]; text: string }[], folder: string): Promise<string | null>;
   /** WR-3: full screen for focus mode. */
   setFullscreen?(on: boolean): Promise<void>;
+  /** AI-1..AI-5 (desktop): the Claude folder, the local connector and Claude Code. */
+  claude?: ClaudePlatform;
+}
+
+/** AI-1..AI-5: what the desktop app does for the Claude integration. */
+export interface ClaudePlatform {
+  /** Where a world's Claude folder goes unless the writer picks another place. */
+  defaultFolder(worldName: string): Promise<string>;
+  chooseFolder(): Promise<string | null>;
+  /** AI-1: write the files that changed since the last call and remove the ones that are gone. Files not written by the app are left alone. */
+  syncFolder(folder: string, files: { path: string; text: string }[]): Promise<{ written: number; removed: number }>;
+  /** Remove every file the app wrote into the folder (and the folder, if it is then empty). */
+  clearFolder(folder: string): Promise<void>;
+  /** AI-2: start the local connector; requests arrive at onRequest, answers go back with reply. Returns the port. */
+  startConnector(onRequest: (id: number, auth: string, body: string) => void): Promise<number>;
+  reply(id: number, status: number, body: string): Promise<void>;
+  /** AI-5: Claude Code's version, or an error when it is not installed. */
+  version(): Promise<string>;
+  /** AI-4: ask Claude Code in the folder; each stream-json line goes to onLine. Returns a run id. */
+  ask(folder: string, prompt: string, session: string | undefined, onLine: (line: string) => void, onDone: (code: number | null, error: string) => void): Promise<number>;
+  stop(run: number): Promise<void>;
+  openFolder(folder: string): Promise<void>;
+  openInVsCode(folder: string): Promise<void>;
+  openTerminal(folder: string): Promise<void>;
 }
 
 export function backupFileName(name: string, d = new Date()): string {
