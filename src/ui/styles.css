@@ -839,3 +839,65 @@ div.file-view-body img { max-width: 100%; max-height: 100%; }
 .arc-turns select { align-self: flex-start; }
 .plan-for li { padding: 2px 0; }
 .arc-summary { margin-bottom: 8px; }
+
+/* Phase 8a: Revise (RV-1..RV-6) */
+.revise-page .plan-body > div { max-width: 1050px; display: flex; flex-direction: column; gap: 12px; }
+.revise-page h2 { font-size: 16px; margin: 8px 0 4px; }
+.revise-page .notice { padding: 8px 12px; border-radius: var(--radius); background: var(--notice-bg); color: var(--notice-fg); border: 1px solid var(--notice-line); }
+.revise-page .notice.error { border-color: var(--danger); }
+.find-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; align-items: end; }
+.find-form label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+.find-form input { font-size: 15px; }
+.find-form .row { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; }
+.find-form .spacer, .review-scene .spacer { flex: 1; }
+.find-results { display: flex; flex-direction: column; gap: 10px; }
+.find-scene { border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; background: var(--panel); }
+.find-scene header { display: flex; gap: 8px; align-items: center; }
+.find-scene ul, .rename-list, .typo-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.find-scene li, .rename-list li { padding: 3px 0; border-top: 1px dashed var(--line); }
+.find-scene li.off .ctx, .rename-list li.off .ctx { opacity: 0.55; }
+.find-scene .ctx, .rename-list .ctx { font-family: Georgia, serif; }
+.find-scene label.checkbox, .rename-list label.checkbox { align-items: baseline; gap: 8px; }
+.rename-list { max-height: 45vh; overflow: auto; }
+.rename-list .where { min-width: 160px; font-size: 13px; color: var(--muted); }
+.rename-box { display: flex; flex-direction: column; gap: 8px; }
+.rename-box > .row { display: flex; gap: 12px; align-items: flex-end; }
+.rename-box label.grow { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.rename-modal { width: min(820px, 94vw); }
+.rename-modal .rename-box { padding: 0 16px 16px; }
+.revise-names section, .revise-style section { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 14px 12px; }
+.typo-list li { padding: 6px 0; border-top: 1px dashed var(--line); display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.typo-actions { margin-left: auto; display: inline-flex; gap: 10px; align-items: center; }
+.rule-list { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0; }
+.style-table th.num { font-weight: 500; font-size: 12px; }
+.top-words { display: flex; flex-wrap: wrap; gap: 6px; }
+.overused { margin: 0; padding-left: 18px; }
+.pass-table { width: auto; }
+.pass-table th.pass-col { min-width: 130px; vertical-align: bottom; }
+.pass-name { width: 100%; font-weight: 600; }
+.pass-bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 3px; }
+.pass-bar > div { height: 100%; background: var(--accent); border-radius: 2px; }
+.pass-cell { text-align: center; }
+.pass-notes textarea { width: 100%; font-size: 12px; }
+.review-scene { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
+.review-scene.decided { opacity: 0.7; }
+.review-scene header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.review-actions { display: inline-flex; gap: 6px; }
+.review-text { font-family: Georgia, serif; font-size: 15px; line-height: 1.55; margin-top: 6px; }
+.review-text p { margin: 0 0 8px; }
+.review-text .center { text-align: center; }
+.review-comments { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+/* RV-2, RV-4 marks in the text */
+.name-typo { text-decoration: underline wavy var(--danger); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.style-mark { text-underline-offset: 3px; }
+.style-repeat { text-decoration: underline dotted #d0782a; text-decoration-thickness: 2px; }
+.style-long-sentence { background: rgba(201, 138, 18, 0.13); }
+.style-adverb { text-decoration: underline dotted #3a7ca5; text-decoration-thickness: 2px; }
+.style-filter { text-decoration: underline dotted #8e44ad; text-decoration-thickness: 2px; }
+.style-overused { background: rgba(208, 120, 42, 0.2); }
+.style-key { padding: 0 2px; }
+.style-table .num, .pass-table .num { text-align: right; }
+.pass-table textarea { min-width: 0; }
+.find-form label.checkbox { flex-direction: row; align-items: center; color: var(--fg); }
+.revise-page .pass-table { width: auto; align-self: flex-start; }
+.pass-table td:first-child { padding-right: 24px; }

@@ -17,6 +17,7 @@ import { ArcsForCharacter } from './Plan';
 import { ICONS, PALETTE, blankCharacter, placeName, splitList } from '../util';
 import { Knowledge, Relationships, StatusBadge } from './CharacterExtras';
 import { Plans } from './CharacterPlans';
+import { RenameButton } from '../components/Rename';
 
 const IMPORTANCE: Importance[] = ['main', 'secondary', 'minor'];
 
@@ -168,7 +169,7 @@ function CharacterDetail({ c }: { c: Character }) {
       {dialog === 'merge' && <MergeDialog collection="characters" id={c.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
       <div className="two-col">
         <div className="form-grid">
-          <Field label="Name"><input value={c.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="Name"><input value={c.name} onChange={(e) => set({ name: e.target.value })} /><RenameButton kind="character" id={c.id} /></Field>
           <Field label="Aliases and titles" hint="Comma separated"><CommaInput value={c.aliases} onChange={(aliases) => set({ aliases })} /></Field>
           <Field label="Importance">
             <select value={c.importance} onChange={(e) => set({ importance: e.target.value as Importance })}>

@@ -325,6 +325,7 @@ describe('AI-10 round trip: each kind of change leaves every other record alone 
     notes: { title: 'Idea' },
     setups: { title: 'A clue', setupSceneId: w.scenes[0].id },
     arcs: { characterId: kaela, bookId: id(w.books, 'The Salt Roads'), turns: [{ sceneId: w.scenes[0].id, note: 'x' }] },
+    passes: { bookId: id(w.books, 'The Salt Roads'), name: 'Dialogue', done: [w.chapters[0].id] },
   };
   for (const c of CLAUDE_COLLECTIONS) {
     it(`${c}: create, update, delete`, () => {

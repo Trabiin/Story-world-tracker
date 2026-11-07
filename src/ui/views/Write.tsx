@@ -6,7 +6,8 @@
  */
 import type { EditorView } from 'prosemirror-view';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Book, Chapter, Id, LinkTarget, LinkTargetKind, RefKind, Scene, SceneText, docToBlocks, formatFuzzy, linkTargets, midpoint, nameCard, nameIndex, outline, readerKnowledge, readerPointBefore, refLabel, runText, scenePov, wordCounts, worldWords } from '../../core';
+import { Book, Chapter, Id, LinkTarget, LinkTargetKind, RefKind, Scene, SceneText, docToBlocks, formatFuzzy, linkTargets, midpoint, nameCard, nameIndex, outline, readerKnowledge, readerPointBefore, refLabel, runText, scenePov, wordCounts, worldWords, nameTypos, nameWordSet, styleOff, styleReport } from '../../core';
+import { requestRevise } from '../revise/actions';
 import { recordBase } from '../../storage';
 import { useApp } from '../context';
 import { ExportDialog } from '../writing/ExportDialog';
@@ -80,6 +81,20 @@ export function Write() {
   const nameKey = [world.characters, world.places, world.regions, world.events, world.groups, world.mapFeatures];
   const wordSet = useMemo(() => worldWords(world), nameKey); // eslint-disable-line react-hooks/exhaustive-deps
   const names = useMemo(() => nameIndex(world), nameKey); // eslint-disable-line react-hooks/exhaustive-deps
+  // RV-2: words that look like misspelt names get a red underline; RV-4: style marks when switched on.
+  const typoList = useMemo(() => (world.settings.disabledRules.includes('name-typo') ? [] : nameTypos(world).filter((t) => !world.dismissals.some((d) => d.key === `name-typo:${t.word}`))), [world.sceneTexts, world.dismissals, world.settings.disabledRules, ...nameKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const typoKey = typoList.map((t) => `${t.word}>${t.like}`).join('|');
+  const typos = useMemo(() => new Map(typoList.map((t) => [t.word, t.like])), [typoKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const styleNames = useMemo(() => nameWordSet(world), nameKey); // eslint-disable-line react-hooks/exhaustive-deps
+  const offKey = (ws.styleOff ?? []).join();
+  const overusedKey = useMemo(() => (ws.styleMarks && bookId && !(ws.styleOff ?? []).includes('overused') ? styleReport(world, bookId, styleOff(world), styleNames).overused.map((o) => o.word).join() : ''), [ws.styleMarks, bookId, world.sceneTexts, offKey, styleNames]); // eslint-disable-line react-hooks/exhaustive-deps
+  const style = useMemo<TextInfo['style']>(() => (ws.styleMarks ? { off: new Set((ws.styleOff ?? []) as never[]), names: styleNames, overused: new Set(overusedKey ? overusedKey.split(',') : []) } : undefined), [ws.styleMarks, offKey, styleNames, overusedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openFind = () => {
+    const v = activeView.current;
+    const sel = v && !v.state.selection.empty ? v.state.doc.textBetween(v.state.selection.from, v.state.selection.to, ' ') : '';
+    requestRevise({ tab: 'find', query: sel.length < 80 ? sel : '', scope: bookId ? { kind: 'book', bookId } : undefined });
+    go('revise');
+  };
   const openRef = useOpenRef();
   const worldRef = useRef(world);
   worldRef.current = world;
@@ -95,6 +110,7 @@ export function Write() {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (e.key === 'F11') { e.preventDefault(); enterFocus(!focus); }
+      else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'h') { e.preventDefault(); openFind(); }
       else if (e.key === 'Escape' && focus && !document.querySelector('.modal-backdrop')) enterFocus(false);
     };
     window.addEventListener('keydown', k);
@@ -317,6 +333,8 @@ export function Write() {
           <button title="Scene break (Ctrl+Enter, or type ***)" onClick={() => run(commands.sceneBreak)}>* * *</button>
           <button title="WR-11: link the selected words to a character, place or other record (Ctrl+L). Or type @ and a name." disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onLinkKey(active, v); }}>Link</button>
           <button title="NT-1: comment on the selected words in the margin (Ctrl+Alt+M)" disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onCommentKey(active, v); }}>Comment</button>
+          <button title="RV-3: find and replace in this book or the whole series (Ctrl+H)" onClick={openFind}>Find</button>
+          <button className={ws.styleMarks ? 'on' : ''} title="RV-4: mark repeated words, long sentences, adverbs, filter words and overused words (rules in Revise → Style)" onClick={() => setWriting({ styleMarks: !ws.styleMarks })}>Style</button>
           <button className="icon" title="Undo typing (Ctrl+Z)" onClick={() => run(commands.undo)}>↶</button>
           <button className="icon" title="Redo typing (Ctrl+Y)" onClick={() => run(commands.redo)}>↷</button>
           <span className="write-counts muted small" title="WR-12: words in this scene · chapter · book · whole series">
@@ -340,7 +358,7 @@ export function Write() {
               <section key={c.id} className="write-chapter" id={`chapter-${c.id}`}>
                 <h1 className="write-chapter-title">{c.title}</h1>
                 {scenes.map((s, i) => (
-                  <SceneBlock key={s.id} scene={s} first={i === 0} text={textBy.get(s.id)} wordSet={wordSet} names={names} label={label} spelling={ws.spelling ?? 'en-GB'} typewriter={!!ws.typewriter}
+                  <SceneBlock key={s.id} scene={s} first={i === 0} text={textBy.get(s.id)} wordSet={wordSet} names={names} label={label} typos={typos} styleInfo={style} spelling={ws.spelling ?? 'en-GB'} typewriter={!!ws.typewriter}
                     onFocus={onFocus} onNav={onNav} register={register} onHistory={() => setHistoryFor(s.id)} onDetails={() => go('story', s.id)} active={s.id === active} onChange={() => setTick((n) => n + 1)}
                     onStage={(stage) => setStage(s, stage)} onMention={onMention} onMentionKey={onMentionKey} onLinkKey={onLinkKey}
                     onCommentKey={onCommentKey} getView={getView} marginSide={marginSide && !focus && (sheetShift === undefined || hasComments)} editingComment={editingComment} setEditingComment={setEditingComment} />
@@ -375,6 +393,8 @@ interface BlockProps {
   wordSet: Set<string>;
   names: TextInfo['names'];
   label: TextInfo['label'];
+  typos: TextInfo['typos'];
+  styleInfo: TextInfo['style'];
   spelling: string;
   typewriter: boolean;
   active: boolean;
@@ -409,7 +429,7 @@ function SceneBlock(p: BlockProps) {
     return () => io.disconnect();
   }, [mounted]);
   const comments = p.text?.comments;
-  const info = useMemo<TextInfo>(() => ({ words: p.wordSet, names: p.names, comments: new Map((comments ?? []).map((c) => [c.id, c])), label: p.label }), [p.wordSet, p.names, comments, p.label]);
+  const info = useMemo<TextInfo>(() => ({ words: p.wordSet, names: p.names, comments: new Map((comments ?? []).map((c) => [c.id, c])), label: p.label, typos: p.typos, style: p.styleInfo }), [p.wordSet, p.names, comments, p.label, p.typos, p.styleInfo]);
   const pov = scenePov(world, p.scene);
   return (
     <div className={`write-scene ${p.active ? 'active' : ''}`} id={`scene-${p.scene.id}`} ref={ref}>

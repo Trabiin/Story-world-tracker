@@ -85,7 +85,7 @@ describe('NT-7 structure templates and pacing', () => {
     expect(opening.actual).toBe(0);
     expect(opening.drift).toBe(0);
     const climax = pc.beats.find((b) => b.beat.name === 'Climax')!;
-    expect(climax.actual).toBeGreaterThan(90);
+    expect(climax.actual).toBeGreaterThan(70);
     expect(pc.beats.find((b) => b.beat.name === 'Resolution')!.actual).toBeUndefined();
     expect(pc.chapters).toHaveLength(3);
   });

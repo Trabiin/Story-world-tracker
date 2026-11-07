@@ -98,6 +98,10 @@ export interface WritingSettings {
   dailyGoal?: number;
   /** WR-9: the story sidebar beside the page is shown. Absent = shown. */
   sidebar?: boolean;
+  /** RV-4: style rules switched off ('repeat', 'long-sentence', 'adverb', 'filter', 'overused'). */
+  styleOff?: string[];
+  /** RV-4: style marks shown on the Write page. */
+  styleMarks?: boolean;
 }
 
 /** EU-3: "soldier of the Guard": what a new character starts with. */
@@ -506,6 +510,18 @@ export interface Setup extends RecordBase {
   payoffSceneId?: Id;
 }
 
+/** RV-5: a named revision pass over a book ("dialogue", "timeline fixes"), ticked off chapter by chapter. */
+export interface RevisionPass extends RecordBase {
+  bookId: Id;
+  name: string;
+  /** What to look for in this pass. */
+  note: string;
+  /** Chapters done in this pass. */
+  done: Id[];
+  /** Position among the book's passes (1, 2, 3…). */
+  order: number;
+}
+
 /** NT-8: one character's arc through one book: where they start and end, and the scenes that turn them. */
 export interface CharacterArc extends RecordBase {
   characterId: Id;
@@ -779,6 +795,8 @@ export interface World {
   /** NT-6 setups and payoffs, NT-8 character arcs. */
   setups: Setup[];
   arcs: CharacterArc[];
+  /** RV-5: revision passes over a book, with a checklist per chapter. Shared by every scenario. */
+  passes: RevisionPass[];
   /** NT-4: research files (images and PDFs) attached to notes and records. The bytes are stored once in the world file, by fileKey. */
   attachments: Attachment[];
   /** AI-3: changes Claude proposed, waiting to be accepted or rejected. Shared by every scenario. */

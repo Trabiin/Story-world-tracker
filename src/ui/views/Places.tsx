@@ -15,6 +15,7 @@ import { DeleteDialog, MergeDialog } from '../components/RecordTools';
 import { CommaInput } from './Characters';
 import { Backlinks } from '../components/Backlinks';
 import { subjectName } from '../util';
+import { RenameButton } from '../components/Rename';
 
 export const PLACE_KINDS: PlaceKind[] = ['capital', 'city', 'town', 'village', 'castle', 'port', 'temple', 'ruin', 'battle-site', 'building', 'room', 'region', 'landmark', 'river', 'lake', 'road', 'area', 'other', 'unknown'];
 export const PLACE_ICON: Record<PlaceKind, string> = { city: '◉', town: '●', village: '•', castle: '♜', port: '⚓', temple: '⛩', ruin: '⌂', 'battle-site': '⚔', building: '▪', room: '▫', region: '◌', landmark: '▲', other: '◆', unknown: '?', capital: '✪', river: '〰', lake: '◍', road: '═', area: '▧' };
@@ -80,7 +81,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
       {dialog === 'merge' && <MergeDialog collection="places" id={p.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
       <div className="two-col">
         <div className="form-grid">
-          <Field label="Name"><input value={p.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="Name"><input value={p.name} onChange={(e) => set({ name: e.target.value })} /><RenameButton kind="place" id={p.id} /></Field>
           <Field label="Other names" hint="Comma separated"><CommaInput value={p.aliases} onChange={(aliases) => set({ aliases })} /></Field>
           <Field label="Kind">
             <select value={p.kind} onChange={(e) => set({ kind: e.target.value as PlaceKind })}>

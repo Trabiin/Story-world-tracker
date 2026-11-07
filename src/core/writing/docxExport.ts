@@ -33,6 +33,11 @@ function runsXml(runs: Run[]): string {
 const para = (style: string, inner: string, extra = '') => `<w:p><w:pPr><w:pStyle w:val="${style}"/>${extra}</w:pPr>${inner}</w:p>`;
 const textRun = (s: string) => `<w:r><w:t xml:space="preserve">${esc(s)}</w:t></w:r>`;
 
+/** RV-6: the bookmark name our export puts around a scene (Word allows letters, digits and _ up to 40 characters). */
+export function sceneBookmark(sceneId: Id): string {
+  return `swt_${sceneId.replace(/[^A-Za-z0-9]/g, '')}`.slice(0, 40);
+}
+
 /** "about 90,000 words": nearest thousand for a novel, nearest hundred for something short. */
 export function roundedWords(n: number): string {
   const r = n >= 10000 ? Math.round(n / 1000) * 1000 : Math.max(100, Math.round(n / 100) * 100);
@@ -46,7 +51,7 @@ export function exportContent(world: World, opts: ExportOptions) {
   const from = opts.fromChapter ?? 0, to = opts.toChapter ?? book.chapters.length - 1;
   const chapters = book.chapters.slice(from, to + 1).map(({ chapter, scenes }) => ({
     title: chapter.title,
-    scenes: scenes.map((s) => ({ title: s.title, blocks: docToBlocks(textOf(world, s.id)?.doc) })),
+    scenes: scenes.map((s) => ({ id: s.id, title: s.title, blocks: docToBlocks(textOf(world, s.id)?.doc) })),
   }));
   const words = chapters.reduce((n, c) => n + c.scenes.reduce((m, s) => m + s.blocks.reduce((k, b) => k + (b.kind === 'break' ? 0 : countWords(runText(b.runs))), 0), 0), 0);
   return { book: book.book, chapters, words };
@@ -73,17 +78,25 @@ export async function buildDocx(world: World, opts: ExportOptions): Promise<Uint
   }
 
   const breakMark = ms ? '#' : '* * *';
+  let mark = 0;
   for (const c of chapters) {
     body.push(para('Heading1', textRun(c.title)));
     let first = true;
     c.scenes.forEach((s, si) => {
-      if (si > 0) { body.push(para('SwtSceneBreak', textRun(breakMark))); first = true; }
+      if (si > 0) { body.push(para('SwtSceneSep', textRun(breakMark))); first = true; }
       if (opts.sceneTitles) { body.push(para('Heading2', textRun(s.title))); first = true; }
+      // RV-6: a hidden bookmark around each scene's text, so an edited copy can be read back scene by scene.
+      const start = body.length;
       for (const b of s.blocks as Block[]) {
         if (b.kind === 'break') { body.push(para('SwtSceneBreak', textRun(breakMark))); first = true; continue; }
         if (b.kind === 'heading') { body.push(para(b.level === 1 ? 'Heading2' : 'Heading3', runsXml(b.runs))); first = true; continue; }
         body.push(para(first ? 'SwtFirst' : 'SwtBody', runsXml(b.runs)));
         first = false;
+      }
+      if (body.length > start) {
+        const id = ++mark;
+        body[start] = body[start].replace('</w:pPr>', `</w:pPr><w:bookmarkStart w:id="${id}" w:name="${sceneBookmark(s.id)}"/>`);
+        body[body.length - 1] = body[body.length - 1].replace(/<\/w:p>$/, `<w:bookmarkEnd w:id="${id}"/></w:p>`);
       }
     });
   }
@@ -106,6 +119,7 @@ export async function buildDocx(world: World, opts: ExportOptions): Promise<Uint
 <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="SwtFirst"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:next w:val="SwtFirst"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:i/></w:rPr></w:style>
 <w:style w:type="paragraph" w:customStyle="1" w:styleId="SwtSceneBreak"><w:name w:val="Scene Break"/><w:basedOn w:val="Normal"/><w:next w:val="SwtFirst"/><w:pPr><w:keepNext/><w:jc w:val="center"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:customStyle="1" w:styleId="SwtSceneSep"><w:name w:val="Scene Separator"/><w:basedOn w:val="SwtSceneBreak"/><w:next w:val="SwtFirst"/><w:pPr><w:keepNext/><w:jc w:val="center"/></w:pPr></w:style>
 <w:style w:type="paragraph" w:customStyle="1" w:styleId="SwtTitlePage"><w:name w:val="Title Page"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:line="240" w:lineRule="auto"/><w:tabs><w:tab w:val="right" w:pos="${rightTab}"/></w:tabs></w:pPr></w:style>
 <w:style w:type="paragraph" w:customStyle="1" w:styleId="SwtEnd"><w:name w:val="The End"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:before="480"/><w:jc w:val="center"/></w:pPr></w:style>
 <w:style w:type="paragraph" w:styleId="Header"><w:name w:val="header"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:line="240" w:lineRule="auto"/><w:jc w:val="right"/></w:pPr></w:style>

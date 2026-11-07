@@ -11,7 +11,7 @@ import { Node as PMNode } from 'prosemirror-model';
 import { EditorState, Plugin, PluginKey, Selection, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import { useEffect, useRef } from 'react';
-import { Id, LinkTargetKind, NameIndex, SceneText, TextComment, TextNode, World, addVersion, docWords, emptyDoc, logWords, makeVersion, nameMatches, nameRanges, packDoc, versionsOf, wantsAutoVersion, WRITING_VERSION_EVERY_MS } from '../../core';
+import { Id, LinkTargetKind, StyleRuleId, STYLE_RULES, styleHits, NameIndex, SceneText, TextComment, TextNode, World, addVersion, docWords, emptyDoc, logWords, makeVersion, nameMatches, nameRanges, packDoc, versionsOf, wantsAutoVersion, WRITING_VERSION_EVERY_MS } from '../../core';
 import { nowIso, newId, recordBase } from '../../storage';
 import type { WorldStore } from '../store';
 import { schema } from './schema';
@@ -27,6 +27,10 @@ export interface TextInfo {
   names: NameIndex;
   comments: Map<Id, TextComment>;
   label: (kind: string, id: Id) => string | undefined;
+  /** RV-4: style marks to show (absent = off). */
+  style?: { off: ReadonlySet<StyleRuleId>; names: ReadonlySet<string>; overused: ReadonlySet<string> };
+  /** RV-2: words that look like a misspelt name, and the name ("Kayla" → "Kaela"). */
+  typos?: ReadonlyMap<string, string>;
 }
 
 const infoKey = new PluginKey<DecorationSet>('world-words');
@@ -52,7 +56,29 @@ function decorate(doc: PMNode, info: TextInfo): DecorationSet {
         decos.push(Decoration.inline(pos, pos + text.length, { title: l ? `Linked to ${l}${m.attrs.note ? ` · ${m.attrs.note}` : ''}` : 'Linked record no longer exists' }));
       }
     }
+    // RV-2: a word that looks like a misspelt name.
+    if (info.typos?.size) {
+      for (const t of text.matchAll(/[\p{L}][\p{L}'’-]*/gu)) {
+        const w = t[0].replace(/['’]s$/, '').replace(/['’-]+$/, '');
+        const like = info.typos.get(w);
+        if (like) decos.push(Decoration.inline(pos + t.index!, pos + t.index! + w.length, { class: 'name-typo', title: `Looks like a misspelling of ${like} (see Revise → Names)` }));
+      }
+    }
   });
+  // RV-4: style marks. Offsets are per block (top-level node), one position per character as in runText.
+  if (info.style) {
+    const texts: string[] = [];
+    const starts: number[] = [];
+    doc.forEach((node, offset) => {
+      starts.push(offset + 1);
+      let s = '';
+      node.forEach((c) => { s += c.isText ? c.text ?? '' : c.type.name === 'hard_break' ? '\n' : ''; });
+      texts.push(node.isTextblock ? s : '');
+    });
+    for (const h of styleHits(texts, info.style.off, info.style.names, info.style.overused)) {
+      decos.push(Decoration.inline(starts[h.block] + h.from, starts[h.block] + h.to, { class: `style-mark style-${h.rule}`, title: `${STYLE_RULES[h.rule].name}: ${h.note}` }));
+    }
+  }
   return DecorationSet.create(doc, decos);
 }
 

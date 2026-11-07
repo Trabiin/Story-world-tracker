@@ -290,7 +290,11 @@ export function sampleWorld(): World {
   ]);
   sceneText(keepNight, [P('Tamsin had not meant to listen. But the keep was old, and its walls carried voices the way a well carries an echo, and the name she heard was _Bram_.')]);
   sceneText(saltWind, [P('The same grey morning, from the other side of the gate: Mira watched Oren lose his temper over a toll of two coppers, and wondered what he was really waiting for.')]);
-  sceneText(heir, [P('At the harbour, with the gulls quarrelling over the fish market, Kaela broke the seal.')]);
+  // Phase 8a: "Kayla" is a deliberate name typo (RV-2), and the second paragraph gives the style marks something to show (RV-4).
+  sceneText(heir, [
+    P('At the harbour, with the gulls quarrelling over the fish market, Kaela broke the seal.'),
+    P('Inside, wrapped in oilcloth, was a ring, and Kayla suddenly felt the weight of it settle in her palm as she slowly turned it toward the light and saw the regent’s crest cut into the stone, the same crest she had seen above the gate on the morning she left Varn, and she knew then that the letter had never been the thing she was carrying.'),
+  ]);
 
   // Phase 6b: scene stages (WR-13), a word goal and deadline for the book, a daily goal and some days of writing (WR-12),
   // and an inline link to a realm typed with @ (WR-11).
@@ -363,6 +367,13 @@ export function sampleWorld(): World {
     turns: [{ id: newId(), sceneId: s2.id, note: 'Walks the last stretch rather than turn back' }, { id: newId(), sceneId: heir.id, note: 'Breaks the seal' }],
     notes: '',
   });
+
+  // Phase 8a: two revision passes over book one, the first part done (RV-5).
+  const chs = w.chapters.filter((c) => c.bookId === book.id).sort((x, y) => x.order - y.order);
+  w.passes.push(
+    { ...recordBase(), bookId: book.id, name: 'Timeline and places', note: 'Dates, travel times, who is where: clear the Warnings page for this book.', done: chs.slice(0, 2).map((c) => c.id), order: 1 },
+    { ...recordBase(), bookId: book.id, name: 'Dialogue', note: 'Cut small talk, check tags and beats, read it aloud.', done: [chs[0].id], order: 2 },
+  );
 
   // Phase 6c: three example suggestions from Claude (AI-3, AI-7, AI-8), so the Suggestions list can be tried in the preview.
   const opts = { newId, now: nowIso };

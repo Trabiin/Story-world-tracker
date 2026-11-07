@@ -14,6 +14,8 @@ export interface RichPara {
   heading?: number;
   /** Word style id, e.g. our own title page styles, which are skipped on import. */
   style?: string;
+  /** RV-6: the scene this paragraph came from, from the bookmark our export puts around each scene ("swt_" + scene id without dashes). */
+  scene?: string;
 }
 
 export interface DocxContent {
@@ -34,27 +36,55 @@ const on = (rPr: string, tag: string) => {
 };
 
 /** Read paragraphs with bold, italics, line breaks and comment ranges from document.xml. */
-export function richFromXml(documentXml: string, stylesXml?: string, commentsXml?: string): DocxContent {
+export function richFromXml(documentXml: string, stylesXml?: string, commentsXml?: string, opts: { revisions?: boolean } = {}): DocxContent {
   const styles = headingStyles(stylesXml);
   const body = documentXml.slice(Math.max(0, documentXml.indexOf('<w:body')));
   const paras: RichPara[] = [];
   const open = new Set<string>();
-  for (const m of body.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)/g)) {
+  // RV-6: our export's scene bookmark that is open now.
+  let cur: { id: string; key: string } | undefined;
+  const bookmark = (tag: string): 'start' | 'end' | undefined => {
+    if (tag.startsWith('<w:bookmarkStart')) {
+      const name = attr(tag, 'w:bookmarkStart', 'w:name') ?? '', id = attr(tag, 'w:bookmarkStart', 'w:id') ?? '';
+      if (!name.startsWith('swt_')) return undefined;
+      cur = { id, key: name };
+      return 'start';
+    }
+    const id = attr(tag, 'w:bookmarkEnd', 'w:id');
+    if (cur && id === cur.id) { cur = undefined; return 'end'; }
+    return undefined;
+  };
+  for (const m of body.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)|<w:bookmark(?:Start|End)\b[^>]*\/>/g)) {
+    if (m[0].startsWith('<w:bookmark')) { bookmark(m[0]); continue; }
     const inner = m[1] ?? '';
     const runs: Run[] = [];
-    for (const t of inner.matchAll(/<w:commentRangeStart\b[^>]*\/>|<w:commentRangeEnd\b[^>]*\/>|<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)) {
+    let scene: string | undefined;
+    let rev: Run['rev'];
+    for (const t of inner.matchAll(/<w:commentRangeStart\b[^>]*\/>|<w:commentRangeEnd\b[^>]*\/>|<w:bookmark(?:Start|End)\b[^>]*\/>|<w:(?:ins|del|moveFrom|moveTo)\b[^>]*>|<\/w:(?:ins|del|moveFrom|moveTo)>|<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)) {
       const tag = t[0];
       if (tag.startsWith('<w:commentRangeStart')) { const id = attr(tag, 'w:commentRangeStart', 'w:id'); if (id) open.add(id); continue; }
       if (tag.startsWith('<w:commentRangeEnd')) { const id = attr(tag, 'w:commentRangeEnd', 'w:id'); if (id) open.delete(id); continue; }
+      if (tag.startsWith('<w:bookmark')) { if (bookmark(tag) === 'start') scene = cur!.key; continue; }
+      if (tag.startsWith('</w:')) { rev = undefined; continue; }
+      if (!/^<w:r[\s>]/.test(tag)) {
+        if (tag.endsWith('/>')) continue; // a revision mark on the paragraph itself
+        const name = tag.match(/^<w:(\w+)/)![1];
+        rev = { kind: name === 'del' || name === 'moveFrom' ? 'del' : 'ins', author: attr(tag, `w:${name}`, 'w:author'), date: attr(tag, `w:${name}`, 'w:date') };
+        continue;
+      }
+      if (rev?.kind === 'del' && !opts.revisions) continue; // deleted text is not part of the edited file
       const run = t[1] ?? '';
       const rPr = run.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/)?.[1] ?? '';
       const bold = on(rPr, 'b'), italic = on(rPr, 'i');
       const comments = open.size ? [...open].map((id) => `docx-comment-${id}`) : undefined;
-      for (const x of run.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:t\/>|<w:tab\/>|<w:br\b[^>]*\/>|<w:cr\/>/g)) {
-        if (x[0].startsWith('<w:tab')) runs.push({ text: '\t', bold, italic, comments });
-        else if (x[0].startsWith('<w:t')) { const s = decode(x[1] ?? '').replace(/ /g, ' '); if (s) runs.push({ text: s, bold, italic, comments }); }
+      const extra: Partial<Run> = opts.revisions && rev ? { rev } : {};
+      const before = runs.length;
+      for (const x of run.matchAll(/<w:(?:t|delText)(?:\s[^>]*)?>([\s\S]*?)<\/w:(?:t|delText)>|<w:t\/>|<w:tab\/>|<w:br\b[^>]*\/>|<w:cr\/>/g)) {
+        if (x[0].startsWith('<w:tab')) runs.push({ text: '\t', bold, italic, comments, ...extra });
+        else if (x[0].startsWith('<w:t') || x[0].startsWith('<w:delText')) { const s = decode(x[1] ?? '').replace(/ /g, ' '); if (s) runs.push({ text: s, bold, italic, comments, ...extra }); }
         else runs.push({ text: '', br: true });
       }
+      if (runs.length > before && !scene && cur) scene = cur.key;
     }
     const styleId = attr(inner, 'w:pStyle');
     const outline = attr(inner, 'w:outlineLvl');
@@ -64,6 +94,7 @@ export function richFromXml(documentXml: string, stylesXml?: string, commentsXml
     const p: RichPara = { runs: tidyRuns(runs) };
     if (heading) p.heading = heading;
     if (styleId) p.style = styleId;
+    if (scene) p.scene = scene;
     paras.push(p);
   }
   const comments: TextComment[] = [];
@@ -84,13 +115,13 @@ function tidyRuns(runs: Run[]): Run[] {
   const out: Run[] = [];
   for (const r of runs) {
     const last = out[out.length - 1];
-    if (last && !last.br && !r.br && !!last.bold === !!r.bold && !!last.italic === !!r.italic && (last.comments ?? []).join() === (r.comments ?? []).join() && !last.link && !r.link) last.text += r.text;
+    if (last && !last.br && !r.br && !!last.bold === !!r.bold && !!last.italic === !!r.italic && (last.comments ?? []).join() === (r.comments ?? []).join() && !last.link && !r.link && JSON.stringify(last.rev) === JSON.stringify(r.rev)) last.text += r.text;
     else out.push({ ...r });
   }
   return out;
 }
 
-export async function readDocxRich(bytes: Uint8Array): Promise<DocxContent> {
+export async function readDocxRich(bytes: Uint8Array, opts: { revisions?: boolean } = {}): Promise<DocxContent> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(bytes);
@@ -103,7 +134,7 @@ export async function readDocxRich(bytes: Uint8Array): Promise<DocxContent> {
   const comments = await zip.file('word/comments.xml')?.async('string');
   const core = await zip.file('docProps/core.xml')?.async('string');
   const title = core?.match(/<dc:title>([\s\S]*?)<\/dc:title>/)?.[1];
-  const out = richFromXml(doc, styles, comments);
+  const out = richFromXml(doc, styles, comments, opts);
   if (title?.trim()) out.title = decode(title.trim());
   return out;
 }
