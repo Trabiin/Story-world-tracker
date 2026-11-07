@@ -4,7 +4,7 @@ import { sampleWorld } from '../src/ui/sample';
 
 it('sample world shows exactly its deliberate problems', () => {
   const rules = checkWorld(sampleWorld()).map((w) => `${w.rule}:${w.message.split(' ')[0]}`).sort();
-  expect(rules).toEqual(['biome-climate:Rainforest', 'gap:Tamsin', 'impossible-travel:Tamsin', 'lake-outlet:Reed', 'missing-journey:Tamsin', 'open-stay:Kaela', 'settlement-water:Emberhold']);
+  expect(rules).toEqual(['biome-climate:Rainforest', 'gap:Tamsin', 'impossible-travel:Tamsin', 'lake-outlet:Reed', 'missing-journey:Tamsin', 'open-stay:Kaela', 'settlement-water:Emberhold', 'setup-no-payoff:The']);
 });
 
 import { LayerIndex, toDayNumber } from '../src/core';

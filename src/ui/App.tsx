@@ -29,6 +29,7 @@ import { Todos } from './views/Todos';
 import { Write } from './views/Write';
 import { AskClaude } from './views/AskClaude';
 import { Notebook } from './views/Notebook';
+import { Plan } from './views/Plan';
 import { QuickCapture } from './components/QuickCapture';
 import { ClaudeHub } from './claude/ClaudeHub';
 import type { ClaudePreview } from './context';
@@ -40,6 +41,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'map', label: 'Map', key: '3' },
   { view: 'write', label: 'Write', key: '' },
   { view: 'notes', label: 'Notebook', key: '' },
+  { view: 'plan', label: 'Plan', key: '' },
   { view: 'story', label: 'Books & scenes', key: '4' },
   { view: 'manuscripts', label: 'Manuscripts', key: '5' },
   { view: 'characters', label: 'Characters', key: '6' },
@@ -91,7 +93,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const ix = useMemo(() => new WorldIndex(world), [world]);
   // Warnings ignore the current moment, so recompute only when records change.
   const u = unfiltered;
-  const recordsKey = useMemo(() => ({ ...u, settings: { ...u.settings, currentMoment: undefined } }), [u.characters, u.places, u.groups, u.memberships, u.stays, u.journeys, u.dismissals, u.settings.disabledRules, u.settings.travelModes, u.settings.radiusKm, u.settings.defaultDetourFactor, u.settings.hemisphereForSeasons, u.terrain, u.mapFeatures, u.settings.biomes, u.settings.axialTiltDeg, u.settings.winds, u.settings.settlementWaterKm, u.scenes, u.chapters, u.events, u.secrets, u.settings.travelModifiers, u.regions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const recordsKey = useMemo(() => ({ ...u, settings: { ...u.settings, currentMoment: undefined } }), [u.characters, u.places, u.groups, u.memberships, u.stays, u.journeys, u.dismissals, u.settings.disabledRules, u.settings.travelModes, u.settings.radiusKm, u.settings.defaultDetourFactor, u.settings.hemisphereForSeasons, u.terrain, u.mapFeatures, u.settings.biomes, u.settings.axialTiltDeg, u.settings.winds, u.settings.settlementWaterKm, u.scenes, u.chapters, u.events, u.secrets, u.settings.travelModifiers, u.regions, u.setups, u.books]); // eslint-disable-line react-hooks/exhaustive-deps
   // Warnings cover the whole (scenario) world; the VW-7 filter narrows which ones show.
   const allWarnings = useMemo(() => checkWorld(recordsKey), [recordsKey]);
   const shownChars = useMemo(() => new Set(world.characters.map((c) => c.id)), [world.characters]);
@@ -243,6 +245,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'map' && <MapView />}
           {view === 'write' && <Write />}
           {view === 'notes' && <Notebook />}
+          {view === 'plan' && <Plan />}
           {view === 'story' && <Story />}
           {view === 'manuscripts' && <Manuscripts />}
           {view === 'characters' && <Characters />}
@@ -275,6 +278,7 @@ function captureAbout(w: World, view: View, id: Id | undefined): TodoRef | undef
     : view === 'events' ? (has(w.events) ? 'event' : has(w.secrets) ? 'secret' : undefined)
     : view === 'story' || view === 'write' ? (has(w.scenes) ? 'scene' : has(w.chapters) ? 'chapter' : has(w.books) ? 'book' : has(w.threads) ? 'thread' : undefined)
     : view === 'notes' ? (has(w.notes) ? 'note' : has(w.attachments) ? 'file' : undefined)
+    : view === 'plan' ? (has(w.setups) ? 'setup' : has(w.arcs) ? 'arc' : undefined)
     : undefined;
   return kind ? { kind, id } : undefined;
 }

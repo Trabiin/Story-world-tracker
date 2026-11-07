@@ -103,6 +103,7 @@ const REQUIRED: Partial<Record<DataCollection, string[]>> = {
   chapters: ['bookId'],
   regions: ['layerId'],
   sceneTexts: ['sceneId'],
+  arcs: ['characterId', 'bookId'],
 };
 
 function strip(v: unknown, id: Id, parentOf: Id | undefined, depth = 0): unknown {
@@ -131,6 +132,10 @@ function strip(v: unknown, id: Id, parentOf: Id | undefined, depth = 0): unknown
 export function deleteRecord(world: World, collection: DataCollection, id: Id, mode: { kind: 'remove' } | { kind: 'reassign'; to: Id }): World {
   let w = world;
   if (mode.kind === 'reassign') w = replaceRefs(w, id, mode.to);
+  // NT-7: a book's beat stays when its scene goes; it is only no longer placed.
+  else if (collection === 'scenes' && w.books.some((b) => b.beats?.some((x) => x.sceneId === id))) {
+    w = { ...w, books: w.books.map((b) => (b.beats?.some((x) => x.sceneId === id) ? { ...b, beats: b.beats.map((x) => (x.sceneId === id ? { ...x, sceneId: undefined } : x)) } : b)) };
+  }
   const rec = (w[collection] as unknown as Record<string, unknown>[]).find((r) => r.id === id);
   const parentOf = rec?.parentId as Id | undefined;
   const next = { ...w, settings: strip(w.settings, id, undefined) } as World;

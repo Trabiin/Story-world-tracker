@@ -60,6 +60,8 @@ export interface WorldSettings {
   savedViews?: SavedView[];
   /** EU-3: start a character from a template. */
   characterTemplates?: CharacterTemplate[];
+  /** NT-7: the writer's own beat sheets, beside the built-in ones. */
+  structureTemplates?: StructureTemplate[];
   /** WR-3, WR-5, WR-8: how the writing page looks and what goes on an exported title page. */
   writing?: WritingSettings;
   /** AI-1..AI-9: the Claude integration for this world. Absent = off (AI-6). */
@@ -471,6 +473,57 @@ export interface Book extends RecordBase {
   wordGoal?: number;
   /** WR-12: the real-world date the book should be finished by, "YYYY-MM-DD" (not an in-world date). */
   deadline?: string;
+  /** NT-7: the structure template laid over this book ("Three acts"), and its beats. */
+  structureName?: string;
+  beats?: Beat[];
+}
+
+/** NT-7: a beat of a structure ("Midpoint" at 50% of the book), and the scene where it actually happens. */
+export interface Beat {
+  id: Id;
+  name: string;
+  /** Where the template puts it, as a percentage of the book (0–100). */
+  at: number;
+  sceneId?: Id;
+  note?: string;
+}
+
+/** NT-7: a beat sheet to lay over a book. Built-in ones live in core/plan; the writer's own in settings. */
+export interface StructureTemplate {
+  id: Id;
+  name: string;
+  beats: { name: string; at: number; note?: string }[];
+}
+
+/** NT-6: a setup (a clue, a promise, a planted object) and the scene that pays it off. */
+export interface Setup extends RecordBase {
+  title: string;
+  kind: 'clue' | 'promise' | 'object' | 'foreshadowing' | 'other';
+  note: string;
+  /** The scene that plants it. */
+  setupSceneId?: Id;
+  /** The scene that pays it off. */
+  payoffSceneId?: Id;
+}
+
+/** NT-8: one character's arc through one book: where they start and end, and the scenes that turn them. */
+export interface CharacterArc extends RecordBase {
+  characterId: Id;
+  bookId: Id;
+  goalStart: string;
+  goalEnd: string;
+  beliefStart: string;
+  beliefEnd: string;
+  woundStart: string;
+  woundEnd: string;
+  turns: ArcTurn[];
+  notes: string;
+}
+
+export interface ArcTurn {
+  id: Id;
+  sceneId: Id;
+  note: string;
 }
 
 export interface Chapter extends RecordBase {
@@ -723,6 +776,9 @@ export interface World {
   writingDays: WritingDay[];
   /** NT-2, NT-3: the notebook (free notes and research pages in folders; quick captures land in its Inbox). Shared by every scenario. */
   notes: Note[];
+  /** NT-6 setups and payoffs, NT-8 character arcs. */
+  setups: Setup[];
+  arcs: CharacterArc[];
   /** NT-4: research files (images and PDFs) attached to notes and records. The bytes are stored once in the world file, by fileKey. */
   attachments: Attachment[];
   /** AI-3: changes Claude proposed, waiting to be accepted or rejected. Shared by every scenario. */
@@ -790,7 +846,7 @@ export interface ClaudeLogEntry {
 }
 
 /** EU-14: what a to-do or plot hole can point at. */
-export type RefKind = LinkTargetKind | 'secret' | 'region' | 'thread' | 'manuscript' | 'relationship' | 'note' | 'file';
+export type RefKind = LinkTargetKind | 'secret' | 'region' | 'thread' | 'manuscript' | 'relationship' | 'note' | 'file' | 'setup' | 'arc';
 export interface TodoRef { kind: RefKind; id: Id }
 
 /** EU-14: a to-do or a plot hole, linked to the records it concerns. */
