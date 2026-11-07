@@ -189,3 +189,12 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Direct editing** (AI-9): optional, off by default, per world. Every change is labelled "Before Claude…" in version history, listed in **Activity**, and can be undone singly or all at once.
 - **Chat, VS Code and terminal** (AI-4, AI-5): ask Claude Code inside the app, or open the folder in VS Code or a terminal with Claude Code. Setup checks that Claude Code is installed and writes `.mcp.json` and `.claude/settings.local.json` (Claude may read the folder and use the connector, not edit files).
 - World file format 12 (suggestions and the Claude activity log). Older files open as before.
+
+## Phase 7a: notes
+
+- **Margin comments** (NT-1): select words on the Write page and press **Comment** (Ctrl+Alt+M). The card sits in the margin beside the words (under the scene when the window is narrow). Edit, resolve, delete, or **Make to-do**: the to-do quotes the words and **Show in the text** jumps back to the comment. Word comments come in the same way.
+- **Notebook** (NT-2): notes in folders (use `/` for folders inside folders; double-click a folder to rename it, drag notes onto one to move them). Link a note to any record and it shows on that record's page, which also has a **+ Note** button.
+- **Quick capture** (NT-3): **Ctrl+Shift+N** or **Note** in the top bar, from anywhere (also in focus mode). The first line is the title; it is linked to what was open and lands in the **Inbox** until you file it.
+- **Research files** (NT-4): add or drop images and PDFs (up to 25 MB) on any note or record page. They open in the app, PDFs in the built-in reader. Each file is stored once in the world file.
+- Claude's folder gains `notes/`, `research/` (with copies of the files) and `story/comments.md`; Claude can propose notes.
+- World file format 13 (notes and research files). Older files open as before.

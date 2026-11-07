@@ -37,7 +37,7 @@ export function CommandBar({ onClose }: { onClose: () => void }) {
         out.push({ label: h.title, sub: h.snippet ? `${h.sub}: ${h.snippet}` : h.sub, run: () => openRef(h) });
       }
     }
-    const views: [string, View][] = [['Home', 'home'], ['To-dos', 'todos'], ['Search', 'search'], ['Who is where', 'who'], ['Timeline', 'timeline'], ['Map', 'map'], ['Books & scenes', 'story'], ['Manuscripts', 'manuscripts'], ['Warnings', 'warnings'], ['Settings', 'settings']];
+    const views: [string, View][] = [['Home', 'home'], ['Notebook', 'notes'], ['To-dos', 'todos'], ['Search', 'search'], ['Who is where', 'who'], ['Timeline', 'timeline'], ['Map', 'map'], ['Books & scenes', 'story'], ['Manuscripts', 'manuscripts'], ['Warnings', 'warnings'], ['Settings', 'settings']];
     for (const [label, v] of views) if (match(label)) out.push({ label, sub: 'View', run: () => go(v) });
     if (match('new stay')) out.push({ label: 'New stay', sub: 'Action', run: () => edit({ kind: 'stay' }) });
     if (match('new journey')) out.push({ label: 'New journey', sub: 'Action', run: () => edit({ kind: 'journey' }) });

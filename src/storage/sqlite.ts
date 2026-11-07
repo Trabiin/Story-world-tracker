@@ -7,12 +7,13 @@ import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import type { World } from '../core';
 import { normalizeWorld } from './newWorld';
 import type { Snapshot } from './snapshots';
+import { fileKeys } from './files';
 import { blobStore, decodeTerrain, encodeTerrain, manifestHashes } from './terrainCodec';
 
-/** 2: painted terrain (terrain_blobs table, "terrain" meta entry) and map symbols. 3: map features. 4: detail maps, drawing layers. 5: region layers and regions. 6: terrain tiles may carry an added-detail block (MK-21). 7: world events, relationships and secrets (TL-5, CH-4, CH-8). 8: plot threads and scenarios (ST-3, ST-7). 9: to-dos (EU-14). 10: scene text and scene versions (WR-1, WR-6). 11: words written per day (WR-12); books gain wordGoal/deadline and scenes a writing stage (WR-13), both inside the record JSON. 12: Claude suggestions and the Claude activity log (AI-3, AI-9). */
-export const SCHEMA_VERSION = 12;
+/** 2: painted terrain (terrain_blobs table, "terrain" meta entry) and map symbols. 3: map features. 4: detail maps, drawing layers. 5: region layers and regions. 6: terrain tiles may carry an added-detail block (MK-21). 7: world events, relationships and secrets (TL-5, CH-4, CH-8). 8: plot threads and scenarios (ST-3, ST-7). 9: to-dos (EU-14). 10: scene text and scene versions (WR-1, WR-6). 11: words written per day (WR-12); books gain wordGoal/deadline and scenes a writing stage (WR-13), both inside the record JSON. 12: Claude suggestions and the Claude activity log (AI-3, AI-9). 13: notes and research files (NT-2, NT-4); file bytes share the blob table with terrain tiles under "file:" keys. */
+export const SCHEMA_VERSION = 13;
 
-export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'mapLayers', 'detailMaps', 'regionLayers', 'regions', 'events', 'relationships', 'secrets', 'threads', 'scenarios', 'todos', 'sceneTexts', 'sceneVersions', 'writingDays', 'suggestions', 'claudeLog'] as const;
+export const COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'mapImages', 'dismissals', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'mapLayers', 'detailMaps', 'regionLayers', 'regions', 'events', 'relationships', 'secrets', 'threads', 'scenarios', 'todos', 'sceneTexts', 'sceneVersions', 'writingDays', 'suggestions', 'claudeLog', 'notes', 'attachments'] as const;
 export type CollectionName = (typeof COLLECTIONS)[number];
 
 const TABLE: Record<CollectionName, string> = {
@@ -46,6 +47,8 @@ const TABLE: Record<CollectionName, string> = {
   writingDays: 'writing_days',
   suggestions: 'claude_suggestions',
   claudeLog: 'claude_log',
+  notes: 'notes',
+  attachments: 'attachments',
 };
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
@@ -104,8 +107,8 @@ export async function worldToBytes(world: World, snapshots: Snapshot[] = []): Pr
     const snap = db.prepare('INSERT INTO snapshots (id, at, label, summary, data, refs) VALUES (?, ?, ?, ?, ?, ?)');
     for (const sn of snapshots) snap.run([sn.id, sn.at, sn.label, sn.summary, sn.data, JSON.stringify(sn.terrainRefs ?? [])]);
     snap.free();
-    // Terrain tiles used by the world or by any kept version, each stored once.
-    const refs = new Set([...manifestHashes(manifest), ...snapshots.flatMap((sn) => sn.terrainRefs ?? [])]);
+    // Terrain tiles and research files (NT-4) used by the world or by any kept version, each stored once.
+    const refs = new Set([...manifestHashes(manifest), ...fileKeys(world), ...snapshots.flatMap((sn) => sn.terrainRefs ?? [])]);
     const blob = db.prepare('INSERT INTO terrain_blobs (hash, data) VALUES (?, ?)');
     for (const h of refs) {
       const b = blobStore.get(h);

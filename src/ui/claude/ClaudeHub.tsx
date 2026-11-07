@@ -3,7 +3,8 @@
  * date after every change and answer the local connector. Renders nothing.
  */
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { CANON, Id, McpEnv, Warning, World, checkWorld, claudeFolderFiles, claudeSettingsJson, handleMcp, mcpJson, scenarioView } from '../../core';
+import { CANON, Id, McpEnv, Warning, World, checkWorld, claudeFolderFiles, claudeSettingsJson, handleMcp, researchFilePath, mcpJson, scenarioView } from '../../core';
+import { getFile } from '../../storage';
 import { useApp } from '../context';
 import type { WorldStore } from '../store';
 import { claudeOpts, proposeInStore } from './actions';
@@ -50,6 +51,11 @@ export function folderFiles(world: World, port: number | undefined, warnings: Wa
   const files = claudeFolderFiles(world, warnings, { directEdit: !!c.directEdit });
   if (port && c.token) files.push({ path: '.mcp.json', text: mcpJson(port, c.token) });
   files.push({ path: '.claude/settings.local.json', text: claudeSettingsJson() });
+  // NT-4: copies of the research files, so Claude Code can open the images and PDFs themselves.
+  for (const a of world.attachments) {
+    const bytes = getFile(a.fileKey);
+    if (bytes) files.push({ path: researchFilePath(a), text: a.fileKey, bytes });
+  }
   return files;
 }
 

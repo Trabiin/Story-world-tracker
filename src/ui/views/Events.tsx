@@ -13,6 +13,7 @@ import { MergeDialog } from '../components/RecordTools';
 import { ShiftDatesModal } from '../components/ShiftDates';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
+import { Research } from '../components/Research';
 import { placeName } from '../util';
 
 export function Events() {
@@ -147,6 +148,7 @@ function EventDetail({ e }: { e: WorldEvent }) {
           )}
           <Backlinks kind="event" id={e.id} />
           <TodosFor kind="event" id={e.id} />
+          <Research kind="event" id={e.id} />
           <Pictures value={e.images} onChange={(images) => set({ images })} />
         </div>
       </div>

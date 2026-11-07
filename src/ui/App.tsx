@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CANON, Id, LatLng, NO_FILTER, ViewFilter, World, WorldIndex, applyFilter, checkWorld, readingChoices, scenarioView, spoilerView, withoutDrafts } from '../core';
+import { CANON, Id, LatLng, NO_FILTER, TodoRef, ViewFilter, World, WorldIndex, applyFilter, checkWorld, readingChoices, scenarioView, spoilerView, withoutDrafts } from '../core';
 import { ViewControls } from './components/ViewControls';
 import { ask } from './components/Dialogs';
 import { CommandBar } from './components/CommandBar';
@@ -28,6 +28,8 @@ import { SearchPage } from './views/SearchPage';
 import { Todos } from './views/Todos';
 import { Write } from './views/Write';
 import { AskClaude } from './views/AskClaude';
+import { Notebook } from './views/Notebook';
+import { QuickCapture } from './components/QuickCapture';
 import { ClaudeHub } from './claude/ClaudeHub';
 import type { ClaudePreview } from './context';
 
@@ -37,6 +39,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'timeline', label: 'Timeline', key: '2' },
   { view: 'map', label: 'Map', key: '3' },
   { view: 'write', label: 'Write', key: '' },
+  { view: 'notes', label: 'Notebook', key: '' },
   { view: 'story', label: 'Books & scenes', key: '4' },
   { view: 'manuscripts', label: 'Manuscripts', key: '5' },
   { view: 'characters', label: 'Characters', key: '6' },
@@ -104,6 +107,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [pickFor, setPickFor] = useState<Id | undefined>();
   const [routeFor, setRouteFor] = useState<Id | undefined>();
   const [quick, setQuick] = useState(false);
+  const [capture, setCapture] = useState(false);
   const [focusLink, setFocusLink] = useState<Id | undefined>();
   const [mapFocus, setMapFocus] = useState<{ at: LatLng; n: number } | undefined>();
   const [trackRequest, setTrackRequest] = useState<{ id: Id; n: number } | undefined>();
@@ -125,7 +129,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
     const k = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement || (e.target instanceof HTMLElement && e.target.isContentEditable);
-      if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); setCommand(true); }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); setCapture(true); }
+      else if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); setCommand(true); }
       else if (mod && e.key.toLowerCase() === 'j') { e.preventDefault(); setQuick(true); }
       else if (mod && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); if (e.shiftKey) store.redo(); else store.undo(); }
       else if (mod && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); store.redo(); }
@@ -140,6 +145,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
 
   const openWarnings = warnings.filter((w) => !w.dismissed && w.severity === 'warning').length;
   const openTodos = world.todos.filter((t) => !t.done).length;
+  const inboxNotes = world.notes.filter((n) => n.inbox).length;
   const openSuggestions = stored.suggestions.filter((x) => x.state === 'open').length;
   const ctx = {
     store, world, ix, warnings, platform, moment, view, go,
@@ -206,6 +212,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
             <button className="icon" disabled={!store.canUndo} onClick={() => store.undo()} title="Undo (Ctrl+Z)">↶</button>
             <button className="icon" disabled={!store.canRedo} onClick={() => store.redo()} title="Redo (Ctrl+Shift+Z)">↷</button>
             <span className={`save-state ${store.saveState}`} title={store.saveError}>{saveLabel}</span>
+            <button onClick={() => setCapture(true)} title="NT-3: jot down a note (Ctrl+Shift+N). It lands in the Notebook's Inbox.">Note</button>
             <button onClick={() => setQuick(true)} title="Ctrl+J">Quick add</button>
             <button onClick={() => setCommand(true)} title="Ctrl+K">Search</button>
           </div>
@@ -216,6 +223,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
               {n.label}
               {n.view === 'warnings' && openWarnings > 0 && <span className="badge">{openWarnings}</span>}
               {n.view === 'todos' && openTodos > 0 && <span className="count">{openTodos}</span>}
+              {n.view === 'notes' && inboxNotes > 0 && <span className="count" title="Notes in the Inbox, waiting to be sorted">{inboxNotes}</span>}
               {n.view === 'claude' && openSuggestions > 0 && <span className="count claude-count" title="Suggestions waiting">{openSuggestions}</span>}
             </button>
           ))}
@@ -234,6 +242,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'timeline' && <Timeline />}
           {view === 'map' && <MapView />}
           {view === 'write' && <Write />}
+          {view === 'notes' && <Notebook />}
           {view === 'story' && <Story />}
           {view === 'manuscripts' && <Manuscripts />}
           {view === 'characters' && <Characters />}
@@ -250,8 +259,22 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
         {editor?.kind === 'journey' && <JourneyEditor key={editorN} id={editor.id} preset={editor.preset} onClose={() => setEditor(null)} />}
         {command && <CommandBar onClose={() => setCommand(false)} />}
         {quick && <QuickAdd onClose={() => setQuick(false)} />}
+        {capture && <QuickCapture about={captureAbout(world, view, selectedByView[view])} onClose={() => setCapture(false)} />}
         <ClaudeHub />
       </div>
     </Ctx.Provider>
   );
+}
+
+/** NT-3: what a quick note is about by default: the record open on the current page. */
+function captureAbout(w: World, view: View, id: Id | undefined): TodoRef | undefined {
+  if (!id) return undefined;
+  const has = (list: { id: Id }[]) => list.some((x) => x.id === id);
+  const kind: TodoRef['kind'] | undefined =
+    view === 'characters' ? 'character' : view === 'places' ? 'place' : view === 'groups' ? 'group' : view === 'layers' ? 'region'
+    : view === 'events' ? (has(w.events) ? 'event' : has(w.secrets) ? 'secret' : undefined)
+    : view === 'story' || view === 'write' ? (has(w.scenes) ? 'scene' : has(w.chapters) ? 'chapter' : has(w.books) ? 'book' : has(w.threads) ? 'thread' : undefined)
+    : view === 'notes' ? (has(w.notes) ? 'note' : has(w.attachments) ? 'file' : undefined)
+    : undefined;
+  return kind ? { kind, id } : undefined;
 }

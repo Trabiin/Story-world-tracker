@@ -11,6 +11,7 @@ import { Field } from '../components/Modal';
 import { RevealField } from '../components/RevealField';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
+import { Research } from '../components/Research';
 import { Pictures } from '../components/Pictures';
 import { BorderHistory, RegionLayerList, sortedLayers } from '../map/RegionsPanel';
 import { PLACE_ICON } from './Places';
@@ -214,6 +215,7 @@ function RegionPage({ r, ix }: { r: Region; ix: LayerIndex }) {
             </>
           )}
           <TodosFor kind="region" id={r.id} />
+          <Research kind="region" id={r.id} />
           <Pictures value={r.images} onChange={(images) => set({ images })} />
         </div>
       </div>

@@ -1,6 +1,7 @@
 /** EU-14: to-dos and plot holes, each linked to the records it concerns. */
 import { useMemo, useState } from 'react';
-import { Todo } from '../../core';
+import { Todo, commentQuote, quoted } from '../../core';
+import { requestComment } from '../writing/Comments';
 import { recordBase } from '../../storage';
 import { ask } from '../components/Dialogs';
 import { Field } from '../components/Modal';
@@ -55,7 +56,11 @@ export function Todos() {
 }
 
 function TodoDetail({ t }: { t: Todo }) {
-  const { store, select } = useApp();
+  const { store, select, world, go } = useApp();
+  // NT-1: made from a margin comment.
+  const from = t.comment && world.sceneTexts.find((x) => x.sceneId === t.comment!.sceneId);
+  const comment = from && from.comments?.find((c) => c.id === t.comment!.commentId);
+  const scene = t.comment && world.scenes.find((s) => s.id === t.comment!.sceneId);
   const set = (p: Partial<Todo>) => store.upsert('todos', { ...t, ...p });
   const remove = async () => {
     if (!(await ask.confirm(`Delete “${t.title}”?`, { okLabel: 'Delete', danger: true }))) return;
@@ -68,6 +73,18 @@ function TodoDetail({ t }: { t: Todo }) {
         <h1>{t.kind === 'plot-hole' ? 'Plot hole' : 'To-do'}</h1>
         <div className="row"><button className="danger" onClick={remove}>Delete</button></div>
       </div>
+      {t.comment && (
+        <div className="comment-source">
+          {comment && from ? (
+            <>
+              <div className="muted small">From a margin comment in <b>{scene?.title ?? 'a scene'}</b>{comment.resolved ? ' (resolved)' : ''}</div>
+              <blockquote>{quoted(commentQuote(from.doc, comment.id) || '…')}</blockquote>
+              <div><b>{comment.author || 'Comment'}:</b> {comment.text}</div>
+              <button className="small" onClick={() => { requestComment(t.comment!.sceneId, comment.id); go('write', t.comment!.sceneId); }}>Show in the text</button>
+            </>
+          ) : <div className="muted small">Made from a margin comment that has since been deleted.</div>}
+        </div>
+      )}
       <div className="form-grid">
         <Field label="What"><input value={t.title} onChange={(e) => set({ title: e.target.value })} /></Field>
         <div className="seg">

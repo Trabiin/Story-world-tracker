@@ -22,7 +22,7 @@ export function world(): World {
     journeys: [],
     mapImages: [],
     dismissals: [],
-    books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], mapFeatures: [], mapLayers: [], detailMaps: [], regionLayers: [], regions: [], events: [], relationships: [], secrets: [], threads: [], scenarios: [], todos: [], sceneTexts: [], sceneVersions: [], writingDays: [], suggestions: [], claudeLog: [], terrain: emptyTerrain(),
+    books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], mapFeatures: [], mapLayers: [], detailMaps: [], regionLayers: [], regions: [], events: [], relationships: [], secrets: [], threads: [], scenarios: [], todos: [], sceneTexts: [], sceneVersions: [], writingDays: [], suggestions: [], claudeLog: [], notes: [], attachments: [], terrain: emptyTerrain(),
   };
 }
 

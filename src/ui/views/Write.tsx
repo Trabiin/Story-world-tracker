@@ -6,8 +6,8 @@
  */
 import type { EditorView } from 'prosemirror-view';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Book, Chapter, Id, LinkTarget, LinkTargetKind, RefKind, Scene, SceneText, TextComment, docToBlocks, formatFuzzy, linkTargets, midpoint, nameCard, nameIndex, outline, readerKnowledge, readerPointBefore, refLabel, removeCommentMarks, runText, scenePov, wordCounts, worldWords } from '../../core';
-import { nowIso, recordBase } from '../../storage';
+import { Book, Chapter, Id, LinkTarget, LinkTargetKind, RefKind, Scene, SceneText, docToBlocks, formatFuzzy, linkTargets, midpoint, nameCard, nameIndex, outline, readerKnowledge, readerPointBefore, refLabel, runText, scenePov, wordCounts, worldWords } from '../../core';
+import { recordBase } from '../../storage';
 import { useApp } from '../context';
 import { ExportDialog } from '../writing/ExportDialog';
 import { HistoryPanel } from '../writing/HistoryPanel';
@@ -16,6 +16,8 @@ import { MentionState, SceneEditor, TextInfo, commands, dismissMention, linkRang
 import { StageDot, StageSelect } from '../writing/Goals';
 import { LinkPicker, MentionMenu, NameCardBox } from '../writing/LinkMenu';
 import { StorySidebar } from '../writing/StorySidebar';
+import { CommentMargin, addComment, takeCommentRequest } from '../writing/Comments';
+import { ask } from '../components/Dialogs';
 import { useOpenRef } from '../components/Refs';
 import { Selection } from 'prosemirror-state';
 
@@ -45,6 +47,34 @@ export function Write() {
   const views = useRef(new Map<Id, EditorView>());
   const activeView = useRef<EditorView | null>(null);
   const [, setTick] = useState(0);
+  // NT-1: the comment being written, and whether there is room for comments beside the text.
+  const [editingComment, setEditingComment] = useState<Id | undefined>();
+  const [marginSide, setMarginSide] = useState(true);
+  const [sheetShift, setSheetShift] = useState<number | undefined>();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    // Room for a 250 px margin on the right: keep the page centred if it fits, else move the page left to make room.
+    const check = () => {
+      const sheet = el.querySelector('.write-sheet') as HTMLElement | null;
+      if (!sheet) return;
+      const room = el.clientWidth - sheet.offsetWidth;
+      setMarginSide(room >= 270);
+      setSheetShift(room >= 500 || room < 270 ? undefined : Math.max(8, Math.floor((room - 270) / 2)));
+    };
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    check();
+    return () => ro.disconnect();
+  }, [tree.length > 0, size]); // eslint-disable-line react-hooks/exhaustive-deps
+  const getView = useCallback((id: Id) => views.current.get(id), []);
+  const onCommentKey = useCallback((sceneId: Id, v: EditorView) => {
+    if (store.readOnly) return store.onBlocked?.();
+    const id = addComment(store, sceneId, v, worldRef.current.settings.writing?.authorName || 'Me');
+    if (id) setEditingComment(id);
+    else void ask.alert('Select the words you want to comment on first.');
+  }, [store]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // WR-8: names never get the red underline. Recomputed only when names change.
   const nameKey = [world.characters, world.places, world.regions, world.events, world.groups, world.mapFeatures];
@@ -77,10 +107,19 @@ export function Write() {
     if (!selScene) return;
     const el = document.getElementById(`scene-${selScene.id}`);
     el?.scrollIntoView({ block: 'start' });
+    // NT-1: opened from a to-do made from a comment: show that comment.
+    const cid = takeCommentRequest(selScene.id);
+    if (cid) setTimeout(() => {
+      const card = document.querySelector(`.comment-card[data-id="${CSS.escape(cid)}"]`);
+      card?.scrollIntoView({ block: 'center' });
+      card?.classList.add('flash');
+      setTimeout(() => card?.classList.remove('flash'), 2000);
+    }, 400);
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onFocus = useCallback((sceneId: Id, v: EditorView) => { activeView.current = v; setActive(sceneId); }, []);
-  const register = useCallback((sceneId: Id, v: EditorView | null) => { if (v) views.current.set(sceneId, v); else views.current.delete(sceneId); }, []);
+  // NT-1: a newly made editor lets the margin place its comments beside the words.
+  const register = useCallback((sceneId: Id, v: EditorView | null) => { if (v) { views.current.set(sceneId, v); setTimeout(() => setTick((n) => n + 1), 0); } else views.current.delete(sceneId); }, []);
   const order = useMemo(() => (book ? book.chapters.flatMap((c) => c.scenes.map((s) => s.id)) : []), [book]);
   const onNav = useCallback((sceneId: Id, dir: 'prev' | 'next') => {
     const i = order.indexOf(sceneId);
@@ -210,6 +249,7 @@ export function Write() {
     setBook(b.id);
   };
 
+  const hasComments = useMemo(() => !!book && book.chapters.some((c) => c.scenes.some((s) => world.sceneTexts.some((t) => t.sceneId === s.id && t.comments?.length))), [book, world.sceneTexts]);
   const textBy = useMemo(() => new Map(world.sceneTexts.map((t) => [t.sceneId, t])), [world.sceneTexts]);
   const counts = useMemo(() => wordCounts(world), [world.sceneTexts, world.scenes, world.chapters, world.books]); // eslint-disable-line react-hooks/exhaustive-deps
   const countScene = (id: Id) => textBy.get(id)?.words ?? 0;
@@ -276,6 +316,7 @@ export function Write() {
           </select>
           <button title="Scene break (Ctrl+Enter, or type ***)" onClick={() => run(commands.sceneBreak)}>* * *</button>
           <button title="WR-11: link the selected words to a character, place or other record (Ctrl+L). Or type @ and a name." disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onLinkKey(active, v); }}>Link</button>
+          <button title="NT-1: comment on the selected words in the margin (Ctrl+Alt+M)" disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onCommentKey(active, v); }}>Comment</button>
           <button className="icon" title="Undo typing (Ctrl+Z)" onClick={() => run(commands.undo)}>↶</button>
           <button className="icon" title="Redo typing (Ctrl+Y)" onClick={() => run(commands.redo)}>↷</button>
           <span className="write-counts muted small" title="WR-12: words in this scene · chapter · book · whole series">
@@ -292,8 +333,8 @@ export function Write() {
           {!focus && <button className={showSidebar ? 'on' : ''} onClick={() => setWriting({ sidebar: !showSidebar })} title="WR-9, WR-12: the story sidebar (who is where, warnings, goals)">Sidebar</button>}
           <button className={focus ? 'primary' : ''} onClick={() => enterFocus(!focus)} title="Focus mode (F11, Esc to leave)">{focus ? 'Leave focus' : 'Focus'}</button>
         </div>
-        <div className={`write-scroll ${ws.typewriter ? 'typewriter' : ''}`} onMouseOver={onSheetOver} onMouseLeave={() => { if (hover) hideSoon(); }} onClickCapture={onSheetClick}>
-          <div className="write-sheet">
+        <div ref={scrollRef} className={`write-scroll ${ws.typewriter ? 'typewriter' : ''}`} onMouseOver={onSheetOver} onMouseLeave={() => { if (hover) hideSoon(); }} onClickCapture={onSheetClick}>
+          <div className="write-sheet" style={sheetShift !== undefined && !focus && hasComments ? { marginLeft: sheetShift } : undefined}>
             {book && <div className="write-book-title">{book.book.title}</div>}
             {book?.chapters.map(({ chapter: c, scenes }) => (
               <section key={c.id} className="write-chapter" id={`chapter-${c.id}`}>
@@ -301,7 +342,8 @@ export function Write() {
                 {scenes.map((s, i) => (
                   <SceneBlock key={s.id} scene={s} first={i === 0} text={textBy.get(s.id)} wordSet={wordSet} names={names} label={label} spelling={ws.spelling ?? 'en-GB'} typewriter={!!ws.typewriter}
                     onFocus={onFocus} onNav={onNav} register={register} onHistory={() => setHistoryFor(s.id)} onDetails={() => go('story', s.id)} active={s.id === active} onChange={() => setTick((n) => n + 1)}
-                    onStage={(stage) => setStage(s, stage)} onMention={onMention} onMentionKey={onMentionKey} onLinkKey={onLinkKey} />
+                    onStage={(stage) => setStage(s, stage)} onMention={onMention} onMentionKey={onMentionKey} onLinkKey={onLinkKey}
+                    onCommentKey={onCommentKey} getView={getView} marginSide={marginSide && !focus && (sheetShift === undefined || hasComments)} editingComment={editingComment} setEditingComment={setEditingComment} />
                 ))}
                 {!focus && <button className="link write-add" onClick={() => addScene(c.id)}>+ New scene in {c.title}</button>}
               </section>
@@ -346,6 +388,11 @@ interface BlockProps {
   onMention: (m: MentionState | null) => void;
   onMentionKey: (e: KeyboardEvent) => boolean;
   onLinkKey: (sceneId: Id, v: EditorView) => void;
+  onCommentKey: (sceneId: Id, v: EditorView) => void;
+  getView: (sceneId: Id) => EditorView | undefined;
+  marginSide: boolean;
+  editingComment: Id | undefined;
+  setEditingComment: (id: Id | undefined) => void;
 }
 
 /** One scene on the page: a thin header, then its editor (made when it scrolls near, so long books stay quick). */
@@ -364,12 +411,6 @@ function SceneBlock(p: BlockProps) {
   const comments = p.text?.comments;
   const info = useMemo<TextInfo>(() => ({ words: p.wordSet, names: p.names, comments: new Map((comments ?? []).map((c) => [c.id, c])), label: p.label }), [p.wordSet, p.names, comments, p.label]);
   const pov = scenePov(world, p.scene);
-  const removeComment = (c: TextComment) => {
-    store.update((w) => ({
-      ...w,
-      sceneTexts: w.sceneTexts.map((t) => (t.sceneId === p.scene.id ? { ...t, doc: removeCommentMarks(t.doc, c.id), comments: (t.comments ?? []).filter((x) => x.id !== c.id), updatedAt: nowIso() } : t)),
-    }), false);
-  };
   return (
     <div className={`write-scene ${p.active ? 'active' : ''}`} id={`scene-${p.scene.id}`} ref={ref}>
       {!p.first && <div className="write-scene-gap" aria-hidden>* * *</div>}
@@ -383,17 +424,11 @@ function SceneBlock(p: BlockProps) {
       </div>
       {mounted ? (
         <SceneEditor store={store} sceneId={p.scene.id} text={p.text} readOnly={store.readOnly} info={info} spelling={p.spelling} typewriter={p.typewriter}
-          onFocus={p.onFocus} onNav={p.onNav} register={p.register} onChange={p.onChange} onMention={p.onMention} onMentionKey={p.onMentionKey} onLinkKey={p.onLinkKey} />
+          onFocus={p.onFocus} onNav={p.onNav} register={p.register} onChange={p.onChange} onMention={p.onMention} onMentionKey={p.onMentionKey} onLinkKey={p.onLinkKey} onCommentKey={p.onCommentKey} />
       ) : (
         <StaticText text={p.text} />
       )}
-      {!!comments?.length && (
-        <ul className="write-comments">
-          {comments.map((c) => (
-            <li key={c.id}><b>{c.author || 'Comment'}</b>{c.date && <span className="muted small"> · {new Date(c.date).toLocaleDateString()}</span>}: {c.text} <button className="link small" onClick={() => removeComment(c)}>Remove</button></li>
-          ))}
-        </ul>
-      )}
+      <CommentMargin sceneId={p.scene.id} text={p.text} getView={() => p.getView(p.scene.id)} side={p.marginSide} editing={p.editingComment} setEditing={p.setEditingComment} />
     </div>
   );
 }

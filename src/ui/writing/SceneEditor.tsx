@@ -46,7 +46,7 @@ function decorate(doc: PMNode, info: TextInfo): DecorationSet {
     for (const m of node.marks) {
       if (m.type.name === 'comment') {
         const c = info.comments.get(m.attrs.id);
-        if (c) decos.push(Decoration.inline(pos, pos + text.length, { title: `${c.author ? c.author + ': ' : ''}${c.text}` }));
+        if (c) decos.push(Decoration.inline(pos, pos + text.length, { title: `${c.author ? c.author + ': ' : ''}${c.text}`, ...(c.resolved ? { class: 'comment-resolved' } : {}) }));
       } else if (m.type.name === 'link') {
         const l = info.label(m.attrs.kind, m.attrs.id);
         decos.push(Decoration.inline(pos, pos + text.length, { title: l ? `Linked to ${l}${m.attrs.note ? ` · ${m.attrs.note}` : ''}` : 'Linked record no longer exists' }));
@@ -230,17 +230,22 @@ interface Props {
   onMentionKey?: (e: KeyboardEvent) => boolean;
   /** WR-11: Ctrl+L, link the selected words (or a name at the cursor). */
   onLinkKey?: (sceneId: Id, view: EditorView) => void;
+  /** NT-1: Ctrl+Alt+M, comment on the selected words. */
+  onCommentKey?: (sceneId: Id, view: EditorView) => void;
 }
 
 /**
  * Save the editor's text into the world (not an undo step: the editor has its own undo).
  * WR-12: the change in the scene's word count goes into today's words-written log.
+ * NT-1: editComments changes the scene's comment list in the same step.
  */
-export function commitText(store: WorldStore, sceneId: Id, doc: TextNode) {
+export function commitText(store: WorldStore, sceneId: Id, doc: TextNode, editComments?: (c: TextComment[]) => TextComment[]) {
   store.update((w: World) => {
     const words = docWords(doc);
     const t = w.sceneTexts.find((x) => x.sceneId === sceneId);
     const rec: SceneText = t ? { ...t, doc, words, updatedAt: nowIso() } : { ...recordBase(), id: newId(), sceneId, doc, words };
+    // NT-1: a comment is added or removed together with its mark.
+    if (editComments) rec.comments = editComments(rec.comments ?? []);
     const next = { ...w, sceneTexts: t ? w.sceneTexts.map((x) => (x === t ? rec : x)) : [...w.sceneTexts, rec] };
     return logWords(next, words - (t?.words ?? 0));
   }, false);
@@ -307,6 +312,7 @@ export function SceneEditor(p: Props) {
           'Mod-Alt-0': commands.paragraph, 'Mod-Alt-1': commands.heading(1), 'Mod-Alt-2': commands.heading(2), 'Mod-Alt-3': commands.heading(3),
           'Mod-Enter': commands.sceneBreak,
           'Mod-l': (_s, _d, v) => { if (v && props.current.onLinkKey) props.current.onLinkKey(props.current.sceneId, v); return true; },
+          'Mod-Alt-m': (_s, _d, v) => { if (v && props.current.onCommentKey) props.current.onCommentKey(props.current.sceneId, v); return true; },
           'Shift-Enter': (s, d) => { d?.(s.tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView()); return true; },
           ArrowDown: (s, _d, v) => atEdge(s, v, 'end', 'down') && nav('next'),
           ArrowRight: (s) => s.selection.empty && s.selection.head === Selection.atEnd(s.doc).head && nav('next'),

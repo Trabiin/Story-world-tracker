@@ -67,6 +67,8 @@ export function createEmptyWorld(name: string): World {
     writingDays: [],
     suggestions: [],
     claudeLog: [],
+    notes: [],
+    attachments: [],
     terrain: emptyTerrain(),
   };
 }
