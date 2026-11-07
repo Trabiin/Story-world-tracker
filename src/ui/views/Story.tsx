@@ -11,6 +11,7 @@ import { PlaceSelect } from '../components/Pickers';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
+import { PlanForScene } from './Plan';
 import { placePath, sortByName } from '../util';
 import { ChapterOverviewPanel, OrderList, SceneThreads, ThreadDetail, ThreadList, ThreadMap } from './StoryStructure';
 
@@ -251,6 +252,7 @@ function SceneDetail({ s }: { s: Scene }) {
       <Backlinks kind="scene" id={s.id} title="Linked passages" />
       <TodosFor kind="scene" id={s.id} />
       <Research kind="scene" id={s.id} />
+      <PlanForScene sceneId={s.id} />
     </div>
   );
 }

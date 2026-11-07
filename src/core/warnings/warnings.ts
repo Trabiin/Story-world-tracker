@@ -12,10 +12,11 @@ import { OPEN_END, Segment, WorldIndex, nominalEnd, nominalStart } from '../wher
 import { checkPeople } from '../people/checks';
 import { describeFactor } from '../travel/modifiers';
 import { overduePlans } from '../travel/plans';
+import { checkSetups } from '../plan/plan';
 
 export type RuleId = 'two-places' | 'gap' | 'impossible-travel' | 'missing-journey' | 'open-stay' | 'placeholder' | 'biome-climate' | 'river-uphill' | 'river-dead-end' | 'river-split'
   | 'lake-outlet' | 'river-crossing' | 'river-source' | 'settlement-water' | 'rain-shadow'
-  | 'life-span' | 'place-existence' | 'scene-place' | 'knowledge-order' | 'plan-overdue';
+  | 'life-span' | 'place-existence' | 'scene-place' | 'knowledge-order' | 'plan-overdue' | 'setup-no-payoff' | 'payoff-before-setup';
 
 export const RULES: Record<RuleId, { name: string; requirement: string; severity: 'warning' | 'info' }> = {
   'two-places': { name: 'In two places at once', requirement: 'CC-1', severity: 'warning' },
@@ -38,6 +39,8 @@ export const RULES: Record<RuleId, { name: string; requirement: string; severity
   'scene-place': { name: 'Scene place differs from the stay', requirement: 'CC-6', severity: 'warning' },
   'knowledge-order': { name: 'Learns of an event before it happens', requirement: 'CH-8', severity: 'warning' },
   'plan-overdue': { name: 'Plan never carried out', requirement: 'WH-11', severity: 'info' },
+  'setup-no-payoff': { name: 'Setup never paid off', requirement: 'NT-6', severity: 'warning' },
+  'payoff-before-setup': { name: 'Payoff comes before its setup', requirement: 'NT-6', severity: 'warning' },
 };
 
 export interface RecordRef {
@@ -199,6 +202,7 @@ export function checkWorld(world: World): Warning[] {
   }
   for (const p of checkPeople(world, ix)) out.push({ ...p, severity: 'warning' });
   for (const p of overduePlans(world)) out.push({ key: p.key, rule: 'plan-overdue', severity: 'info', characterId: p.characterId, message: p.message, refs: [{ kind: 'character', id: p.characterId }], day: p.day });
+  for (const s of checkSetups(world)) out.push({ key: s.key, rule: s.rule, severity: 'warning', message: s.message, refs: s.sceneIds.map((id) => ({ kind: 'scene' as const, id })) });
   out.push(...checkTerrain(world));
   const terrainOn = hasTerrain(world.terrain);
   for (const r of checkRivers(world)) {

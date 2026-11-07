@@ -2,7 +2,7 @@
 import {
   Book, Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
   makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
-  Block, Run, TextComment, Attachment, Note, commentTodo, blocksToDoc, docToBlocks, docWords, addDays, dayKey, ProposalInput, addSuggestion, checkProposal,
+  Block, Run, TextComment, Attachment, Note, commentTodo, applyTemplate, BUILT_IN_TEMPLATES, blocksToDoc, docToBlocks, docWords, addDays, dayKey, ProposalInput, addSuggestion, checkProposal,
 } from '../core';
 import { blobStore, newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
@@ -344,6 +344,25 @@ export function sampleWorld(): World {
   };
   file('Thornwick sketch.svg', 'image/svg+xml', new TextEncoder().encode(thornwickSketch()), 'Rough plan of the market square and the salt road', [{ kind: 'place', id: thornwick.id }, { kind: 'note', id: salt.id }]);
   file('Salt pans of the southern coast.pdf', 'application/pdf', tinyPdf(['Salt pans of the southern coast', '', 'Notes from a visit to the coastal salt works.', 'Pans are filled at the spring tides and worked through summer.', 'The crust is raked at dawn and carted inland in late August.']), 'Field notes', [{ kind: 'note', id: salt.id }]);
+
+  // Phase 7b: setups and payoffs (NT-6; Bram's name is deliberately never paid off), a three-act structure over
+  // book one with some beats placed (NT-7), and Kaela's arc (NT-8).
+  w.setups.push(
+    { ...recordBase(), title: 'The letter is too heavy', kind: 'clue', note: 'The weight is the heir’s ring sewn into the seal.', setupSceneId: s1.id, payoffSceneId: heir.id },
+    { ...recordBase(), title: 'Tamsin overhears Bram’s name', kind: 'promise', note: 'Who is Bram to the regent?', setupSceneId: keepNight.id },
+  );
+  const structured = applyTemplate(book, BUILT_IN_TEMPLATES[0], newId);
+  const putBeat = (beat: string, sceneId: string) => { const b = structured.beats!.find((x) => x.name === beat); if (b) b.sceneId = sceneId; };
+  putBeat('Opening image', s1.id); putBeat('Inciting incident', s2.id); putBeat('End of act one', s3.id); putBeat('Midpoint', keepNight.id); putBeat('Climax', heir.id);
+  Object.assign(book, structured);
+  w.arcs.push({
+    ...recordBase(), characterId: kaela.id, bookId: book.id,
+    goalStart: 'Deliver the letter, get paid, ask no questions', goalEnd: 'Keep the heir alive, whatever it costs her',
+    beliefStart: 'A courier is safe as long as she doesn’t know what she carries', beliefEnd: 'Not knowing is how people like her get used',
+    woundStart: 'Her father died on a courier run he never understood', woundEnd: 'She chooses to know, and to carry it anyway',
+    turns: [{ id: newId(), sceneId: s2.id, note: 'Walks the last stretch rather than turn back' }, { id: newId(), sceneId: heir.id, note: 'Breaks the seal' }],
+    notes: '',
+  });
 
   // Phase 6c: three example suggestions from Claude (AI-3, AI-7, AI-8), so the Suggestions list can be tried in the preview.
   const opts = { newId, now: nowIso };

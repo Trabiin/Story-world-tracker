@@ -15,6 +15,7 @@ import type { Warning } from '../warnings';
 import { OPEN_END, WorldIndex } from '../whereabouts';
 import { safeName, textOf } from '../writing';
 import { allComments, cleanFolder } from '../notes';
+import { SETUP_STATE_LABEL, arcTurnsInOrder, pacing, readIndexOf, setupState } from '../plan';
 import { claudeMd, dataModelGuide } from './guide';
 import { REF_KIND_COLLECTION } from './schema';
 import { docToMarkdown } from './text';
@@ -222,6 +223,25 @@ ${r.ties.map((t) => `- ${t.role}: ${ch(t.characterId)}${t.start || t.end ? `, ${
   files.push({ path: 'story/secrets.md', text: `# Secrets\n\n${world.secrets.map((x) => `## ${x.title}\n\n- **id:** \`${x.id}\`\n${line('About event', name('events', x.eventId))}${line('Description', x.description)}${x.knowers.map((k) => `- ${ch(k.characterId)} knows ${k.from ? `from ${d(k.from)}` : 'from the start'}${k.how ? `: ${k.how}` : ''}`).join('\n')}\n`).join('\n') || 'None yet.'}\n` });
   files.push({ path: 'story/scenarios.md', text: `# What-if scenarios\n\nEach scenario changes records only inside itself; canon is untouched until the writer keeps it.\n\n${world.scenarios.map((x) => `## ${x.name}\n\n- **id:** \`${x.id}\`\n${line('Description', x.description)}${scenarioChanges(stored, x.id).map((c) => `- ${c.kind}: ${c.collection} ${c.label} (\`${c.id}\`)`).join('\n')}\n`).join('\n') || 'None.'}\n` });
   files.push({ path: 'story/todos.md', text: `# To-dos and plot holes\n\n${world.todos.map((t) => `- [${t.done ? 'x' : ' '}] ${t.kind === 'plot-hole' ? 'Plot hole: ' : ''}${t.title} (\`${t.id}\`)${t.note ? `: ${t.note}` : ''}`).join('\n') || 'None.'}\n` });
+
+  // ---- planning: setups and payoffs, structure, arcs (NT-6..NT-8) ----
+  const read = readIndexOf(world);
+  const sc = (id: Id | undefined) => name('scenes', id);
+  files.push({
+    path: 'story/setups.md',
+    text: `# Setups and payoffs\n\nA setup with no payoff, or a payoff the reader reads before its setup, is a warning.\n\n${world.setups.map((x) => `- **${x.title}** (\`${x.id}\`, ${x.kind}): ${SETUP_STATE_LABEL[setupState(x, read)]}. Planted in ${sc(x.setupSceneId) || 'no scene yet'}; paid off in ${sc(x.payoffSceneId) || 'no scene yet'}${x.note ? `. ${x.note}` : ''}`).join('\n') || 'None yet.'}\n`,
+  });
+  files.push({
+    path: 'story/structure.md',
+    text: `# Book structure\n\nBeat sheets laid over each book. "at" is where the template puts a beat (% of the book); "falls at" is where its scene actually is, by words written (or by scenes while there is little text).\n\n${world.books.slice().sort((a, b) => a.order - b.order).map((b) => {
+      const pc = pacing(world, b.id);
+      return `## ${b.title} (\`${b.id}\`)\n\n${b.beats?.length ? `Structure: ${b.structureName ?? 'own'}\n\n${pc.beats.map((x) => `- **${x.beat.name}** at ${x.target}%: ${x.beat.sceneId ? `${sc(x.beat.sceneId)}, falls at ${Math.round(x.actual ?? 0)}%` : 'no scene yet'}${x.beat.note ? ` (${x.beat.note})` : ''}`).join('\n')}` : 'No structure laid over this book.'}\n`;
+    }).join('\n') || 'No books yet.'}\n`,
+  });
+  files.push({
+    path: 'story/arcs.md',
+    text: `# Character arcs\n\nPer book: where each character starts and ends, and the scenes that turn them.\n\n${world.arcs.map((a) => `## ${ch(a.characterId)} in ${name('books', a.bookId)}\n\n- **id:** \`${a.id}\`\n${line('Goal', a.goalStart || a.goalEnd ? `${a.goalStart || '?'} → ${a.goalEnd || '?'}` : '')}${line('Belief', a.beliefStart || a.beliefEnd ? `${a.beliefStart || '?'} → ${a.beliefEnd || '?'}` : '')}${line('Wound', a.woundStart || a.woundEnd ? `${a.woundStart || '?'} → ${a.woundEnd || '?'}` : '')}${arcTurnsInOrder(world, a).map((t) => `- Turn in ${sc(t.sceneId)}${t.note ? `: ${t.note}` : ''}`).join('\n')}${line('Notes', a.notes)}`).join('\n\n') || 'None yet.'}\n`,
+  });
 
   // ---- notebook and research files (NT-2, NT-4) ----
   const refText = (r: { kind: string; id: Id }) => `${r.kind} ${name(REF_KIND_COLLECTION[r.kind] ?? '', r.id)}`;
