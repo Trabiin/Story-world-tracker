@@ -14,13 +14,18 @@ import { scenarioChanges, scenarioView } from '../structure';
 import type { Warning } from '../warnings';
 import { OPEN_END, WorldIndex } from '../whereabouts';
 import { safeName, textOf } from '../writing';
+import { allComments, cleanFolder } from '../notes';
 import { claudeMd, dataModelGuide } from './guide';
+import { REF_KIND_COLLECTION } from './schema';
 import { docToMarkdown } from './text';
 
 export interface FolderFile {
   /** Relative path with "/" between folders. */
   path: string;
+  /** The file's text; for a binary file (bytes set), a key that changes when the bytes do. */
   text: string;
+  /** NT-4: a binary file (a research file's copy). */
+  bytes?: Uint8Array;
 }
 
 const num = (i: number, n: number) => String(i + 1).padStart(Math.max(2, String(n).length), '0');
@@ -218,6 +223,27 @@ ${r.ties.map((t) => `- ${t.role}: ${ch(t.characterId)}${t.start || t.end ? `, ${
   files.push({ path: 'story/scenarios.md', text: `# What-if scenarios\n\nEach scenario changes records only inside itself; canon is untouched until the writer keeps it.\n\n${world.scenarios.map((x) => `## ${x.name}\n\n- **id:** \`${x.id}\`\n${line('Description', x.description)}${scenarioChanges(stored, x.id).map((c) => `- ${c.kind}: ${c.collection} ${c.label} (\`${c.id}\`)`).join('\n')}\n`).join('\n') || 'None.'}\n` });
   files.push({ path: 'story/todos.md', text: `# To-dos and plot holes\n\n${world.todos.map((t) => `- [${t.done ? 'x' : ' '}] ${t.kind === 'plot-hole' ? 'Plot hole: ' : ''}${t.title} (\`${t.id}\`)${t.note ? `: ${t.note}` : ''}`).join('\n') || 'None.'}\n` });
 
+  // ---- notebook and research files (NT-2, NT-4) ----
+  const refText = (r: { kind: string; id: Id }) => `${r.kind} ${name(REF_KIND_COLLECTION[r.kind] ?? '', r.id)}`;
+  const noteFile = namer();
+  for (const n of world.notes) {
+    const dir = ['notes', ...(n.inbox ? ['Inbox'] : cleanFolder(n.folder).split("/").filter(Boolean).map((p) => safeName(p)))].join('/');
+    const files2 = world.attachments.filter((a) => a.refs.some((r) => r.kind === 'note' && r.id === n.id));
+    files.push({
+      path: noteFile(dir, n.title || 'Untitled note', n.id),
+      text: `${head(n.title || 'Untitled note', n.id, 'note')}${line('Folder', n.inbox ? 'Inbox (not sorted yet)' : n.folder || 'top of the notebook')}${line('About', n.refs.map(refText))}${line('Files', files2.map((a) => `${a.name} (\`${a.id}\`)`))}${line('Last changed', n.updatedAt.slice(0, 10))}\n${n.body || '_Empty._'}\n`,
+    });
+  }
+  files.push({
+    path: 'research/files.md',
+    text: `# Research files\n\nImages and PDFs the writer keeps with the world. Copies of the files themselves are in \`research/files/\` when the desktop app wrote them.\n\n${world.attachments.map((a) => `- **${a.name}** (\`${a.id}\`, ${a.mime}, ${Math.round(a.size / 1024)} KB)${a.caption ? `: ${a.caption}` : ''}${a.refs.length ? `. Attached to ${a.refs.map(refText).join(', ')}` : ''}. File: \`${researchFilePath(a)}\``).join('\n') || 'None.'}\n`,
+  });
+  const comments = allComments(world);
+  files.push({
+    path: 'story/comments.md',
+    text: `# Margin comments\n\nComments on passages of the scene text (NT-1), in reading order of their scenes.\n\n${comments.map((c) => `- ${name('scenes', c.sceneId)}${c.comment.resolved ? ' (resolved)' : ''}: **${c.comment.author || 'Comment'}**: ${c.comment.text}${c.quote ? ` — on “${c.quote}”` : ''}${c.todo ? ` [to-do \`${c.todo.id}\`${c.todo.done ? ', done' : ''}]` : ''}`).join('\n') || 'None.'}\n`,
+  });
+
   // ---- map ----
   const R = s.radiusKm;
   files.push({
@@ -232,6 +258,14 @@ ${r.ties.map((t) => `- ${t.role}: ${ch(t.characterId)}${t.start || t.end ? `, ${
   // ---- whole world as JSON ----
   files.push({ path: 'data/world.json', text: JSON.stringify(worldForJson(world), null, 1) });
   return files;
+}
+
+/** NT-4: where a research file's copy goes in the Claude folder. */
+export function researchFilePath(a: { id: Id; name: string }): string {
+  const dot = a.name.lastIndexOf('.');
+  const stem = dot > 0 ? a.name.slice(0, dot) : a.name;
+  const ext = dot > 0 ? a.name.slice(dot).replace(/[^.\w]/g, '') : '';
+  return `research/files/${safeName(stem)} (${a.id.slice(0, 6)})${ext}`;
 }
 
 /** The world without the painted map, pictures and scene version history (too big, and not text). */

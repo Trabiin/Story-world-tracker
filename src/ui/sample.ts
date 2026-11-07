@@ -2,9 +2,9 @@
 import {
   Book, Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
   makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
-  Block, Run, TextComment, blocksToDoc, docToBlocks, docWords, addDays, dayKey, ProposalInput, addSuggestion, checkProposal,
+  Block, Run, TextComment, Attachment, Note, commentTodo, blocksToDoc, docToBlocks, docWords, addDays, dayKey, ProposalInput, addSuggestion, checkProposal,
 } from '../core';
-import { newId, nowIso } from '../storage';
+import { blobStore, newId, nowIso } from '../storage';
 import { createEmptyWorld, recordBase } from '../storage';
 import { sampleTerrain } from './sampleTerrain';
 
@@ -309,6 +309,42 @@ export function sampleWorld(): World {
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
 
+  // Phase 7a: the notebook (NT-2) with folders, two quick notes still in the Inbox (NT-3), research files (NT-4),
+  // and margin comments (NT-1): the regent's comment became a to-do; a second comment on the toll-keeper is resolved.
+  const t1 = w.sceneTexts.find((t) => t.sceneId === s1.id)!;
+  w.todos.push(commentTodo(t1, t1.comments![0], recordBase()));
+  const tollId = crypto.randomUUID();
+  {
+    const blocks = docToBlocks(t3.doc);
+    const runs = blocks[1].kind === 'p' ? blocks[1].runs : [];
+    const i = runs.findIndex((r) => r.text.includes('toll-keeper'));
+    if (i >= 0) {
+      const r = runs[i];
+      const at = r.text.indexOf('toll-keeper');
+      runs.splice(i, 1, { ...r, text: r.text.slice(0, at) }, { ...r, text: 'toll-keeper', comments: [tollId] }, { ...r, text: r.text.slice(at + 'toll-keeper'.length) });
+      t3.doc = blocksToDoc(blocks);
+      t3.comments = [{ id: tollId, author: 'Ojon', text: 'Give the toll-keeper a name; he comes back in book two.', resolved: true, date: new Date(Date.now() - 4 * 864e5).toISOString() }];
+    }
+  }
+  const note = (title: string, folder: string, body: string, refs: Note['refs'], extra: Partial<Note> = {}): Note => {
+    const n: Note = { ...recordBase(), title, body, folder, refs, ...extra };
+    w.notes.push(n);
+    return n;
+  };
+  const salt = note('How salt pans work', 'Research/Salt trade', 'Shallow pans along the coast, filled at high tide and left to the sun. The brine is moved from pan to pan as it thickens; the last pans crust white by late summer.\n\nRakers work at dawn before the heat. A good season gives about forty cartloads per pan row. Rain in August ruins a year.\n\nUse for Thornwick: the smell of salt reaches the town on a south wind.', [{ kind: 'place', id: thornwick.id }]);
+  note('Ships in Saltmere harbour', 'Research/Ships', 'Cogs for the salt trade, round-bellied and slow. Galleys only for the regent’s couriers. Harbour chain across the mouth at night.', [{ kind: 'place', id: saltmere.id }]);
+  note('Kaela’s voice', 'Characters', 'Short sentences when she is afraid. Counts things (milestones, steps, coins) to keep calm: her father taught her. Never says the regent’s name.', [{ kind: 'character', id: kaela.id }], { pinned: true });
+  note('Ending for book one?', 'Ideas', 'Kaela breaks the seal at the harbour and the letter is blank: the weight was the message. Or: the seal itself is the heir’s ring.', [{ kind: 'book', id: book.id }, { kind: 'scene', id: heir.id }]);
+  note('The toll-keeper needs a name', '', 'Something short and local. Hob? Wat?', [{ kind: 'place', id: thornwick.id }], { inbox: true });
+  note('What does the regent’s seal look like?', '', '', [], { inbox: true });
+  const file = (name: string, mime: string, bytes: Uint8Array, caption: string, refs: Attachment['refs']) => {
+    const fileKey = `file:sample-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    blobStore.set(fileKey, bytes);
+    w.attachments.push({ ...recordBase(), name, mime, size: bytes.length, fileKey, caption, refs });
+  };
+  file('Thornwick sketch.svg', 'image/svg+xml', new TextEncoder().encode(thornwickSketch()), 'Rough plan of the market square and the salt road', [{ kind: 'place', id: thornwick.id }, { kind: 'note', id: salt.id }]);
+  file('Salt pans of the southern coast.pdf', 'application/pdf', tinyPdf(['Salt pans of the southern coast', '', 'Notes from a visit to the coastal salt works.', 'Pans are filled at the spring tides and worked through summer.', 'The crust is raked at dawn and carted inland in late August.']), 'Field notes', [{ kind: 'note', id: salt.id }]);
+
   // Phase 6c: three example suggestions from Claude (AI-3, AI-7, AI-8), so the Suggestions list can be tried in the preview.
   const opts = { newId, now: nowIso };
   const proposals: ProposalInput[] = [
@@ -344,4 +380,41 @@ export function sampleWorld(): World {
     if (!check.errors.length) out = addSuggestion(out, p, check, opts).world;
   }
   return out;
+}
+
+/** NT-4 sample: a sketch of Thornwick's market square, drawn as an SVG image. */
+function thornwickSketch(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+<rect width="640" height="420" fill="#f3ead6"/>
+<path d="M0 300 C 160 280 260 330 640 290" stroke="#9c8a6a" stroke-width="26" fill="none" opacity="0.6"/>
+<text x="470" y="330" font-family="Georgia" font-size="16" fill="#6b5b40">salt road to Saltmere</text>
+<rect x="230" y="120" width="180" height="120" fill="none" stroke="#5a4a32" stroke-width="3" stroke-dasharray="6 4"/>
+<text x="262" y="186" font-family="Georgia" font-size="18" fill="#5a4a32">Market square</text>
+<g fill="#c9b48c" stroke="#5a4a32" stroke-width="2"><rect x="120" y="90" width="80" height="60"/><rect x="440" y="110" width="70" height="90"/><rect x="250" y="40" width="120" height="50"/><rect x="150" y="190" width="60" height="70"/></g>
+<text x="128" y="125" font-family="Georgia" font-size="13" fill="#3e3222">Toll house</text>
+<text x="268" y="70" font-family="Georgia" font-size="13" fill="#3e3222">Bell tower</text>
+<text x="446" y="160" font-family="Georgia" font-size="13" fill="#3e3222">Inn</text>
+<text x="152" y="230" font-family="Georgia" font-size="12" fill="#3e3222">Salt</text><text x="152" y="246" font-family="Georgia" font-size="12" fill="#3e3222">store</text>
+<circle cx="320" cy="212" r="7" fill="#5a4a32"/><text x="332" y="217" font-family="Georgia" font-size="12" fill="#3e3222">well</text>
+<text x="20" y="400" font-family="Georgia" font-size="14" font-style="italic" fill="#6b5b40">Thornwick, from memory. The gate faces south.</text>
+</svg>`;
+}
+
+/** NT-4 sample: a one-page PDF with a few lines of text. */
+function tinyPdf(lines: string[]): Uint8Array {
+  const esc = (t: string) => t.replace(/[\\()]/g, (c) => `\\${c}`);
+  const stream = `BT /F1 20 Tf 72 740 Td (${esc(lines[0])}) Tj /F1 12 Tf ${lines.slice(1).map((l) => `0 -22 Td (${esc(l)}) Tj`).join(' ')} ET`;
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objs.forEach((o, i) => { offsets.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(out);
 }

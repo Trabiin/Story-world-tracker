@@ -8,6 +8,7 @@ import { Backlinks } from '../components/Backlinks';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
+import { Research } from '../components/Research';
 import { DeleteDialog, MergeDialog } from '../components/RecordTools';
 import { PALETTE, placeName, sortByName } from '../util';
 
@@ -101,6 +102,7 @@ function GroupDetail({ g }: { g: Group }) {
           {stays.length + journeys.length === 0 && <p className="muted">None yet.</p>}
           <Backlinks kind="group" id={g.id} />
           <TodosFor kind="group" id={g.id} />
+          <Research kind="group" id={g.id} />
         </div>
       </div>
     </div>

@@ -200,7 +200,8 @@ export const desktopClaude: ClaudePlatform = {
       if (written.get(path) === f.text && before.has(f.path)) continue;
       const dir = f.path.split('/').slice(0, -1).join('/');
       if (dir && !dirs.has(dir)) { await mkdir(fileIn(folder, dir), { recursive: true }); dirs.add(dir); }
-      await writeTextFile(path, f.text);
+      if (f.bytes) await writeFile(path, f.bytes);
+      else await writeTextFile(path, f.text);
       written.set(path, f.text);
       n++;
     }

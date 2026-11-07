@@ -10,6 +10,7 @@ import { Field } from '../components/Modal';
 import { PlaceSelect } from '../components/Pickers';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
+import { Research } from '../components/Research';
 import { placePath, sortByName } from '../util';
 import { ChapterOverviewPanel, OrderList, SceneThreads, ThreadDetail, ThreadList, ThreadMap } from './StoryStructure';
 
@@ -188,6 +189,7 @@ function ChapterDetail({ c }: { c: Chapter }) {
       <ChapterOverviewPanel chapterId={c.id} />
       <Backlinks kind="chapter" id={c.id} title="Linked" />
       <TodosFor kind="chapter" id={c.id} />
+      <Research kind="chapter" id={c.id} />
     </div>
   );
 }
@@ -248,6 +250,7 @@ function SceneDetail({ s }: { s: Scene }) {
       </div>
       <Backlinks kind="scene" id={s.id} title="Linked passages" />
       <TodosFor kind="scene" id={s.id} />
+      <Research kind="scene" id={s.id} />
     </div>
   );
 }

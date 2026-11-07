@@ -3,6 +3,7 @@
  * so "restore the world as it was last Tuesday" works without any backup folder.
  */
 import type { World } from '../core';
+import { fileKeys } from './files';
 import { normalizeWorld } from './newWorld';
 import { TerrainManifest, decodeTerrain, encodeTerrain, gunzip, gzip, manifestHashes } from './terrainCodec';
 
@@ -12,7 +13,7 @@ export interface Snapshot {
   label: string;
   summary: string; // "12 characters · 40 places · 210 stays and journeys"
   data: Uint8Array; // gzip of the world JSON, without map image pixels
-  /** Terrain tiles (by hash) this version uses; stored once in the world file. */
+  /** Terrain tiles (by hash) and research files ("file:" keys, NT-4) this version uses; stored once in the world file. */
   terrainRefs?: string[];
 }
 
@@ -29,7 +30,7 @@ export async function makeSnapshot(world: World, label: string): Promise<Snapsho
   // Scene versions (WR-6), the words-per-day log (WR-12) and the Claude activity log (AI-9) are histories of their own and stay out of world versions.
   const lean = { ...world, mapImages: world.mapImages.map((m) => ({ ...m, dataUrl: '' })), sceneVersions: [], writingDays: [], claudeLog: [], terrain };
   const json = new TextEncoder().encode(JSON.stringify(lean));
-  return { id: crypto.randomUUID(), at: new Date().toISOString(), label, summary: summarize(world), data: await gzip(json), terrainRefs: manifestHashes(terrain) };
+  return { id: crypto.randomUUID(), at: new Date().toISOString(), label, summary: summarize(world), data: await gzip(json), terrainRefs: [...manifestHashes(terrain), ...fileKeys(world)] };
 }
 
 /** Rebuild the world from a snapshot, reusing current map image pixels where the image still exists. */

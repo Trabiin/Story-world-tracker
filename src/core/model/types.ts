@@ -666,6 +666,8 @@ export interface TextComment {
   author: string;
   date?: string;
   text: string;
+  /** NT-1: dealt with. The comment stays (and its mark), shown folded away. */
+  resolved?: boolean;
 }
 
 /** WR-6: one saved version of a scene's text. The document is gzipped JSON in base64 to keep the world file small. */
@@ -719,6 +721,10 @@ export interface World {
   sceneVersions: SceneVersion[];
   /** WR-12: words written on each real-world day. Shared by every scenario; world undo leaves it alone. */
   writingDays: WritingDay[];
+  /** NT-2, NT-3: the notebook (free notes and research pages in folders; quick captures land in its Inbox). Shared by every scenario. */
+  notes: Note[];
+  /** NT-4: research files (images and PDFs) attached to notes and records. The bytes are stored once in the world file, by fileKey. */
+  attachments: Attachment[];
   /** AI-3: changes Claude proposed, waiting to be accepted or rejected. Shared by every scenario. */
   suggestions: ClaudeSuggestion[];
   /** AI-9: what Claude changed (or what was accepted from it), newest last. */
@@ -784,7 +790,7 @@ export interface ClaudeLogEntry {
 }
 
 /** EU-14: what a to-do or plot hole can point at. */
-export type RefKind = LinkTargetKind | 'secret' | 'region' | 'thread' | 'manuscript' | 'relationship';
+export type RefKind = LinkTargetKind | 'secret' | 'region' | 'thread' | 'manuscript' | 'relationship' | 'note' | 'file';
 export interface TodoRef { kind: RefKind; id: Id }
 
 /** EU-14: a to-do or a plot hole, linked to the records it concerns. */
@@ -793,5 +799,35 @@ export interface Todo extends RecordBase {
   note: string;
   kind: 'todo' | 'plot-hole';
   done: boolean;
+  refs: TodoRef[];
+  /** NT-1: made from this margin comment; the to-do links back to it. */
+  comment?: { sceneId: Id; commentId: Id };
+}
+
+/** NT-2: a page in the writer's notebook. */
+export interface Note extends RecordBase {
+  title: string;
+  /** Plain text; blank lines separate paragraphs. */
+  body: string;
+  /** Folder path with "/" between levels ("Research/Ships"); "" = the top of the notebook. */
+  folder: string;
+  /** NT-3: captured quickly and not sorted yet (shown in the Inbox). */
+  inbox?: boolean;
+  /** Records the note is about; it shows on their pages (EU-6, EU-10). */
+  refs: TodoRef[];
+  pinned?: boolean;
+}
+
+/** NT-4: a research file (an image or a PDF). */
+export interface Attachment extends RecordBase {
+  /** File name as added ("Salt trade.pdf"). */
+  name: string;
+  mime: string;
+  /** Size in bytes. */
+  size: number;
+  /** Where the bytes are kept in the world file: "file:" and the SHA-256 of the bytes, so the same file is stored once. */
+  fileKey: string;
+  caption: string;
+  /** Notes and records it is attached to. */
   refs: TodoRef[];
 }

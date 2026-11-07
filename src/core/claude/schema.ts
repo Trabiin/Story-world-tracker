@@ -9,19 +9,19 @@
  */
 import type {
   Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
-  Plan, PlotThread, RecordBase, Region, RegionLayer, RegionOverlord, RegionTie, RegionVersion, Relationship, Scene, Secret, Stay, Todo, WorldEvent,
+  Note, Plan, PlotThread, RecordBase, Region, RegionLayer, RegionOverlord, RegionTie, RegionVersion, Relationship, Scene, Secret, Stay, Todo, WorldEvent,
 } from '../model';
 import { DIRECTED_RELATIONS } from '../model';
 
 /** Collections Claude may propose changes to (AI-3). Scene text has its own change ('text'), terrain too ('terrain'). */
 export const CLAUDE_COLLECTIONS = [
   'characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'threads', 'events', 'relationships', 'secrets',
-  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos',
+  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes',
 ] as const;
 export type ClaudeCollection = (typeof CLAUDE_COLLECTIONS)[number];
 
 /** Collections Claude can read but not change. */
-export const READ_ONLY_COLLECTIONS = ['sceneTexts', 'manuscripts', 'links', 'scenarios', 'dismissals', 'mapImages'] as const;
+export const READ_ONLY_COLLECTIONS = ['sceneTexts', 'manuscripts', 'links', 'scenarios', 'dismissals', 'mapImages', 'attachments'] as const;
 
 export type Field =
   | { t: 'string'; desc: string; req?: boolean }
@@ -116,7 +116,7 @@ const AREA_KINDS = ['lake', 'sea', 'mountains', 'forest', 'desert', 'swamp', 'ot
 const LAYER_TYPES = ['political', 'culture', 'religion', 'language', 'trade', 'population', 'resources', 'influence', 'military', 'danger', 'magic', 'known-world', 'history', 'disasters', 'notes', 'other'] as const;
 const EVENT_KINDS = ['battle', 'coronation', 'festival', 'eclipse', 'treaty', 'disaster', 'birth', 'death', 'wedding', 'discovery', 'other'] as const;
 const RELATION_KINDS = ['parent', 'spouse', 'sibling', 'lover', 'ally', 'rival', 'enemy', 'friend', 'mentor', 'liege', 'other'] as const;
-const REF_KINDS = ['character', 'place', 'group', 'stay', 'journey', 'book', 'chapter', 'scene', 'event', 'secret', 'region', 'thread', 'manuscript', 'relationship'] as const;
+const REF_KINDS = ['character', 'place', 'group', 'stay', 'journey', 'book', 'chapter', 'scene', 'event', 'secret', 'region', 'thread', 'manuscript', 'relationship', 'note', 'file'] as const;
 
 const characters: Spec<Character> = {
   name: { t: 'string', req: true, desc: 'Name as used in the text.' },
@@ -334,12 +334,24 @@ const detailMaps: Spec<DetailMap> = {
   notes: { t: 'string', desc: 'Notes.' },
 };
 
+const REFS = (desc: string): Field => ({ t: 'list', fields: { kind: { t: 'enum', values: REF_KINDS, req: true, desc: 'Record kind.' }, id: { t: 'string', req: true, desc: 'Record id.' } }, desc });
+
 const todos: Spec<Todo> = {
   title: { t: 'string', req: true, desc: 'What to do.' },
   note: { t: 'string', desc: 'Details.' },
   kind: { t: 'enum', values: ['todo', 'plot-hole'], desc: 'To-do or plot hole. Default "todo".' },
   done: { t: 'boolean', desc: 'Done.' },
-  refs: { t: 'list', fields: { kind: { t: 'enum', values: REF_KINDS, req: true, desc: 'Record kind.' }, id: { t: 'string', req: true, desc: 'Record id.' } }, desc: 'Records it concerns.' },
+  refs: REFS('Records it concerns.'),
+  comment: { t: 'app', desc: 'NT-1: the margin comment it was made from ({ sceneId, commentId }); set by the app.' },
+};
+
+const notes: Spec<Note> = {
+  title: { t: 'string', req: true, desc: 'Title of the note.' },
+  body: { t: 'string', desc: 'The note itself, plain text (blank lines between paragraphs).' },
+  folder: { t: 'string', desc: 'Folder path with "/" between levels, e.g. "Research/Ships". "" = top of the notebook.' },
+  inbox: { t: 'boolean', desc: 'NT-3: still in the Inbox (captured, not sorted). Notes you write should normally leave it out.' },
+  refs: REFS('Records the note is about (it shows on their pages). Kinds as for to-dos; "file" points at a research file.'),
+  pinned: { t: 'boolean', desc: 'Pinned to the top of its folder.' },
 };
 
 export interface CollectionSpec {
@@ -371,12 +383,14 @@ export const SCHEMA: Record<ClaudeCollection, CollectionSpec> = {
   mapLayers: { about: 'Drawing layers that group features and symbols (MK-13).', fields: mapLayers, defaults: { visible: true, locked: false, order: 0 } },
   detailMaps: { about: 'Continent, region and city maps framed on the globe (MP-4).', fields: detailMaps, defaults: { notes: '' } },
   todos: { about: 'To-dos and plot holes linked to records (EU-14).', fields: todos, defaults: { note: '', kind: 'todo', done: false, refs: [] } },
+  notes: { about: 'The writer\'s notebook: free notes and research pages in folders, each linked to the records it is about (NT-2). Quick captures sit in the Inbox until sorted (NT-3). Research files (images, PDFs) are read only: see research/files.md.', fields: notes, defaults: { body: '', folder: '', refs: [] } },
 };
 
 /** How a to-do ref kind maps to a collection. */
 export const REF_KIND_COLLECTION: Record<string, string> = {
   character: 'characters', place: 'places', group: 'groups', stay: 'stays', journey: 'journeys', book: 'books', chapter: 'chapters', scene: 'scenes',
   event: 'events', secret: 'secrets', region: 'regions', thread: 'threads', manuscript: 'manuscripts', relationship: 'relationships',
+  note: 'notes', file: 'attachments',
 };
 
 /**
@@ -391,7 +405,8 @@ export const DEPENDENCY_RULES: string[] = [
   'A region needs its layer. A realm is a region on a political layer, never a place. Political regions never overlap: use the "border" change, which takes land from neighbours or stops at their border.',
   'Places nest physically through parentId. Deleting a place moves its sub-places up one level; a place can never be inside itself.',
   'The built-in place "unknown-place" (Unknown / on the road) cannot be deleted.',
-  'Every other reference (a scene\'s cast, an event\'s place, a to-do\'s refs, …) is simply removed when the record it points at is deleted.',
+  'Every other reference (a scene\'s cast, an event\'s place, a to-do\'s or a note\'s refs, …) is simply removed when the record it points at is deleted.',
+  'Notes, to-dos and research files are shared by every what-if scenario (they are the writer\'s, not the story\'s). A margin comment lives inside its scene\'s text (sceneTexts[].comments, with a "comment" mark on the commented words); a to-do made from it points back with comment: { sceneId, commentId }.',
   'A delete that would also delete other records is refused unless the change says cascade: true (the proposal then lists what goes). reassignTo moves every link to another record of the same kind first.',
 ];
 

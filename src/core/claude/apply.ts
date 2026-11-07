@@ -158,7 +158,7 @@ function checkRecord(ctx: Ctx, c: ClaudeCollection, r: Record<string, unknown>) 
     const vs = r.versions as { start?: FuzzyDate }[];
     r.versions = [...vs].sort((a, b) => (a.start ? toWindow(a.start).earliest : -Infinity) - (b.start ? toWindow(b.start).earliest : -Infinity));
   }
-  if (c === 'todos' && Array.isArray(r.refs)) for (const ref of r.refs as { kind: string; id: Id }[]) if (!refExists(ctx.w, [REF_KIND_COLLECTION[ref.kind]], ref.id)) err(`refs: ${ref.kind} "${ref.id}" does not exist`);
+  if ((c === 'todos' || c === 'notes') && Array.isArray(r.refs)) for (const ref of r.refs as { kind: string; id: Id }[]) if (!refExists(ctx.w, [REF_KIND_COLLECTION[ref.kind]], ref.id)) err(`refs: ${ref.kind} "${ref.id}" does not exist`);
 }
 
 /** Replace every "new:…" id in the changes with a real one; refuse references to new ids no change creates. */

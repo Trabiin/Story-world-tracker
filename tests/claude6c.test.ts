@@ -322,6 +322,7 @@ describe('AI-10 round trip: each kind of change leaves every other record alone 
     mapLayers: { name: 'Sketch' },
     detailMaps: { name: 'Inn', kind: 'city', north: 50.1, south: 50, west: 5, east: 5.1 },
     todos: { title: 'Check' },
+    notes: { title: 'Idea' },
   };
   for (const c of CLAUDE_COLLECTIONS) {
     it(`${c}: create, update, delete`, () => {

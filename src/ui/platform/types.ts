@@ -45,7 +45,7 @@ export interface ClaudePlatform {
   defaultFolder(worldName: string): Promise<string>;
   chooseFolder(): Promise<string | null>;
   /** AI-1: write the files that changed since the last call and remove the ones that are gone. Files not written by the app are left alone. */
-  syncFolder(folder: string, files: { path: string; text: string }[]): Promise<{ written: number; removed: number }>;
+  syncFolder(folder: string, files: { path: string; text: string; bytes?: Uint8Array }[]): Promise<{ written: number; removed: number }>;
   /** Remove every file the app wrote into the folder (and the folder, if it is then empty). */
   clearFolder(folder: string): Promise<void>;
   /** AI-2: start the local connector; requests arrive at onRequest, answers go back with reply. Returns the port. */

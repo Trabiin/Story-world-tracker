@@ -9,6 +9,7 @@ import { Field } from '../components/Modal';
 import { PlaceSelect, placeOptions } from '../components/Pickers';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
+import { Research } from '../components/Research';
 import { Pictures } from '../components/Pictures';
 import { DeleteDialog, MergeDialog } from '../components/RecordTools';
 import { CommaInput } from './Characters';
@@ -124,6 +125,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
           <WhoWasHere p={p} />
           <Backlinks kind="place" id={p.id} title="Manuscript and scenes" only={['passage', 'scene']} />
           <TodosFor kind="place" id={p.id} />
+          <Research kind="place" id={p.id} />
           <Pictures value={p.images} onChange={(images) => set({ images })} />
         </div>
       </div>

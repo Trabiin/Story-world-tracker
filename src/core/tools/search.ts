@@ -78,6 +78,18 @@ export function globalSearch(world: World, query: string, limit = 200): SearchHi
     const a = world.characters.find((c) => c.id === r.aId)?.name ?? '?', b = world.characters.find((c) => c.id === r.bId)?.name ?? '?';
     if (r.notes || r.label) consider('relationship', r.id, `${a} and ${b}`, `Relationship · ${r.kind}`, [], [r.label ?? '', r.notes]);
   }
+  // NT-2, NT-4: the notebook and research files.
+  for (const n of world.notes) consider('note', n.id, n.title || 'Untitled note', n.inbox ? 'Note · Inbox' : `Note${n.folder ? ` · ${n.folder}` : ''}`, [n.title], [n.body], 2);
+  for (const a of world.attachments) consider('file', a.id, a.name, 'Research file', [a.name], [a.caption], 1);
+  // NT-1: margin comments in scene text.
+  for (const t of world.sceneTexts) {
+    const s = world.scenes.find((x) => x.id === t.sceneId);
+    if (!s) continue;
+    for (const c of t.comments ?? []) {
+      const tx = norm(c.text);
+      if (terms.every((w) => tx.includes(w))) hits.push({ kind: 'scene', id: s.id, title: s.title, sub: `Comment · ${chapter(s.chapterId) ?? '?'}`, snippet: snippetOf(c.text, terms), inText: true, score: 11 });
+    }
+  }
   // Manuscript text: one hit per paragraph, at most 25 per manuscript.
   for (const m of world.manuscripts) {
     let n = 0;
