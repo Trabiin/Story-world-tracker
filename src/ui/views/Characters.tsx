@@ -13,6 +13,7 @@ import { Field } from '../components/Modal';
 import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
+import { ArcsForCharacter } from './Plan';
 import { ICONS, PALETTE, blankCharacter, placeName, splitList } from '../util';
 import { Knowledge, Relationships, StatusBadge } from './CharacterExtras';
 import { Plans } from './CharacterPlans';
@@ -238,6 +239,7 @@ function CharacterDetail({ c }: { c: Character }) {
           <Knowledge c={c} />
           <Backlinks kind="character" id={c.id} />
           <TodosFor kind="character" id={c.id} />
+          <ArcsForCharacter characterId={c.id} />
           <Research kind="character" id={c.id} />
           <Pictures value={c.images} onChange={(images) => set({ images })} />
           {world.regions.some((r) => r.ties.some((t) => t.characterId === c.id)) && (

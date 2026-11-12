@@ -8,7 +8,7 @@
  * describing it here is a compile error, so the guide never falls out of date.
  */
 import type {
-  Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
+  ArcTurn, Beat, CharacterArc, Setup, Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
   Note, Plan, PlotThread, RecordBase, Region, RegionLayer, RegionOverlord, RegionTie, RegionVersion, Relationship, Scene, Secret, Stay, Todo, WorldEvent,
 } from '../model';
 import { DIRECTED_RELATIONS } from '../model';
@@ -16,7 +16,7 @@ import { DIRECTED_RELATIONS } from '../model';
 /** Collections Claude may propose changes to (AI-3). Scene text has its own change ('text'), terrain too ('terrain'). */
 export const CLAUDE_COLLECTIONS = [
   'characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'threads', 'events', 'relationships', 'secrets',
-  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes',
+  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes', 'setups', 'arcs',
 ] as const;
 export type ClaudeCollection = (typeof CLAUDE_COLLECTIONS)[number];
 
@@ -116,7 +116,7 @@ const AREA_KINDS = ['lake', 'sea', 'mountains', 'forest', 'desert', 'swamp', 'ot
 const LAYER_TYPES = ['political', 'culture', 'religion', 'language', 'trade', 'population', 'resources', 'influence', 'military', 'danger', 'magic', 'known-world', 'history', 'disasters', 'notes', 'other'] as const;
 const EVENT_KINDS = ['battle', 'coronation', 'festival', 'eclipse', 'treaty', 'disaster', 'birth', 'death', 'wedding', 'discovery', 'other'] as const;
 const RELATION_KINDS = ['parent', 'spouse', 'sibling', 'lover', 'ally', 'rival', 'enemy', 'friend', 'mentor', 'liege', 'other'] as const;
-const REF_KINDS = ['character', 'place', 'group', 'stay', 'journey', 'book', 'chapter', 'scene', 'event', 'secret', 'region', 'thread', 'manuscript', 'relationship', 'note', 'file'] as const;
+const REF_KINDS = ['character', 'place', 'group', 'stay', 'journey', 'book', 'chapter', 'scene', 'event', 'secret', 'region', 'thread', 'manuscript', 'relationship', 'note', 'file', 'setup', 'arc'] as const;
 
 const characters: Spec<Character> = {
   name: { t: 'string', req: true, desc: 'Name as used in the text.' },
@@ -189,12 +189,48 @@ const journeys: Spec<Journey> = {
   notes: { t: 'string', desc: 'Notes.' },
 };
 
+const beat: SubSpec<Beat> = {
+  id: SUB_ID,
+  name: { t: 'string', req: true, desc: 'Beat name, e.g. "Midpoint".' },
+  at: { t: 'number', min: 0, max: 100, req: true, desc: 'Where the template puts it, % of the book.' },
+  sceneId: { t: 'ref', to: ['scenes'], desc: 'The scene where it happens in this book.' },
+  note: { t: 'string', desc: 'Notes.' },
+};
+
 const books: Spec<Book> = {
   title: { t: 'string', req: true, desc: 'Title.' },
   order: { t: 'number', req: true, desc: 'Position in the series (1, 2, 3…).' },
   notes: { t: 'string', desc: 'Notes.' },
   wordGoal: { t: 'number', min: 0, int: true, desc: 'WR-12: target length in words.' },
   deadline: { t: 'string', desc: 'WR-12: real-world deadline as "YYYY-MM-DD" (not an in-world date).' },
+  structureName: { t: 'string', desc: 'NT-7: the beat sheet laid over the book ("Three acts", "Seven points"…).' },
+  beats: { t: 'list', fields: beat, desc: 'NT-7: the beats of the book\'s structure, each with where the template puts it (at, % of the book) and the scene where it happens.' },
+};
+
+const setups: Spec<Setup> = {
+  title: { t: 'string', req: true, desc: 'What is set up ("the regent\'s heavy seal").' },
+  kind: { t: 'enum', values: ['clue', 'promise', 'object', 'foreshadowing', 'other'], desc: 'Kind of setup. Default "clue".' },
+  note: { t: 'string', desc: 'Notes.' },
+  setupSceneId: { t: 'ref', to: ['scenes'], desc: 'The scene that plants it.' },
+  payoffSceneId: { t: 'ref', to: ['scenes'], desc: 'The scene that pays it off. A setup with no payoff, or a payoff read before its setup, is a warning.' },
+};
+
+const arcTurn: SubSpec<ArcTurn> = {
+  id: SUB_ID,
+  sceneId: { t: 'ref', to: ['scenes'], req: true, desc: 'A scene that turns the character.' },
+  note: { t: 'string', desc: 'What changes in them there.' },
+};
+const arcs: Spec<CharacterArc> = {
+  characterId: { t: 'ref', to: ['characters'], req: true, desc: 'Whose arc.' },
+  bookId: { t: 'ref', to: ['books'], req: true, desc: 'The book it spans (one arc per character per book).' },
+  goalStart: { t: 'string', desc: 'What they want at the start of the book.' },
+  goalEnd: { t: 'string', desc: 'What they want (or got) at the end.' },
+  beliefStart: { t: 'string', desc: 'The belief (or lie) they start with.' },
+  beliefEnd: { t: 'string', desc: 'What they believe at the end.' },
+  woundStart: { t: 'string', desc: 'The wound they carry in.' },
+  woundEnd: { t: 'string', desc: 'Where the wound stands at the end.' },
+  turns: { t: 'list', fields: arcTurn, desc: 'The scenes that turn them, in any order (shown in reading order).' },
+  notes: { t: 'string', desc: 'Notes.' },
 };
 
 const chapters: Spec<Chapter> = {
@@ -383,6 +419,8 @@ export const SCHEMA: Record<ClaudeCollection, CollectionSpec> = {
   mapLayers: { about: 'Drawing layers that group features and symbols (MK-13).', fields: mapLayers, defaults: { visible: true, locked: false, order: 0 } },
   detailMaps: { about: 'Continent, region and city maps framed on the globe (MP-4).', fields: detailMaps, defaults: { notes: '' } },
   todos: { about: 'To-dos and plot holes linked to records (EU-14).', fields: todos, defaults: { note: '', kind: 'todo', done: false, refs: [] } },
+  setups: { about: 'Setups and payoffs (NT-6): a clue, promise or planted object, the scene that plants it and the scene that pays it off.', fields: setups, defaults: { kind: 'clue', note: '' } },
+  arcs: { about: 'Character arcs (NT-8): per book, where a character starts and ends (goal, belief, wound) and the scenes that turn them.', fields: arcs, defaults: { goalStart: '', goalEnd: '', beliefStart: '', beliefEnd: '', woundStart: '', woundEnd: '', turns: [], notes: '' } },
   notes: { about: 'The writer\'s notebook: free notes and research pages in folders, each linked to the records it is about (NT-2). Quick captures sit in the Inbox until sorted (NT-3). Research files (images, PDFs) are read only: see research/files.md.', fields: notes, defaults: { body: '', folder: '', refs: [] } },
 };
 
@@ -390,7 +428,7 @@ export const SCHEMA: Record<ClaudeCollection, CollectionSpec> = {
 export const REF_KIND_COLLECTION: Record<string, string> = {
   character: 'characters', place: 'places', group: 'groups', stay: 'stays', journey: 'journeys', book: 'books', chapter: 'chapters', scene: 'scenes',
   event: 'events', secret: 'secrets', region: 'regions', thread: 'threads', manuscript: 'manuscripts', relationship: 'relationships',
-  note: 'notes', file: 'attachments',
+  note: 'notes', file: 'attachments', setup: 'setups', arc: 'arcs',
 };
 
 /**
@@ -400,6 +438,7 @@ export const REF_KIND_COLLECTION: Record<string, string> = {
 export const DEPENDENCY_RULES: string[] = [
   'A stay needs its character or group and its place; a journey needs its character or group, its origin and its destination. Deleting any of those deletes the stay or journey.',
   'A membership needs its character and its group. A relationship needs both characters.',
+  'A character arc needs its character and its book. Deleting a scene takes it out of setups, payoffs, arc turns and book beats.',
   'A chapter needs its book; a scene needs its chapter; a scene\'s text needs its scene. Deleting a book deletes its chapters, their scenes and the scene text.',
   'A map feature (river, road, lake…) is also a place (MP-8): creating a feature creates its place (same name, kept in step); deleting the feature deletes that place too unless stays or journeys use it (then the place is kept); deleting the place deletes the feature.',
   'A region needs its layer. A realm is a region on a political layer, never a place. Political regions never overlap: use the "border" change, which takes land from neighbours or stops at their border.',

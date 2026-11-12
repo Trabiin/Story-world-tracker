@@ -198,3 +198,12 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Research files** (NT-4): add or drop images and PDFs (up to 25 MB) on any note or record page. They open in the app, PDFs in the built-in reader. Each file is stored once in the world file.
 - Claude's folder gains `notes/`, `research/` (with copies of the files) and `story/comments.md`; Claude can propose notes.
 - World file format 13 (notes and research files). Older files open as before.
+
+## Phase 7b: plan
+
+- **Corkboard and outline** (NT-5): the **Plan** page shows an index card per scene, by chapter. Drag a card to a new place (also into another chapter) and edit its summary on the card. **Outline** is the same book as a table: summary, POV, date, stage and words, with totals per chapter.
+- **Setups and payoffs** (NT-6): plant a clue, a promise, an object or a bit of foreshadowing in one scene and say where it pays off (also in a later book). A setup with no payoff, or a payoff the reader meets before its setup, shows on the **Warnings** page. Cards, outline rows and scene pages show the setups and payoffs in each scene.
+- **Structure** (NT-7, optional): lay three acts, seven points, the hero's journey or four parts over a book, or your own (**Save as template**). Pin each beat to a scene; the pacing strip shows where the beats fall by words (by scenes while there is little text) and flags a beat ten points or more from where the template puts it.
+- **Character arcs** (NT-8): per book, where a character starts and ends (goal, belief, wound) and the scenes that turn them. Main characters without an arc are listed; arcs show on the character's page and turns on the scene's page.
+- Claude's folder gains `story/setups.md`, `story/structure.md` and `story/arcs.md`; Claude can propose setups, arcs and beats.
+- World file format 14 (setups and character arcs). Older files open as before.

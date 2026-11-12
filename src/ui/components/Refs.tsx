@@ -7,7 +7,7 @@ import { useApp } from '../context';
 export const REF_LABEL: Record<RefKind, string> = {
   character: 'character', place: 'place', group: 'group', stay: 'stay', journey: 'journey', book: 'book', chapter: 'chapter', scene: 'scene',
   event: 'event', secret: 'secret', region: 'region', thread: 'thread', manuscript: 'manuscript', relationship: 'relationship',
-  note: 'note', file: 'file',
+  note: 'note', file: 'file', setup: 'setup', arc: 'arc',
 };
 
 export function useOpenRef() {
@@ -23,6 +23,7 @@ export function useOpenRef() {
       case 'book': case 'chapter': case 'scene': case 'thread': return go('story', r.id);
       case 'stay': case 'journey': return edit({ kind: r.kind, id: r.id });
       case 'note': case 'file': return go('notes', r.id);
+      case 'setup': case 'arc': return go('plan', r.id);
       case 'manuscript': {
         // Jump to the paragraph: the nearest link in it, or just the manuscript.
         const l = r.paraIndex !== undefined ? world.links.find((x) => x.manuscriptId === r.id && x.anchor.paraIndex === r.paraIndex) : undefined;

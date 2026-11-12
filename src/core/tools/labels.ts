@@ -3,7 +3,7 @@ import { formatFuzzy } from '../dates';
 import type { Id, RefKind, World } from '../model';
 
 /** Collections that hold story data (not settings, terrain or map images). */
-export const DATA_COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'detailMaps', 'regionLayers', 'regions', 'events', 'relationships', 'secrets', 'threads', 'todos', 'sceneTexts', 'notes', 'attachments'] as const;
+export const DATA_COLLECTIONS = ['characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'manuscripts', 'links', 'mapSymbols', 'mapFeatures', 'detailMaps', 'regionLayers', 'regions', 'events', 'relationships', 'secrets', 'threads', 'todos', 'sceneTexts', 'notes', 'attachments', 'setups', 'arcs'] as const;
 
 export const COLLECTION_LABEL: Record<(typeof DATA_COLLECTIONS)[number], [string, string]> = {
   characters: ['character', 'characters'], places: ['place', 'places'], groups: ['group', 'groups'], memberships: ['group membership', 'group memberships'],
@@ -11,7 +11,7 @@ export const COLLECTION_LABEL: Record<(typeof DATA_COLLECTIONS)[number], [string
   manuscripts: ['manuscript', 'manuscripts'], links: ['manuscript link', 'manuscript links'], mapSymbols: ['map symbol', 'map symbols'], mapFeatures: ['map feature', 'map features'],
   detailMaps: ['detail map', 'detail maps'], regionLayers: ['layer', 'layers'], regions: ['region', 'regions'], events: ['event', 'events'], relationships: ['relationship', 'relationships'],
   secrets: ['secret', 'secrets'], threads: ['plot thread', 'plot threads'], todos: ['to-do', 'to-dos'], sceneTexts: ['scene text', 'scene texts'],
-  notes: ['note', 'notes'], attachments: ['research file', 'research files'],
+  notes: ['note', 'notes'], attachments: ['research file', 'research files'], setups: ['setup', 'setups'], arcs: ['character arc', 'character arcs'],
 };
 
 export const countText = (n: number, c: (typeof DATA_COLLECTIONS)[number]) => `${n} ${COLLECTION_LABEL[c][n === 1 ? 0 : 1]}`;
@@ -28,6 +28,7 @@ export function recordLabel(world: World, c: string, r: unknown): string {
   if (c === 'journeys') return `${who(o.subject as never)}: ${place(o.originId)} → ${place(o.destinationId)}${when(o.departure)}`;
   if (c === 'memberships') return `${ch(o.characterId)} in ${world.groups.find((g) => g.id === o.groupId)?.name ?? '?'}`;
   if (c === 'relationships') return `${ch(o.aId)} and ${ch(o.bId)} (${o.kind})`;
+  if (c === 'arcs') return `${ch(o.characterId)}'s arc in ${world.books.find((b) => b.id === o.bookId)?.title ?? '?'}`;
   if (c === 'sceneTexts') return `Text of ${world.scenes.find((s) => s.id === o.sceneId)?.title ?? 'a scene'}`;
   if (c === 'links') return `“${String((o.anchor as { quote?: string })?.quote ?? '').slice(0, 50)}”`;
   return String(o.kind ?? c);
@@ -37,7 +38,7 @@ export function recordLabel(world: World, c: string, r: unknown): string {
 export const REF_COLLECTION: Record<RefKind, (typeof DATA_COLLECTIONS)[number]> = {
   character: 'characters', place: 'places', group: 'groups', stay: 'stays', journey: 'journeys', book: 'books', chapter: 'chapters', scene: 'scenes',
   event: 'events', secret: 'secrets', region: 'regions', thread: 'threads', manuscript: 'manuscripts', relationship: 'relationships',
-  note: 'notes', file: 'attachments',
+  note: 'notes', file: 'attachments', setup: 'setups', arc: 'arcs',
 };
 
 export function refLabel(world: World, kind: RefKind, id: Id): string | undefined {

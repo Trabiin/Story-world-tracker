@@ -323,6 +323,8 @@ describe('AI-10 round trip: each kind of change leaves every other record alone 
     detailMaps: { name: 'Inn', kind: 'city', north: 50.1, south: 50, west: 5, east: 5.1 },
     todos: { title: 'Check' },
     notes: { title: 'Idea' },
+    setups: { title: 'A clue', setupSceneId: w.scenes[0].id },
+    arcs: { characterId: kaela, bookId: id(w.books, 'The Salt Roads'), turns: [{ sceneId: w.scenes[0].id, note: 'x' }] },
   };
   for (const c of CLAUDE_COLLECTIONS) {
     it(`${c}: create, update, delete`, () => {
