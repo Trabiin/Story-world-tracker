@@ -276,7 +276,7 @@ export function sampleWorld(): World {
     { kind: 'p', runs: [{ text: 'The lamps in the ' }, { text: 'Hall of Lamps', link: { kind: 'place', id: hall.id } }, { text: ' were never allowed to go out, and so Kaela Venn had learned to read faces by their light. The regent’s face that morning told her nothing at all.' }] },
     P('“Thornwick,” he said, and pressed the letter into her hand. “Before the market closes. Give it to no one but Oren Hask.”'),
     P('She turned the letter over. The seal was the regent’s own, the wax still soft at the edges, and it was _heavier_ than a letter had any right to be.'),
-    { kind: 'p', runs: [{ text: '“And if Oren Hask is not there?”' }, { text: ' “Then you wait,” the regent said.', comments: [commentId] }] },
+    { kind: 'p', runs: [{ text: '“And if Oren Hask is not there?”', speaker: kaela.id }, { text: ' “Then you wait,” the regent said.', comments: [commentId] }] },
   ], [{ id: commentId, author: 'Ojon', text: 'Too abrupt? Let him hesitate first.' }]);
   sceneText(s2, [
     P('She left Varn on the twenty-eighth, with the seal against her ribs and the gates closing behind her.'),
@@ -286,7 +286,8 @@ export function sampleWorld(): World {
   ]);
   sceneText(s3, [
     P('Oren Hask counted carts the way other men counted debts. Forty-one had come down the southern road from Ashford, and every one of them was late.'),
-    P('Mira Solt found him at the gate, already arguing with the toll-keeper about the price of salt. “You’ll have a visitor,” she said. “From Varn. She rides like she owes someone money.”'),
+    // Phase 8b: Mira's words are tagged as hers (RV-7).
+    { kind: 'p', runs: [{ text: 'Mira Solt found him at the gate, already arguing with the toll-keeper about the price of salt. ' }, { text: '“You’ll have a visitor,”', speaker: mira.id }, { text: ' she said. ' }, { text: '“From Varn. She rides like she owes someone money.”', speaker: mira.id }] },
   ]);
   sceneText(keepNight, [P('Tamsin had not meant to listen. But the keep was old, and its walls carried voices the way a well carries an echo, and the name she heard was _Bram_.')]);
   sceneText(saltWind, [P('The same grey morning, from the other side of the gate: Mira watched Oren lose his temper over a toll of two coppers, and wondered what he was really waiting for.')]);
@@ -308,7 +309,7 @@ export function sampleWorld(): World {
   pattern.forEach((words, i) => { if (words) w.writingDays.push({ id: addDays(today, -(pattern.length - i)), scenarioId: 'canon', added: words + 40, removed: 40 }); });
   w.writingDays.push({ id: today, scenarioId: 'canon', added: 260, removed: 25 });
   const t3 = w.sceneTexts.find((t) => t.sceneId === s3.id)!;
-  t3.doc = blocksToDoc([...docToBlocks(t3.doc), { kind: 'p', runs: [{ text: '“A courier from the ' }, { text: 'Kingdom of Varn', link: { kind: 'region', id: varnRealm.id } }, { text: '? Then the regent is frightened.”' }] }]);
+  t3.doc = blocksToDoc([...docToBlocks(t3.doc), { kind: 'p', runs: [{ text: '“A courier from the ', speaker: oren.id }, { text: 'Kingdom of Varn', link: { kind: 'region', id: varnRealm.id }, speaker: oren.id }, { text: '? Then the regent is frightened.”', speaker: oren.id }] }]);
   t3.words = docWords(t3.doc);
 
   w.settings.currentMoment = toDayNumber({ year: 1042, month: 5, day: 5 });
@@ -373,6 +374,21 @@ export function sampleWorld(): World {
   w.passes.push(
     { ...recordBase(), bookId: book.id, name: 'Timeline and places', note: 'Dates, travel times, who is where: clear the Warnings page for this book.', done: chs.slice(0, 2).map((c) => c.id), order: 1 },
     { ...recordBase(), bookId: book.id, name: 'Dialogue', note: 'Cut small talk, check tags and beats, read it aloud.', done: [chs[0].id], order: 2 },
+  );
+
+  // Phase 8b: book two is outlined (so the "Previously on" recap has something to come before), and book one has gone out to agents (RV-9).
+  const book2: Book = { ...recordBase(), title: 'The Glass Mere', order: 2, notes: 'Kaela takes the ring north.' };
+  w.books.push(book2);
+  const b2c1 = { ...recordBase(), bookId: book2.id, title: 'Chapter 1: Thaw', order: 1, povCharacterId: kaela.id, notes: '' };
+  w.chapters.push(b2c1);
+  w.scenes.push(
+    { ...recordBase(), chapterId: b2c1.id, title: 'The ice road', order: 1, characterIds: [], summary: 'Kaela crosses the mere before the ice breaks.', stage: 'outlined' },
+  );
+  w.submissions.push(
+    { ...recordBase(), bookId: book.id, to: 'Hollis Grey, Grey & Marsh', kind: 'agent', sent: 'query', sentOn: addDays(today, -61), answer: 'rejected', answeredOn: addDays(today, -40), notes: 'Kind note: liked the voice, not the pace.' },
+    { ...recordBase(), bookId: book.id, to: 'Petra Lind, Northlight Literary', kind: 'agent', sent: 'query', sentOn: addDays(today, -45), answer: 'requested', answeredOn: addDays(today, -20), notes: 'Asked for the first three chapters.' },
+    { ...recordBase(), bookId: book.id, to: 'Petra Lind, Northlight Literary', kind: 'agent', sent: 'partial', sentOn: addDays(today, -18), answer: 'waiting', notes: '' },
+    { ...recordBase(), bookId: book.id, to: 'Harbourside first-novel prize', kind: 'contest', sent: 'full', sentOn: addDays(today, -9), answer: 'waiting', notes: 'Shortlist announced in spring.' },
   );
 
   // Phase 6c: three example suggestions from Claude (AI-3, AI-7, AI-8), so the Suggestions list can be tried in the preview.

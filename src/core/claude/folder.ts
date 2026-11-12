@@ -16,7 +16,8 @@ import { OPEN_END, WorldIndex } from '../whereabouts';
 import { safeName, textOf } from '../writing';
 import { allComments, cleanFolder } from '../notes';
 import { SETUP_STATE_LABEL, arcTurnsInOrder, pacing, readIndexOf, setupState } from '../plan';
-import { STYLE_RULES, STYLE_RULE_IDS, passesOf } from '../revise';
+import { STYLE_RULES, STYLE_RULE_IDS, dialogueCounts, dialogueLines, passesOf } from '../revise';
+import { SUBMISSION_ANSWERS, SUBMISSION_KINDS, SUBMISSION_SENT, sortedSubmissions, submissionSummary } from '../publish';
 import { claudeMd, dataModelGuide } from './guide';
 import { REF_KIND_COLLECTION } from './schema';
 import { docToMarkdown } from './text';
@@ -253,6 +254,22 @@ ${r.ties.map((t) => `- ${t.role}: ${ch(t.characterId)}${t.start || t.end ? `, ${
       const chapters = world.chapters.filter((c) => c.bookId === b.id).sort((x, y) => x.order - y.order);
       return `## ${b.title}\n\n${list.length ? list.map((p) => `### ${p.name} (\`${p.id}\`)\n\n${p.note ? `${p.note}\n\n` : ''}${chapters.map((c) => `- [${p.done.includes(c.id) ? 'x' : ' '}] ${c.title}`).join('\n')}`).join('\n\n') : 'No passes for this book.'}\n`;
     }).join('\n') || 'No books yet.'}\nStyle checks (RV-4) on the Write page: ${STYLE_RULE_IDS.filter((r) => !off.includes(r)).map((r) => STYLE_RULES[r].name.toLowerCase()).join(', ') || 'all switched off'}. Names that look misspelt (RV-2) are listed in warnings.md.\n`,
+  });
+
+  // ---- dialogue by character (RV-7) and submissions (RV-9) ----
+  const lines = dialogueLines(world);
+  files.push({
+    path: 'story/dialogue.md',
+    text: `# Dialogue by character\n\nLines the writer has tagged with a speaker on the Write page, in reading order. Untagged speech is not listed.\n\n${dialogueCounts(lines).map((c) => `## ${ch(c.characterId)}\n\n${c.lines} lines, ${c.words} words, in ${c.scenes} scenes.\n\n${lines.filter((l) => l.characterId === c.characterId).map((l) => `- ${l.text} (${name('scenes', l.sceneId)})`).join('\n')}`).join('\n\n') || 'No tagged lines yet.'}\n`,
+  });
+  const lbl = <T extends { id: string; label: string }>(xs: T[], id: string) => xs.find((x) => x.id === id)?.label ?? id;
+  files.push({
+    path: 'story/submissions.md',
+    text: `# Submissions\n\nWhere each book was sent and the answer (real-world dates, newest first).\n\n${world.books.slice().sort((a, b) => a.order - b.order).filter((b) => world.submissions.some((x) => x.bookId === b.id)).map((b) => {
+      const list = sortedSubmissions(world, b.id);
+      const sum = submissionSummary(list);
+      return `## ${b.title}\n\n${sum.sent} sent, ${sum.open} open, ${sum.offers} offers, ${sum.rejections} rejections.\n\n${list.map((x) => `- ${x.sentOn}: ${lbl(SUBMISSION_SENT, x.sent).toLowerCase()} to **${x.to}** (${lbl(SUBMISSION_KINDS, x.kind).toLowerCase()}): ${lbl(SUBMISSION_ANSWERS, x.answer).toLowerCase()}${x.answeredOn ? ` on ${x.answeredOn}` : ''}${x.notes ? `. ${x.notes}` : ''} (\`${x.id}\`)`).join('\n')}`;
+    }).join('\n\n') || 'Nothing sent yet.'}\n`,
   });
 
   // ---- notebook and research files (NT-2, NT-4) ----

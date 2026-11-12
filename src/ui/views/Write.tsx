@@ -13,9 +13,9 @@ import { useApp } from '../context';
 import { ExportDialog } from '../writing/ExportDialog';
 import { HistoryPanel } from '../writing/HistoryPanel';
 import { ImportDialog } from '../writing/ImportDialog';
-import { MentionState, SceneEditor, TextInfo, commands, dismissMention, linkRangeAt, linkText, nameRangeAt, unlinkText } from '../writing/SceneEditor';
+import { MentionState, SceneEditor, TextInfo, commands, dismissMention, linkRangeAt, linkText, nameRangeAt, setSpeaker, speakerRange, unlinkText } from '../writing/SceneEditor';
 import { StageDot, StageSelect } from '../writing/Goals';
-import { LinkPicker, MentionMenu, NameCardBox } from '../writing/LinkMenu';
+import { LinkPicker, MentionMenu, NameCardBox, SpeakerPicker } from '../writing/LinkMenu';
 import { StorySidebar } from '../writing/StorySidebar';
 import { CommentMargin, addComment, takeCommentRequest } from '../writing/Comments';
 import { ask } from '../components/Dialogs';
@@ -191,6 +191,24 @@ export function Write() {
     setPicker(null);
   };
 
+  // RV-7: say who speaks a quote (Ctrl+Alt+S or the Speaker button).
+  const [speaker, setSpeakerPicker] = useState<{ view: EditorView; sceneId: Id; from: number; to: number; left: number; top: number; quote: string; current?: Id } | null>(null);
+  const onSpeakerKey = useCallback((sceneId: Id, v: EditorView) => {
+    if (store.readOnly) return;
+    const r = speakerRange(v.state);
+    if (!r) { void ask.alert('Put the cursor inside a quote, or select the words that are spoken, then press Speaker.'); return; }
+    let left = 200, top = 200;
+    try { const c = v.coordsAtPos(r.to); left = c.left; top = c.bottom; } catch { /* not drawn */ }
+    setSpeakerPicker({ view: v, sceneId, ...r, left, top, quote: v.state.doc.textBetween(r.from, r.to, ' ') });
+  }, [store]);
+  const speakerFirst = useMemo(() => {
+    const sc = speaker && world.scenes.find((x) => x.id === speaker.sceneId);
+    if (!sc) return [];
+    const pov = scenePov(world, sc);
+    return [...new Set([...(pov ? [pov] : []), ...sc.characterIds])];
+  }, [speaker, world]);
+  const speakerCss = useMemo(() => world.characters.map((c) => `.text-speaker[data-speaker="${c.id}"]{--speaker:${/^#[0-9a-f]{3,8}$/i.test(c.color) ? c.color : '#888'}}`).join('\n'), [world.characters]);
+
   // WR-10: hover a name (or a link) for its card; Ctrl+click opens the record.
   type Hover = { kind: LinkTargetKind; id: Id; sceneId: Id; from: number; to: number; linked: boolean; left: number; top: number; el: Element };
   const [hover, setHover] = useState<Hover | null>(null);
@@ -333,6 +351,7 @@ export function Write() {
           <button title="Scene break (Ctrl+Enter, or type ***)" onClick={() => run(commands.sceneBreak)}>* * *</button>
           <button title="WR-11: link the selected words to a character, place or other record (Ctrl+L). Or type @ and a name." disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onLinkKey(active, v); }}>Link</button>
           <button title="NT-1: comment on the selected words in the margin (Ctrl+Alt+M)" disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onCommentKey(active, v); }}>Comment</button>
+          <button title="RV-7: say who speaks the quote at the cursor (Ctrl+Alt+S). Lines by character are in Revise → Dialogue." disabled={!active || store.readOnly} onClick={() => { const v = activeView.current; if (v && active) onSpeakerKey(active, v); }}>Speaker</button>
           <button title="RV-3: find and replace in this book or the whole series (Ctrl+H)" onClick={openFind}>Find</button>
           <button className={ws.styleMarks ? 'on' : ''} title="RV-4: mark repeated words, long sentences, adverbs, filter words and overused words (rules in Revise → Style)" onClick={() => setWriting({ styleMarks: !ws.styleMarks })}>Style</button>
           <button className="icon" title="Undo typing (Ctrl+Z)" onClick={() => run(commands.undo)}>↶</button>
@@ -361,7 +380,7 @@ export function Write() {
                   <SceneBlock key={s.id} scene={s} first={i === 0} text={textBy.get(s.id)} wordSet={wordSet} names={names} label={label} typos={typos} styleInfo={style} spelling={ws.spelling ?? 'en-GB'} typewriter={!!ws.typewriter}
                     onFocus={onFocus} onNav={onNav} register={register} onHistory={() => setHistoryFor(s.id)} onDetails={() => go('story', s.id)} active={s.id === active} onChange={() => setTick((n) => n + 1)}
                     onStage={(stage) => setStage(s, stage)} onMention={onMention} onMentionKey={onMentionKey} onLinkKey={onLinkKey}
-                    onCommentKey={onCommentKey} getView={getView} marginSide={marginSide && !focus && (sheetShift === undefined || hasComments)} editingComment={editingComment} setEditingComment={setEditingComment} />
+                    onCommentKey={onCommentKey} onSpeakerKey={onSpeakerKey} getView={getView} marginSide={marginSide && !focus && (sheetShift === undefined || hasComments)} editingComment={editingComment} setEditingComment={setEditingComment} />
                 ))}
                 {!focus && <button className="link write-add" onClick={() => addScene(c.id)}>+ New scene in {c.title}</button>}
               </section>
@@ -372,6 +391,10 @@ export function Write() {
       </div>
       {showSidebar && <StorySidebar sceneId={sidebarScene} bookId={book?.book.id} onClose={() => setWriting({ sidebar: false })} />}
       {mention && <MentionMenu left={mention.left} top={mention.top} items={mentionItems} index={mentionIndex} onPick={(t) => pickMention(t)} onHover={setMentionIndex} />}
+      <style>{speakerCss}</style>
+      {speaker && <SpeakerPicker left={speaker.left} top={speaker.top} quote={speaker.quote} current={speaker.current} first={speakerFirst}
+        onPick={(id) => { setSpeaker(speaker.view, speaker.from, speaker.to, id); setSpeakerPicker(null); }}
+        onClose={() => { setSpeakerPicker(null); speaker.view.focus(); }} />}
       {picker && <LinkPicker left={picker.left} top={picker.top} initial={picker.initial} onPick={pickLink} onClose={() => { setPicker(null); picker.view.focus(); }} />}
       {hover && card && (
         <NameCardBox card={card} left={hover.left} top={hover.top} linked={hover.linked} onEnter={cancelHide} onLeave={hideSoon}
@@ -409,6 +432,7 @@ interface BlockProps {
   onMentionKey: (e: KeyboardEvent) => boolean;
   onLinkKey: (sceneId: Id, v: EditorView) => void;
   onCommentKey: (sceneId: Id, v: EditorView) => void;
+  onSpeakerKey: (sceneId: Id, v: EditorView) => void;
   getView: (sceneId: Id) => EditorView | undefined;
   marginSide: boolean;
   editingComment: Id | undefined;
@@ -444,7 +468,7 @@ function SceneBlock(p: BlockProps) {
       </div>
       {mounted ? (
         <SceneEditor store={store} sceneId={p.scene.id} text={p.text} readOnly={store.readOnly} info={info} spelling={p.spelling} typewriter={p.typewriter}
-          onFocus={p.onFocus} onNav={p.onNav} register={p.register} onChange={p.onChange} onMention={p.onMention} onMentionKey={p.onMentionKey} onLinkKey={p.onLinkKey} onCommentKey={p.onCommentKey} />
+          onFocus={p.onFocus} onNav={p.onNav} register={p.register} onChange={p.onChange} onMention={p.onMention} onMentionKey={p.onMentionKey} onLinkKey={p.onLinkKey} onCommentKey={p.onCommentKey} onSpeakerKey={p.onSpeakerKey} />
       ) : (
         <StaticText text={p.text} />
       )}

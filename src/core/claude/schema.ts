@@ -8,7 +8,7 @@
  * describing it here is a compile error, so the guide never falls out of date.
  */
 import type {
-  ArcTurn, Beat, CharacterArc, RevisionPass, Setup, Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
+  ArcTurn, Beat, CharacterArc, RevisionPass, Setup, Submission, Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
   Note, Plan, PlotThread, RecordBase, Region, RegionLayer, RegionOverlord, RegionTie, RegionVersion, Relationship, Scene, Secret, Stay, Todo, WorldEvent,
 } from '../model';
 import { DIRECTED_RELATIONS } from '../model';
@@ -16,7 +16,7 @@ import { DIRECTED_RELATIONS } from '../model';
 /** Collections Claude may propose changes to (AI-3). Scene text has its own change ('text'), terrain too ('terrain'). */
 export const CLAUDE_COLLECTIONS = [
   'characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'threads', 'events', 'relationships', 'secrets',
-  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes', 'setups', 'arcs', 'passes',
+  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes', 'setups', 'arcs', 'passes', 'submissions',
 ] as const;
 export type ClaudeCollection = (typeof CLAUDE_COLLECTIONS)[number];
 
@@ -241,6 +241,17 @@ const passes: Spec<RevisionPass> = {
   order: { t: 'number', desc: 'Position among the book\'s passes (1, 2, 3…).' },
 };
 
+const submissions: Spec<Submission> = {
+  bookId: { t: 'ref', to: ['books'], req: true, desc: 'The book that was sent.' },
+  to: { t: 'string', req: true, desc: 'Who it went to ("Jane Doe, Doe Literary", "Harbourside prize").' },
+  kind: { t: 'enum', values: ['agent', 'publisher', 'contest', 'magazine', 'other'], desc: 'Default "agent".' },
+  sent: { t: 'enum', values: ['query', 'partial', 'full', 'other'], desc: 'What was sent. Default "query".' },
+  sentOn: { t: 'string', req: true, desc: 'Real-world date it was sent, "YYYY-MM-DD".' },
+  answer: { t: 'enum', values: ['waiting', 'requested', 'rejected', 'offer', 'withdrawn', 'no-answer'], desc: '"requested" = asked for more pages. Default "waiting".' },
+  answeredOn: { t: 'string', desc: 'Real-world date of the answer, "YYYY-MM-DD".' },
+  notes: { t: 'string', desc: 'Notes.' },
+};
+
 const chapters: Spec<Chapter> = {
   bookId: { t: 'ref', to: ['books'], req: true, desc: 'The book.' },
   title: { t: 'string', req: true, desc: 'Title.' },
@@ -430,6 +441,7 @@ export const SCHEMA: Record<ClaudeCollection, CollectionSpec> = {
   setups: { about: 'Setups and payoffs (NT-6): a clue, promise or planted object, the scene that plants it and the scene that pays it off.', fields: setups, defaults: { kind: 'clue', note: '' } },
   arcs: { about: 'Character arcs (NT-8): per book, where a character starts and ends (goal, belief, wound) and the scenes that turn them.', fields: arcs, defaults: { goalStart: '', goalEnd: '', beliefStart: '', beliefEnd: '', woundStart: '', woundEnd: '', turns: [], notes: '' } },
   passes: { about: 'Revision passes (RV-5): a named pass over a book ("dialogue", "timeline fixes") with a checklist of chapters done. Shared by every what-if scenario.', fields: passes, defaults: { note: '', done: [], order: 1 } },
+  submissions: { about: 'Submissions (RV-9): where each book was sent (agent, publisher, contest, magazine), when, and the answer. Shared by every what-if scenario.', fields: submissions, defaults: { kind: 'agent', sent: 'query', answer: 'waiting', notes: '' } },
   notes: { about: 'The writer\'s notebook: free notes and research pages in folders, each linked to the records it is about (NT-2). Quick captures sit in the Inbox until sorted (NT-3). Research files (images, PDFs) are read only: see research/files.md.', fields: notes, defaults: { body: '', folder: '', refs: [] } },
 };
 
@@ -447,14 +459,14 @@ export const REF_KIND_COLLECTION: Record<string, string> = {
 export const DEPENDENCY_RULES: string[] = [
   'A stay needs its character or group and its place; a journey needs its character or group, its origin and its destination. Deleting any of those deletes the stay or journey.',
   'A membership needs its character and its group. A relationship needs both characters.',
-  'A revision pass needs its book; deleting a chapter takes it off the pass\'s checklist. A character arc needs its character and its book. Deleting a scene takes it out of setups, payoffs, arc turns and book beats.',
+  'A revision pass needs its book; deleting a chapter takes it off the pass\'s checklist. A submission needs its book. A character arc needs its character and its book. Deleting a scene takes it out of setups, payoffs, arc turns and book beats.',
   'A chapter needs its book; a scene needs its chapter; a scene\'s text needs its scene. Deleting a book deletes its chapters, their scenes and the scene text.',
   'A map feature (river, road, lake…) is also a place (MP-8): creating a feature creates its place (same name, kept in step); deleting the feature deletes that place too unless stays or journeys use it (then the place is kept); deleting the place deletes the feature.',
   'A region needs its layer. A realm is a region on a political layer, never a place. Political regions never overlap: use the "border" change, which takes land from neighbours or stops at their border.',
   'Places nest physically through parentId. Deleting a place moves its sub-places up one level; a place can never be inside itself.',
   'The built-in place "unknown-place" (Unknown / on the road) cannot be deleted.',
   'Every other reference (a scene\'s cast, an event\'s place, a to-do\'s or a note\'s refs, …) is simply removed when the record it points at is deleted.',
-  'Notes, to-dos and research files are shared by every what-if scenario (they are the writer\'s, not the story\'s). A margin comment lives inside its scene\'s text (sceneTexts[].comments, with a "comment" mark on the commented words); a to-do made from it points back with comment: { sceneId, commentId }.',
+  'Notes, to-dos and research files are shared by every what-if scenario (they are the writer\'s, not the story\'s). A margin comment lives inside its scene\'s text (sceneTexts[].comments, with a "comment" mark on the commented words); a tagged line of dialogue has a "speaker" mark with the character id (RV-7, read only like all scene text); a to-do made from it points back with comment: { sceneId, commentId }.',
   'A delete that would also delete other records is refused unless the change says cascade: true (the proposal then lists what goes). reassignTo moves every link to another record of the same kind first.',
 ];
 
@@ -463,5 +475,5 @@ export const DATE_RULES: string[] = [
   'DM-1: dates are day/month/year. Write them as text in the app\'s own format: "3/5/1042" (3 May 1042), "3 May 1042", "May 1042", "spring 1042", "late spring 1042", "~1042" (about), "300 BC".',
   'Every date is a window from earliest to latest day; "May 1042" covers the whole month. Checks only warn when windows certainly clash.',
   'TL-4: a date can hang on an event, chapter or scene ("3 days after the battle"). Those are shown as such in the folder; keep them when you only change other fields.',
-  'Book deadlines (WR-12) are real-world dates written "YYYY-MM-DD", not in-world dates.',
+  'Book deadlines (WR-12) and submission dates (RV-9) are real-world dates written "YYYY-MM-DD", not in-world dates.',
 ];

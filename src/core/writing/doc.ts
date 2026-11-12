@@ -4,7 +4,7 @@
  *
  * Nodes:  doc > (paragraph | heading{level 1–3} | scene_break)+
  *         paragraph, heading > (text | hard_break)*
- * Marks on text: strong (bold), em (italics), comment{id} (WR-4, NT-1),
+ * Marks on text: strong (bold), em (italics), comment{id} (WR-4, NT-1), speaker{id} (RV-7, a character's line),
  *                link{kind, id, note} (a passage linked to a record; ST-9 links brought in by WR-4).
  *
  * The editor's schema (ui/writing/schema.ts) must match this description.
@@ -21,6 +21,8 @@ export interface Run {
   link?: { kind: LinkTargetKind; id: Id; note?: string };
   /** A line break inside the paragraph (Shift+Enter). text is ignored. */
   br?: boolean;
+  /** RV-7: the character who speaks these words (a tagged line of dialogue). */
+  speaker?: Id;
   /** RV-6: a tracked change in an edited Word file (only while reviewing it; never stored in scene text). */
   rev?: { kind: 'ins' | 'del'; author?: string; date?: string };
 }
@@ -67,6 +69,7 @@ function inlineRuns(n: TextNode): Run[] {
         if (m.type === 'strong') r.bold = true;
         else if (m.type === 'em') r.italic = true;
         else if (m.type === 'comment' && m.attrs?.id) (r.comments ??= []).push(String(m.attrs.id));
+        else if (m.type === 'speaker' && m.attrs?.id) r.speaker = String(m.attrs.id);
         else if (m.type === 'link' && m.attrs?.id) r.link = { kind: m.attrs.kind as LinkTargetKind, id: String(m.attrs.id), note: m.attrs.note ? String(m.attrs.note) : undefined };
       }
       runs.push(r);
@@ -95,6 +98,7 @@ function marksOf(r: Run): TextMark[] {
   if (r.italic) m.push({ type: 'em' });
   for (const id of r.comments ?? []) m.push({ type: 'comment', attrs: { id } });
   if (r.link) m.push({ type: 'link', attrs: { kind: r.link.kind, id: r.link.id, note: r.link.note ?? '' } });
+  if (r.speaker) m.push({ type: 'speaker', attrs: { id: r.speaker } });
   return m;
 }
 

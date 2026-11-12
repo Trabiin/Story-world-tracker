@@ -1,11 +1,11 @@
 /**
  * Phase 8a, revise: RV-3 find and replace, RV-1 rename everywhere and RV-2 name typos, RV-4 style
- * checks, RV-5 revision passes and RV-6 the editor's changes from Word. One page, in tabs.
+ * checks, RV-5 revision passes, RV-6 the editor's changes from Word and RV-7 dialogue by character. One page, in tabs.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
   Block, FindHit, World, FindScope, Id, PASS_IDEAS, RenameKind, Review, ReviewDecision, RevisionPass, Run, STYLE_RULES, STYLE_RULE_IDS, SceneReview, StyleRuleId, TextChange,
-  addVersion, decideScene, diffParagraphs, docWords, findInWorld, logWords, makeVersion, nameTypos, nameWordSet, outline, passesOf, passProgress, planReplace,
+  addVersion, decideScene, dialogueCounts, dialogueLines, untaggedQuotes, diffParagraphs, docWords, findInWorld, logWords, makeVersion, nameTypos, nameWordSet, outline, passesOf, passProgress, planReplace,
   readDocxRich, reviewDocx, runText, styleOff, styleReport, toggleChapter, withTexts,
 } from '../../core';
 import { newId, nowIso, recordBase } from '../../storage';
@@ -14,11 +14,12 @@ import { RenameEverywhere } from '../components/Rename';
 import { useApp } from '../context';
 import { ReviseRequest, applyTextChanges, takeReviseRequest, undoTextChanges } from '../revise/actions';
 
-type Tab = 'find' | 'names' | 'style' | 'passes' | 'editor';
+type Tab = 'find' | 'names' | 'style' | 'dialogue' | 'passes' | 'editor';
 const TABS: [Tab, string, string][] = [
   ['find', 'Find & replace', 'RV-3: across a scene, a chapter, a book or the whole series'],
   ['names', 'Names', 'RV-1 rename everywhere, RV-2 names that look misspelt'],
   ['style', 'Style', 'RV-4: repetition, long sentences, adverbs, filter words, overused words'],
+  ['dialogue', 'Dialogue', 'RV-7: every line a character speaks, in order'],
   ['passes', 'Passes', 'RV-5: named revision passes with a checklist per chapter'],
   ['editor', "Editor's changes", "RV-6: read back a Word file with an editor's tracked changes and comments"],
 ];
@@ -47,6 +48,7 @@ export function Revise() {
         {tab === 'find' && <FindReplace bookId={bookId} req={req?.tab === 'find' ? req : undefined} />}
         {tab === 'names' && <Names req={req?.tab === 'names' ? req : undefined} />}
         {tab === 'style' && <Style bookId={bookId} />}
+        {tab === 'dialogue' && <Dialogue bookId={bookId} />}
         {tab === 'passes' && <Passes bookId={bookId} />}
         {tab === 'editor' && <EditorChanges />}
       </div>
@@ -256,6 +258,59 @@ function Style({ bookId }: { bookId: Id }) {
       <section>
         <h2>Most used words</h2>
         <p className="top-words">{report.top.map((t) => <span key={t.word} className="tag">{t.word} <span className="muted">{t.count}</span></span>)}</p>
+      </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- RV-7 dialogue
+
+function Dialogue({ bookId }: { bookId: Id }) {
+  const { world, go } = useApp();
+  const lines = useMemo(() => dialogueLines(world, { bookId }), [world.sceneTexts, world.scenes, world.chapters, world.books, bookId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const untagged = useMemo(() => untaggedQuotes(world, bookId), [world.sceneTexts, world.scenes, world.chapters, bookId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const counts = dialogueCounts(lines);
+  const [pick, setPick] = useState<Id | undefined>();
+  const who = counts.some((c) => c.characterId === pick) ? pick! : counts[0]?.characterId;
+  const person = (id: Id) => world.characters.find((c) => c.id === id);
+  const mine = lines.filter((l) => l.characterId === who);
+  const total = counts.reduce((n, c) => n + c.words, 0);
+  const hint = <p className="muted small">On the Write page, put the cursor inside a quote (or select the words) and press <b>Speaker</b> to say who speaks it. {untagged > 0 && <>{plural(untagged, 'quote')} in this book {untagged === 1 ? 'has' : 'have'} no speaker yet.</>}</p>;
+  if (!counts.length) return <div className="revise-dialogue"><p className="muted">No tagged lines in this book yet.</p>{hint}</div>;
+  let lastScene: Id | undefined;
+  return (
+    <div className="revise-dialogue">
+      <aside className="dialogue-who">
+        <table className="plan-outline">
+          <thead><tr><th>Character</th><th className="num">Lines</th><th className="num">Words</th><th className="num">Share</th></tr></thead>
+          <tbody>
+            {counts.map((c) => {
+              const p = person(c.characterId);
+              return (
+                <tr key={c.characterId} className={c.characterId === who ? 'on' : ''} onClick={() => setPick(c.characterId)}>
+                  <td><span className="char-dot" style={{ background: p?.color ?? '#999' }} /> {p?.name ?? 'Deleted character'}</td>
+                  <td className="num">{c.lines}</td>
+                  <td className="num">{c.words.toLocaleString('en-US')}</td>
+                  <td className="num">{total ? Math.round((c.words * 100) / total) : 0}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {hint}
+      </aside>
+      <section className="dialogue-lines">
+        <h2>{person(who!)?.name ?? 'Deleted character'} <span className="muted small">{plural(mine.length, 'line')}, in reading order</span></h2>
+        {mine.map((l) => {
+          const head = l.sceneId !== lastScene;
+          lastScene = l.sceneId;
+          return (
+            <div key={l.index}>
+              {head && <div className="dialogue-scene"><button className="link" onClick={() => go('write', l.sceneId)}>{l.chapterTitle} · {l.sceneTitle}</button></div>}
+              <blockquote className="dialogue-line">{l.text}</blockquote>
+            </div>
+          );
+        })}
       </section>
     </div>
   );
