@@ -29,6 +29,8 @@ import { MapWizard } from './MapWizard';
 import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
 import { drawRegionLayers } from './regionRender';
 import { mapToSvg } from './exportSvg';
+import { imagePdf, formatDayNumber as fmtDay } from '../../core';
+import { canvasBytes } from '../util';
 import { DEFAULT_REGION_TOOLS, REGION_TOOL_KEYS, RegionCard, RegionLayerList, RegionList, RegionToolState, WhatsHere, hereLine, sortedLayers } from './RegionsPanel';
 
 /** A path with long legs broken into great-circle pieces, so it curves correctly on the flat map. */
@@ -1556,6 +1558,12 @@ export function MapView() {
     const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/png'));
     if (blob) await platform.saveBinaryFile(`${fileBase}.png`, new Uint8Array(await blob.arrayBuffer()));
   };
+  // PL-5: the view as a one-page PDF, with the world's name and the date it shows.
+  const exportPdf = async () => {
+    const jpeg = await canvasBytes(await renderExport(3), 'image/jpeg');
+    const pdf = imagePdf(jpeg, { title: world.settings.name + (currentMap ? ` · ${world.detailMaps.find((m) => m.id === currentMap)?.name ?? ''}` : ''), caption: `As of ${fmtDay(moment)}`, page: world.settings.writing?.spelling === 'en-US' ? 'letter' : 'a4' });
+    await platform.saveBinaryFile(`${fileBase}.pdf`, pdf);
+  };
   const exportSvg = async () => {
     const base = (await renderExport(2, true)).toDataURL('image/png');
     const offsets = wrapOffsets(view, size.w);
@@ -1853,6 +1861,7 @@ export function MapView() {
             <button className="small" onClick={() => void exportPng(2)} title="MK-14: a sharp picture of what is on screen">PNG</button>
             <button className="small" onClick={() => void exportPng(4)} title="Four times the screen resolution, for printing">PNG for print</button>
             <button className="small" onClick={() => void exportSvg()} title="Rivers, roads, borders, places and labels as vectors over the painted map">SVG</button>
+            <button className="small" onClick={() => void exportPdf()} title="PL-5: the view on one page (A4 or Letter), with the date it shows">PDF</button>
           </div>
         </div>
         <h3>Show</h3>

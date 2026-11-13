@@ -11,6 +11,7 @@ import { ShiftDatesModal } from '../components/ShiftDates';
 import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
 import { useApp } from '../context';
+import { CsvImportButton } from '../components/CsvImport';
 import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
 import { ArcsForCharacter } from './Plan';
@@ -85,6 +86,7 @@ export function Characters() {
           </div>
           <label className="checkbox"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
           <button className="primary" onClick={add}>+ New character</button>
+          <CsvImportButton kind="characters" />
           {templates.length > 0 && (
             <select value="" onChange={(e) => void fromTemplate(e.target.value)} title="EU-3: start from a template">
               <option value="">+ New from a template…</option>

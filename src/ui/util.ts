@@ -86,3 +86,18 @@ export function splitList(s: string): string[] {
 export function sortByName<T extends { name: string }>(list: T[]): T[] {
   return [...list].sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** PL-5: a canvas as JPEG or PNG bytes. JPEG gets a white background first (no transparency in JPEG). */
+export async function canvasBytes(c: HTMLCanvasElement, type: 'image/png' | 'image/jpeg'): Promise<Uint8Array> {
+  let src = c;
+  if (type === 'image/jpeg') {
+    src = document.createElement('canvas');
+    src.width = c.width; src.height = c.height;
+    const g = src.getContext('2d')!;
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(c, 0, 0);
+  }
+  const blob = await new Promise<Blob | null>((res) => src.toBlob(res, type, 0.92));
+  if (!blob) throw new Error('Could not make the picture.');
+  return new Uint8Array(await blob.arrayBuffer());
+}

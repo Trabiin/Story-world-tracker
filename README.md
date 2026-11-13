@@ -250,3 +250,8 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - The date bar shows the current day in your calendar ("Sixthday, 11 Seedtime 319 AR"); hover for all of them.
 - **Convert a date**: type "3/5/1042" or "3 Thaw 318 AR" and see it in every calendar.
 - Claude's `world.md` lists the calendars and today in each.
+
+## Phase 5b: pictures and spreadsheets
+
+- **Pictures** (PL-5): the map's **Export this view** gains **PDF** (one page, A4 or Letter, with the date it shows), next to PNG and SVG. The Timeline gets **Save: PNG / PDF** for what is on screen.
+- **Import from a spreadsheet** (PL-6): **Import CSV…** on the Characters and Places pages. Save the sheet as "CSV UTF-8"; columns are matched by their headings (name, aliases, born, died, importance, tags, notes; for places kind, inside, latitude, longitude). Each row shows what will happen before you import; names that already exist are skipped or only have their empty fields filled in. One undo takes it back.
