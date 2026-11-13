@@ -200,7 +200,16 @@ ul.plain { list-style: none; padding: 0; margin: 0; display: flex; flex-directio
 .map-layout { display: grid; grid-template-columns: 1fr 280px; height: 100%; }
 .map-canvas { position: relative; overflow: hidden; min-height: 0; }
 .map-canvas canvas { display: block; touch-action: none; }
-.map-toolbar { position: absolute; top: 10px; left: 10px; display: flex; gap: 4px; }
+.map-toolbar { position: absolute; top: 10px; left: 10px; right: 64px; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none; }
+.map-toolbar > * { pointer-events: auto; }
+.zoom-controls { position: absolute; right: 10px; bottom: 52px; display: flex; flex-direction: column; gap: 8px; z-index: 1; }
+.zoom-group { display: flex; flex-direction: column; background: var(--bg); border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); overflow: hidden; }
+.zoom-group button { width: 36px; height: 36px; padding: 0; font-size: 20px; line-height: 1; border: none; border-radius: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: var(--fg); }
+.zoom-group svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.zoom-group button + button { border-top: 1px solid var(--line); }
+.zoom-group button:hover { background: var(--panel); }
+.zoom-group button.on { background: var(--accent); color: var(--accent-fg); }
+.map-zoombox { position: absolute; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); pointer-events: none; }
 .map-toolbar button { background: var(--bg); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }
 .map-toolbar button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .map-status { position: absolute; left: 10px; bottom: 10px; background: var(--bg); padding: 4px 10px; border-radius: var(--radius); font-size: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15); }

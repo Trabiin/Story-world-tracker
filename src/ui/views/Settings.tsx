@@ -1,6 +1,7 @@
 /** World settings, travel speeds (WH-7), backups (EU-17) and open exports (PL-4). */
 import { useMemo, useState } from 'react';
 import { LightSetting, lightSetting, setLightSetting, softwareRendering } from '../perf';
+import { WheelPref, setWheelPref, wheelPref } from '../map/navigate';
 import { EARTH_MOON, MOON_ICON, fromDay, moonPhases, toWindow, BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM, NO_MODIFIERS } from '../../core';
 import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
@@ -236,6 +237,7 @@ function MapSettings() {
           </select>
         </Field>
         <LightDrawingField />
+        <WheelField />
         <Field label="Map style" hint="MK-12: a clean flat look, or a hand-drawn parchment look. Also used for exported maps.">
           <select value={s.mapStyle ?? 'flat'} onChange={(e) => store.setSettings({ mapStyle: e.target.value as 'flat' | 'parchment' })}>
             <option value="flat">Clean and flat</option>
@@ -316,6 +318,18 @@ function LightDrawingField() {
         <option value="auto">Automatic ({soft ? 'lighter' : 'full detail'})</option>
         <option value="on">Lighter (faster)</option>
         <option value="off">Full detail</option>
+      </select>
+    </Field>
+  );
+}
+
+function WheelField() {
+  const [v, setV] = useState<WheelPref>(wheelPref);
+  return (
+    <Field label="Scrolling on the map" hint="A mouse wheel usually zooms. On a touchpad, two-finger scrolling may feel better moving the map. Pinching always zooms, and holding Shift swaps the two. Kept on this computer only.">
+      <select value={v} onChange={(e) => { const n = e.target.value as WheelPref; setWheelPref(n); setV(n); }}>
+        <option value="zoom">Zooms in and out (mouse)</option>
+        <option value="pan">Moves the map (touchpad)</option>
       </select>
     </Field>
   );
