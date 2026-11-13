@@ -32,6 +32,7 @@ import { Notebook } from './views/Notebook';
 import { Plan } from './views/Plan';
 import { Revise } from './views/Revise';
 import { Finish } from './views/Finish';
+import { Grid } from './views/Grid';
 import { QuickCapture } from './components/QuickCapture';
 import { ClaudeHub } from './claude/ClaudeHub';
 import type { ClaudePreview } from './context';
@@ -54,6 +55,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: 'places', label: 'Places', key: '7' },
   { view: 'layers', label: 'Realms & layers', key: '' },
   { view: 'groups', label: 'Groups', key: '8' },
+  { view: 'grid', label: 'Spreadsheet', key: '' },
   { view: 'warnings', label: 'Warnings', key: '9' },
   { view: 'todos', label: 'To-dos', key: '' },
   { view: 'claude', label: 'Ask Claude', key: '' },
@@ -252,6 +254,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
           {view === 'plan' && <Plan />}
           {view === 'revise' && <Revise />}
           {view === 'finish' && <Finish />}
+          {view === 'grid' && <Grid />}
           {view === 'story' && <Story />}
           {view === 'manuscripts' && <Manuscripts />}
           {view === 'characters' && <Characters />}

@@ -252,3 +252,9 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 
 - **Pictures** (PL-5): the map's **Export this view** gains **PDF** (one page, A4 or Letter, with the date it shows), next to PNG and SVG. The Timeline gets **Save: PNG / PDF** for what is on screen.
 - **Import from a spreadsheet** (PL-6): **Import CSV…** on the Characters and Places pages. Save the sheet as "CSV UTF-8"; columns are matched by their headings (name, aliases, born, died, importance, tags, notes; for places kind, inside, latitude, longitude). Each row shows what will happen before you import; names that already exist are skipped or only have their empty fields filled in. One undo takes it back.
+
+## Phase 5c: spreadsheet editing
+
+- **Spreadsheet** (EU-19), in the sidebar: characters, places, stays and journeys as an editable grid. Type in a cell and press Enter to save it (Esc puts it back); arrow keys and Enter move between rows; click a heading to sort; the search box narrows the rows.
+- Cells read the same way as everywhere else: dates in day/month/year or tied to an event, people and places by name or alias (with a list to pick from), lists separated by semicolons. A cell that can't be read turns red, says why, and leaves the record as it was.
+- The last row adds a new record once its starred cells are filled. A block copied from Excel pastes into many cells at once, and extra rows become new records. Stays and journeys show their warnings on the row and can be deleted in bulk. Every save, and every paste, is one undo step.
