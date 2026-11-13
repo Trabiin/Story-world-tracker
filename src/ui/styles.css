@@ -984,3 +984,10 @@ table.sheet td.row-end { padding: 0 6px; white-space: nowrap; font-size: 12px; }
 table.sheet tr.draft td input { font-style: italic; }
 table.sheet tr.new-row td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 table.sheet .warn-dot { color: var(--warn, #b7791f); margin-right: 6px; cursor: help; }
+
+/* MK-17 sketch tracing */
+.sketch-trace { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.sketch-preview { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+.sketch-preview canvas { display: block; width: 100%; height: auto; image-rendering: auto; }
+.sketch-opts hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+@media (max-width: 800px) { .sketch-trace { grid-template-columns: 1fr; } }

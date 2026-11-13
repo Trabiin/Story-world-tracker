@@ -6,3 +6,4 @@ export * from './seasons';
 export * from './rainShadow';
 export * from './suggest';
 export * from './detail';
+export * from './sketch';
