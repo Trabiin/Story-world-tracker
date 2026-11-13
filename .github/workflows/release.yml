@@ -1,9 +1,9 @@
 name: Desktop installers
 
-# Builds the installers Ojon uses: Windows, and Linux for a Chromebook's Linux environment
-# (.deb for Intel/AMD and ARM Chromebooks, plus an AppImage). Runs on pull requests (installers
-# attached to the run), from the Actions tab ("Run workflow"), or on a tag like v0.1.0 (draft
-# release with installers).
+# Builds the Windows installers. (The Chromebook uses the Chrome app from pages.yml; the Linux build
+# was too slow there without graphics acceleration. Add a ubuntu-22.04 / ubuntu-22.04-arm row with
+# bundles deb to build Linux again.) Runs on pull requests (installers attached to the run), from
+# the Actions tab ("Run workflow"), or on a tag like v0.1.0 (draft release with installers).
 on:
   workflow_dispatch:
   pull_request:
@@ -21,21 +21,9 @@ jobs:
           - name: windows
             os: windows-latest
             bundles: nsis,msi
-          # Ubuntu 22.04 so the app also runs on the older Debian that ChromeOS's Linux uses.
-          - name: chromebook-intel
-            os: ubuntu-22.04
-            bundles: deb,appimage
-          - name: chromebook-arm
-            os: ubuntu-22.04-arm
-            bundles: deb
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Linux build libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - uses: actions/setup-node@v4
         with:
           node-version: 22

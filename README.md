@@ -1,6 +1,6 @@
 # Story World Tracker
 
-A desktop app for novelists, for Windows and for a Chromebook (as a Linux app): where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
+A desktop app for novelists, for Windows and (as an installable Chrome app) for a Chromebook: where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
 
 The full requirements live in the project's `spec/requirements.md`; the approved architecture is in `spec/architecture.md`.
 
@@ -155,21 +155,16 @@ src-tauri     desktop shell (Tauri 2)
 The **Desktop installers** workflow (Actions tab → Run workflow, and on every pull request) builds, attached to the run:
 
 - **installers-windows**: the Windows `.exe` and `.msi` installers.
-- **installers-chromebook-intel**: the `.deb` (and an `.AppImage`) for Chromebooks with an Intel or AMD processor.
-- **installers-chromebook-arm**: the `.deb` for Chromebooks with an ARM processor (MediaTek, Snapdragon, Kompanio).
 
 Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
 
-### On a Chromebook
+### On a Chromebook: the Chrome app
 
-1. Turn on Linux once: **Settings → About ChromeOS → Developers → Linux development environment → Set up**.
-2. Which processor? **Settings → About ChromeOS → Diagnostics** shows it (Intel, AMD, or MediaTek/Snapdragon for ARM). Download the matching `.deb`.
-3. The download is a `.zip`: open it and drag the `.deb` into **Linux files**. Newer ChromeOS versions no longer install a `.deb` by double-clicking, so open the **Terminal** app, choose **penguin**, and type `sudo apt install ./Story*.deb` (answer Y). The app then sits in the launcher under **Linux apps**.
-4. Keep `.world` files in **Linux files**, or share a folder (such as Google Drive) with Linux: right-click it → **Share with Linux**. The same `.world` file opens on Windows and on the Chromebook; just don't have it open on both at once.
+The Chromebook uses the app in Chrome, which draws with the graphics chip (the Linux version was too slow there). Every push to main publishes it to **https://trabiin.github.io/Story-world-tracker/** (workflow "Chrome app"; once, in the repository: Settings → Pages → Source: GitHub Actions).
 
-If the app feels slow (Linux on a Chromebook usually has no graphics acceleration), check **Settings → Map → Drawing on this computer**: Automatic switches to lighter drawing when there is no acceleration (canvases at normal rather than full sharpness, no animations or shadows), and Lighter forces it. Turning on `chrome://flags/#crostini-gpu-support` in Chrome, where the Chromebook offers it, gives Linux apps acceleration. The app also turns off WebKit's emulated accelerated drawing when there is no graphics device.
-
-Spell checking and the Claude Code features work as on Windows once the Linux tools are installed (Claude Code is installed in the Linux terminal).
+1. Open that address in Chrome and click the install icon at the right of the address bar (or ⋮ → Cast, save and share → Install page as app). It then opens from the launcher like any app, also offline.
+2. **Open a .world file…** or create a world: you choose where the file goes. Google Drive works, so the same file opens in the Windows app too (just not on both at once). Chrome asks once per visit to allow the file; an installed app can be allowed "on every visit".
+3. Backups stay inside Chrome on that computer; Google Drive also keeps its own versions of the file. Claude Code features are only in the Windows app.
 
 ## Phase 6a: write here
 

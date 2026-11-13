@@ -104,7 +104,7 @@ export function Settings() {
           </div>
         </>
       ) : (
-        <p>In the browser preview, backups are kept inside this browser (last 10). Download a copy to keep it safe elsewhere.</p>
+        <p>{platform.kind === 'web' ? 'Backups are kept inside Chrome on this computer (last 10). The .world file itself is where you saved it; keeping it in Google Drive also gives you Drive\'s own version history.' : 'In the browser preview, backups are kept inside this browser (last 10). Download a copy to keep it safe elsewhere.'}</p>
       )}
       <div className="row">
         <button onClick={() => store.backupNow()}>Back up now</button>

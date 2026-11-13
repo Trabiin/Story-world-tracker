@@ -33,6 +33,7 @@ export function WorldsScreen({ platform, onOpen }: { platform: Platform; onOpen:
       <div className="worlds-card">
         <h1>Story World Tracker</h1>
         <p className="muted">Where is everyone, what are they doing, and how did they get there?</p>
+        {platform.kind === 'web' && <p className="note">Each world is a .world file you keep where you like, for example in Google Drive, so the same file also opens in the Windows app (just not on both at once). Chrome asks once per visit to allow the file.</p>}
         {platform.kind === 'browser' && <p className="note">Browser preview: worlds are saved in this browser only, and file exports may not download here. The desktop app saves real .world files.</p>}
         {error && <p className="error">{error}</p>}
         <h2>Your worlds</h2>
