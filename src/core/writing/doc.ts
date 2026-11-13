@@ -21,6 +21,8 @@ export interface Run {
   link?: { kind: LinkTargetKind; id: Id; note?: string };
   /** A line break inside the paragraph (Shift+Enter). text is ignored. */
   br?: boolean;
+  /** RV-6: a tracked change in an edited Word file (only while reviewing it; never stored in scene text). */
+  rev?: { kind: 'ins' | 'del'; author?: string; date?: string };
 }
 
 /** A paragraph-level block, the simple form used by import, export, safety copies and search. */

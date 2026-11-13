@@ -207,3 +207,14 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Character arcs** (NT-8): per book, where a character starts and ends (goal, belief, wound) and the scenes that turn them. Main characters without an arc are listed; arcs show on the character's page and turns on the scene's page.
 - Claude's folder gains `story/setups.md`, `story/structure.md` and `story/arcs.md`; Claude can propose setups, arcs and beats.
 - World file format 14 (setups and character arcs). Older files open as before.
+
+## Phase 8a: revise
+
+- **Find and replace** (RV-3): **Revise → Find & replace**, or **Find** (Ctrl+H) on the Write page. Look in a scene, a chapter, a book or the whole series, with whole words and match case. Every match is listed with the words around it; untick any to leave them. Bold, italics, links and margin comments stay on the text around them. Each changed scene keeps a version from before, and **Undo** puts it all back.
+- **Rename everywhere** (RV-1): **Rename everywhere…** next to the name of a character, place, realm, group or event (or **Revise → Names**). It finds the full name and, when one word changes ("Kaela Venn" to "Kayla Venn"), that word on its own, in scene text, scene and chapter titles, summaries and notes. Words that other names share ("Venn") start unticked. The old name can stay as an alias.
+- **Name typos** (RV-2): a capitalised word one letter from a name or alias ("Kayla" for Kaela) is underlined in red on the Write page and listed on the Warnings page and in **Revise → Names**, with **Change to Kaela** or **Not a typo**.
+- **Style checks** (RV-4): **Style** on the Write page marks words repeated close together, very long sentences, adverbs, filter words and crutch words overused in the book. **Revise → Style** switches each rule on or off and shows them per chapter, with the book's most used words. Plain rules, no AI.
+- **Revision passes** (RV-5): **Revise → Passes**: named passes ("Dialogue", "Timeline and places") with a tick per chapter and a progress bar.
+- **Editor's changes** (RV-6): export the book (Write → Export), send it to your editor, and open the file they send back in **Revise → Editor's changes**. The export now carries an invisible marker around each scene, so every scene is found again (older exports are matched by chapter titles and scene breaks). Tracked insertions and deletions are shown scene by scene: **Accept** (your links and comments stay where their words still are), **Reject**, or **Keep both** (the editor's version goes into the scene's History). The editor's comments become margin comments.
+- Claude's folder gains `story/revision.md`; Claude can propose revision passes.
+- World file format 15 (revision passes). Older files open as before.

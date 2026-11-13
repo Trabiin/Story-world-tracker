@@ -16,6 +16,7 @@ import { OPEN_END, WorldIndex } from '../whereabouts';
 import { safeName, textOf } from '../writing';
 import { allComments, cleanFolder } from '../notes';
 import { SETUP_STATE_LABEL, arcTurnsInOrder, pacing, readIndexOf, setupState } from '../plan';
+import { STYLE_RULES, STYLE_RULE_IDS, passesOf } from '../revise';
 import { claudeMd, dataModelGuide } from './guide';
 import { REF_KIND_COLLECTION } from './schema';
 import { docToMarkdown } from './text';
@@ -241,6 +242,17 @@ ${r.ties.map((t) => `- ${t.role}: ${ch(t.characterId)}${t.start || t.end ? `, ${
   files.push({
     path: 'story/arcs.md',
     text: `# Character arcs\n\nPer book: where each character starts and ends, and the scenes that turn them.\n\n${world.arcs.map((a) => `## ${ch(a.characterId)} in ${name('books', a.bookId)}\n\n- **id:** \`${a.id}\`\n${line('Goal', a.goalStart || a.goalEnd ? `${a.goalStart || '?'} → ${a.goalEnd || '?'}` : '')}${line('Belief', a.beliefStart || a.beliefEnd ? `${a.beliefStart || '?'} → ${a.beliefEnd || '?'}` : '')}${line('Wound', a.woundStart || a.woundEnd ? `${a.woundStart || '?'} → ${a.woundEnd || '?'}` : '')}${arcTurnsInOrder(world, a).map((t) => `- Turn in ${sc(t.sceneId)}${t.note ? `: ${t.note}` : ''}`).join('\n')}${line('Notes', a.notes)}`).join('\n\n') || 'None yet.'}\n`,
+  });
+
+  // ---- revision passes (RV-5) and style rules (RV-4) ----
+  const off = world.settings.writing?.styleOff ?? [];
+  files.push({
+    path: 'story/revision.md',
+    text: `# Revision\n\nRevision passes: one read through a book looking for one thing, ticked off chapter by chapter.\n\n${world.books.slice().sort((a, b) => a.order - b.order).map((b) => {
+      const list = passesOf(world, b.id);
+      const chapters = world.chapters.filter((c) => c.bookId === b.id).sort((x, y) => x.order - y.order);
+      return `## ${b.title}\n\n${list.length ? list.map((p) => `### ${p.name} (\`${p.id}\`)\n\n${p.note ? `${p.note}\n\n` : ''}${chapters.map((c) => `- [${p.done.includes(c.id) ? 'x' : ' '}] ${c.title}`).join('\n')}`).join('\n\n') : 'No passes for this book.'}\n`;
+    }).join('\n') || 'No books yet.'}\nStyle checks (RV-4) on the Write page: ${STYLE_RULE_IDS.filter((r) => !off.includes(r)).map((r) => STYLE_RULES[r].name.toLowerCase()).join(', ') || 'all switched off'}. Names that look misspelt (RV-2) are listed in warnings.md.\n`,
   });
 
   // ---- notebook and research files (NT-2, NT-4) ----

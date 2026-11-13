@@ -8,7 +8,7 @@
  * describing it here is a compile error, so the guide never falls out of date.
  */
 import type {
-  ArcTurn, Beat, CharacterArc, Setup, Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
+  ArcTurn, Beat, CharacterArc, RevisionPass, Setup, Book, Chapter, Character, CharacterAttribute, DetailMap, Group, Incident, Journey, Knower, MapFeature, MapLayer, MapSymbol, Membership, Picture, Place,
   Note, Plan, PlotThread, RecordBase, Region, RegionLayer, RegionOverlord, RegionTie, RegionVersion, Relationship, Scene, Secret, Stay, Todo, WorldEvent,
 } from '../model';
 import { DIRECTED_RELATIONS } from '../model';
@@ -16,7 +16,7 @@ import { DIRECTED_RELATIONS } from '../model';
 /** Collections Claude may propose changes to (AI-3). Scene text has its own change ('text'), terrain too ('terrain'). */
 export const CLAUDE_COLLECTIONS = [
   'characters', 'places', 'groups', 'memberships', 'stays', 'journeys', 'books', 'chapters', 'scenes', 'threads', 'events', 'relationships', 'secrets',
-  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes', 'setups', 'arcs',
+  'regionLayers', 'regions', 'mapFeatures', 'mapSymbols', 'mapLayers', 'detailMaps', 'todos', 'notes', 'setups', 'arcs', 'passes',
 ] as const;
 export type ClaudeCollection = (typeof CLAUDE_COLLECTIONS)[number];
 
@@ -233,6 +233,14 @@ const arcs: Spec<CharacterArc> = {
   notes: { t: 'string', desc: 'Notes.' },
 };
 
+const passes: Spec<RevisionPass> = {
+  bookId: { t: 'ref', to: ['books'], req: true, desc: 'The book this pass goes through.' },
+  name: { t: 'string', req: true, desc: 'Name of the pass ("Dialogue", "Timeline fixes").' },
+  note: { t: 'string', desc: 'What to look for in this pass.' },
+  done: { t: 'refs', to: ['chapters'], desc: 'Chapters done in this pass (the writer ticks them off).' },
+  order: { t: 'number', desc: 'Position among the book\'s passes (1, 2, 3…).' },
+};
+
 const chapters: Spec<Chapter> = {
   bookId: { t: 'ref', to: ['books'], req: true, desc: 'The book.' },
   title: { t: 'string', req: true, desc: 'Title.' },
@@ -421,6 +429,7 @@ export const SCHEMA: Record<ClaudeCollection, CollectionSpec> = {
   todos: { about: 'To-dos and plot holes linked to records (EU-14).', fields: todos, defaults: { note: '', kind: 'todo', done: false, refs: [] } },
   setups: { about: 'Setups and payoffs (NT-6): a clue, promise or planted object, the scene that plants it and the scene that pays it off.', fields: setups, defaults: { kind: 'clue', note: '' } },
   arcs: { about: 'Character arcs (NT-8): per book, where a character starts and ends (goal, belief, wound) and the scenes that turn them.', fields: arcs, defaults: { goalStart: '', goalEnd: '', beliefStart: '', beliefEnd: '', woundStart: '', woundEnd: '', turns: [], notes: '' } },
+  passes: { about: 'Revision passes (RV-5): a named pass over a book ("dialogue", "timeline fixes") with a checklist of chapters done. Shared by every what-if scenario.', fields: passes, defaults: { note: '', done: [], order: 1 } },
   notes: { about: 'The writer\'s notebook: free notes and research pages in folders, each linked to the records it is about (NT-2). Quick captures sit in the Inbox until sorted (NT-3). Research files (images, PDFs) are read only: see research/files.md.', fields: notes, defaults: { body: '', folder: '', refs: [] } },
 };
 
@@ -438,7 +447,7 @@ export const REF_KIND_COLLECTION: Record<string, string> = {
 export const DEPENDENCY_RULES: string[] = [
   'A stay needs its character or group and its place; a journey needs its character or group, its origin and its destination. Deleting any of those deletes the stay or journey.',
   'A membership needs its character and its group. A relationship needs both characters.',
-  'A character arc needs its character and its book. Deleting a scene takes it out of setups, payoffs, arc turns and book beats.',
+  'A revision pass needs its book; deleting a chapter takes it off the pass\'s checklist. A character arc needs its character and its book. Deleting a scene takes it out of setups, payoffs, arc turns and book beats.',
   'A chapter needs its book; a scene needs its chapter; a scene\'s text needs its scene. Deleting a book deletes its chapters, their scenes and the scene text.',
   'A map feature (river, road, lake…) is also a place (MP-8): creating a feature creates its place (same name, kept in step); deleting the feature deletes that place too unless stays or journeys use it (then the place is kept); deleting the place deletes the feature.',
   'A region needs its layer. A realm is a region on a political layer, never a place. Political regions never overlap: use the "border" change, which takes land from neighbours or stops at their border.',

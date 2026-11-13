@@ -70,6 +70,7 @@ export function createEmptyWorld(name: string): World {
     notes: [],
     attachments: [],
     setups: [],
+    passes: [],
     arcs: [],
     terrain: emptyTerrain(),
   };

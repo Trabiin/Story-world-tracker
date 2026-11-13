@@ -15,6 +15,7 @@ import { useApp } from '../context';
 import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
 import { placeName } from '../util';
+import { RenameButton } from '../components/Rename';
 
 export function Events() {
   const { world, store, selected, select } = useApp();
@@ -111,7 +112,7 @@ function EventDetail({ e }: { e: WorldEvent }) {
       {dialog === 'shift' && <ShiftDatesModal from={e.start} title={`Shift everything from ${e.name} on`} onClose={() => setDialog(null)} />}
       <div className="two-col">
         <div className="form-grid">
-          <Field label="Name"><input value={e.name} onChange={(x) => set({ name: x.target.value })} /></Field>
+          <Field label="Name"><input value={e.name} onChange={(x) => set({ name: x.target.value })} /><RenameButton kind="event" id={e.id} /></Field>
           <Field label="Kind">
             <select value={e.kind} onChange={(x) => set({ kind: x.target.value as WorldEvent['kind'] })}>
               {EVENT_KINDS.map((k) => <option key={k.id} value={k.id}>{k.icon} {k.label}</option>)}

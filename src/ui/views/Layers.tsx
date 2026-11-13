@@ -15,6 +15,7 @@ import { Research } from '../components/Research';
 import { Pictures } from '../components/Pictures';
 import { BorderHistory, RegionLayerList, sortedLayers } from '../map/RegionsPanel';
 import { PLACE_ICON } from './Places';
+import { RenameButton } from '../components/Rename';
 
 const ROLES = ['ruler', 'heir', 'regent', 'founder', 'high priest', 'prophet', 'general', 'governor', 'member'];
 
@@ -110,7 +111,7 @@ function RegionPage({ r, ix }: { r: Region; ix: LayerIndex }) {
       <p className="muted">{layer?.name}{chain.length > 1 && ` · ${describeChain(chain)}`} · on {formatDayNumber(moment)}</p>
       <div className="two-col">
         <div className="form-grid">
-          <Field label="Name"><input value={r.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="Name"><input value={r.name} onChange={(e) => set({ name: e.target.value })} /><RenameButton kind="region" id={r.id} /></Field>
           <Field label="Layer">
             <select value={r.layerId} onChange={(e) => set({ layerId: e.target.value, overlords: [] })}>
               {sortedLayers(world.regionLayers).map((l) => <option key={l.id} value={l.id}>{l.name} ({LAYER_TYPES[l.type].name})</option>)}

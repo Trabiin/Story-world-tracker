@@ -11,6 +11,7 @@ import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
 import { DeleteDialog, MergeDialog } from '../components/RecordTools';
 import { PALETTE, placeName, sortByName } from '../util';
+import { RenameButton } from '../components/Rename';
 
 export function Groups() {
   const { world, store, selected, select } = useApp();
@@ -61,7 +62,7 @@ function GroupDetail({ g }: { g: Group }) {
       {dialog === 'merge' && <MergeDialog collection="groups" id={g.id} onClose={() => setDialog(null)} onDone={(keep) => select(keep)} />}
       <div className="two-col">
         <div className="form-grid">
-          <Field label="Name"><input value={g.name} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <Field label="Name"><input value={g.name} onChange={(e) => set({ name: e.target.value })} /><RenameButton kind="group" id={g.id} /></Field>
           <Field label="Colour">
             <div className="row wrap">
               {PALETTE.map((p) => <button key={p} className={`color-dot ${g.color === p ? 'on' : ''}`} style={{ background: p }} onClick={() => set({ color: p })} />)}

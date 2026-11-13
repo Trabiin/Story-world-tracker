@@ -7,7 +7,7 @@ export function bigWorld(): World {
   const base = { scenarioId: CANON, status: 'canon' as const, createdAt: '', updatedAt: '' };
   const w: World = {
     settings: { name: 'Big', radiusKm: 6371, hemisphereForSeasons: 'north', defaultDetourFactor: 1.3, travelModes: DEFAULT_TRAVEL_MODES, disabledRules: [], axialTiltDeg: 23.44, biomes: DEFAULT_BIOMES },
-    characters: [], places: [], groups: [], memberships: [], stays: [], journeys: [], mapImages: [], dismissals: [], books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], mapFeatures: [], mapLayers: [], detailMaps: [], regionLayers: [], regions: [], events: [], relationships: [], secrets: [], threads: [], scenarios: [], todos: [], sceneTexts: [], sceneVersions: [], writingDays: [], suggestions: [], claudeLog: [], notes: [], attachments: [], setups: [], arcs: [], terrain: emptyTerrain(),
+    characters: [], places: [], groups: [], memberships: [], stays: [], journeys: [], mapImages: [], dismissals: [], books: [], chapters: [], scenes: [], manuscripts: [], links: [], mapSymbols: [], mapFeatures: [], mapLayers: [], detailMaps: [], regionLayers: [], regions: [], events: [], relationships: [], secrets: [], threads: [], scenarios: [], todos: [], sceneTexts: [], sceneVersions: [], writingDays: [], suggestions: [], claudeLog: [], notes: [], attachments: [], setups: [], arcs: [], passes: [], terrain: emptyTerrain(),
   } as World;
   let seed = 1;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);

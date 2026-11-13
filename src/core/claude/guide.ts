@@ -88,7 +88,7 @@ This folder is a live, read-only copy of the story world "${s.name}" kept by Sto
 - \`manuscript/\`: the text of every scene, book by book and chapter by chapter, with the scene's date, point of view, place and cast at the top. Scene text lives in the app; Word is only for import and export.
 - \`characters/\`, \`places/\`, \`groups/\`, \`events/\`, \`realms/\`: one page per record, with its id, fields, relationships, whereabouts and where it appears.
 - \`timeline.md\`: everything that happens, in in-world date order.
-- \`story/\`: plot threads, secrets and who knows them, scenarios (what-ifs), to-dos and plot holes, the margin comments on the text (\`story/comments.md\`), setups and payoffs, each book's structure (beats) and the character arcs.
+- \`story/\`: plot threads, secrets and who knows them, scenarios (what-ifs), to-dos and plot holes, the margin comments on the text (\`story/comments.md\`), setups and payoffs, each book's structure (beats), the character arcs, and the revision passes with the style checks in use (\`story/revision.md\`).
 - \`notes/\`: the writer's notebook, one file per note, in the notebook's folders (\`notes/Inbox/\` holds quick captures not sorted yet). Each note lists the records it is about.
 - \`research/\`: the research files (images and PDFs) with what they are attached to (\`research/files.md\`), and copies of the files in \`research/files/\` that you can open and read.
 - \`map.md\`: rivers, roads, lakes, mountain ranges and other map features; the painted terrain is summarised.
