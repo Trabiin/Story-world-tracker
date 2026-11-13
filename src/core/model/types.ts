@@ -2,7 +2,7 @@
  * The world data model (DM-1..DM-8). Plain data objects; storage lives elsewhere.
  * Every record carries scenarioId and status from day one (DM-6).
  */
-import type { FuzzyDate, Hemisphere } from '../dates';
+import type { CustomCalendar, FuzzyDate, Hemisphere } from '../dates';
 import type { LatLng } from '../globe';
 import type { Biome, Terrain } from '../terrain';
 
@@ -54,6 +54,8 @@ export interface WorldSettings {
   timelineSky?: { events: boolean; seasons: boolean; seasonsAt?: Id; moon: boolean; holidays: boolean };
   /** TL-6: the moon's cycle, from one known new moon (a day number). */
   moon?: { periodDays: number; newMoonDay: number; name?: string };
+  /** TL-2: the world's own calendars. Dates are still stored and shown day/month/year (Gregorian); these are shown alongside and in the converter. */
+  calendars?: CustomCalendar[];
   /** WH-9 (optional): what slows or speeds travel beyond the travel mode's speed. */
   travelModifiers?: TravelModifiers;
   /** EU-7: named filters and layouts. */

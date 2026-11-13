@@ -475,5 +475,6 @@ export const DATE_RULES: string[] = [
   'DM-1: dates are day/month/year. Write them as text in the app\'s own format: "3/5/1042" (3 May 1042), "3 May 1042", "May 1042", "spring 1042", "late spring 1042", "~1042" (about), "300 BC".',
   'Every date is a window from earliest to latest day; "May 1042" covers the whole month. Checks only warn when windows certainly clash.',
   'TL-4: a date can hang on an event, chapter or scene ("3 days after the battle"). Those are shown as such in the folder; keep them when you only change other fields.',
+  'TL-2: the world may have its own calendars (listed in world.md). They are only shown alongside: always write dates in day/month/year as above, converting from a custom calendar first if the writer used one.',
   'Book deadlines (WR-12) and submission dates (RV-9) are real-world dates written "YYYY-MM-DD", not in-world dates.',
 ];

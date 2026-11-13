@@ -8,6 +8,7 @@ import { safetyCopyFiles } from '../../core';
 import { Field } from '../components/Modal';
 import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
+import { CalendarSettings } from './CalendarSettings';
 
 export function Settings() {
   const { world, store, platform, closeWorld } = useApp();
@@ -43,6 +44,8 @@ export function Settings() {
       <MapSettings />
 
       <MoonSettings />
+
+      <CalendarSettings />
 
       <h2>Travel speeds</h2>
       <table className="table">

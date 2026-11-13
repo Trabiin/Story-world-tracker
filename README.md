@@ -1,6 +1,6 @@
 # Story World Tracker
 
-A Windows desktop app for novelists: where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
+A desktop app for novelists, for Windows and for a Chromebook (as a Linux app): where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
 
 The full requirements live in the project's `spec/requirements.md`; the approved architecture is in `spec/architecture.md`.
 
@@ -152,7 +152,22 @@ src-tauri     desktop shell (Tauri 2)
 
 ## Installers
 
-The **Desktop installers** workflow (Actions tab → Run workflow) builds the Windows `.exe` and `.msi` installers, attached to the run. Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
+The **Desktop installers** workflow (Actions tab → Run workflow, and on every pull request) builds, attached to the run:
+
+- **installers-windows**: the Windows `.exe` and `.msi` installers.
+- **installers-chromebook-intel**: the `.deb` (and an `.AppImage`) for Chromebooks with an Intel or AMD processor.
+- **installers-chromebook-arm**: the `.deb` for Chromebooks with an ARM processor (MediaTek, Snapdragon, Kompanio).
+
+Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
+
+### On a Chromebook
+
+1. Turn on Linux once: **Settings → About ChromeOS → Developers → Linux development environment → Set up**.
+2. Which processor? **Settings → About ChromeOS → Diagnostics** shows it (Intel, AMD, or MediaTek/Snapdragon for ARM). Download the matching `.deb`.
+3. In the Files app, double-click the `.deb` and choose **Install**. The app then sits in the launcher under **Linux apps**.
+4. Keep `.world` files in **Linux files**, or share a folder (such as Google Drive) with Linux: right-click it → **Share with Linux**. The same `.world` file opens on Windows and on the Chromebook; just don't have it open on both at once.
+
+Spell checking and the Claude Code features work as on Windows once the Linux tools are installed (Claude Code is installed in the Linux terminal).
 
 ## Phase 6a: write here
 
@@ -228,3 +243,10 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Series bible** (EU-16): **Finish → Series bible**: characters (dates, titles, groups, relationships, description), places by region, groups and their members, and one timeline of events, births and deaths and dated scenes. Either everything (your copy, with notes) or only what the reader knows by the end of a chosen book. Save as PDF or Word.
 - Claude's folder gains `story/dialogue.md` and `story/submissions.md`; Claude can propose submissions.
 - World file format 16 (submissions). Older files open as before.
+
+## Phase 5a: calendars
+
+- **Your world's own calendars** (TL-2): **Settings → Calendars**. Add as many as you like, starting from 12 months, 13 months of 28 days, or 10 months, and set month names and lengths, leap days and the leap rule, the days of the week, the eras and the day year 1 begins. Dates everywhere stay day/month/year (D-16).
+- The date bar shows the current day in your calendar ("Sixthday, 11 Seedtime 319 AR"); hover for all of them.
+- **Convert a date**: type "3/5/1042" or "3 Thaw 318 AR" and see it in every calendar.
+- Claude's `world.md` lists the calendars and today in each.

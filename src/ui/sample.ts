@@ -1,7 +1,7 @@
 /** A small invented world to try the app with. Contains a few deliberate problems to show warnings. */
 import {
   Book, Character, Journey, LatLng, ManuscriptLink, MapFeature, Paragraph, Place, Relationship, Stay, World, WorldEvent, exactDate as d, featureAnchor,
-  makeAnchor, textHash, toDayNumber, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
+  makeAnchor, textHash, toDayNumber, calendarTemplate, traceRiver, Region, editRegionArea, polygonFromPoints, subtractArea, PlotThread, Scene, newScenario, overlayId,
   Block, Run, TextComment, Attachment, Note, commentTodo, applyTemplate, BUILT_IN_TEMPLATES, blocksToDoc, docToBlocks, docWords, addDays, dayKey, ProposalInput, addSuggestion, checkProposal,
 } from '../core';
 import { blobStore, newId, nowIso } from '../storage';
@@ -375,6 +375,9 @@ export function sampleWorld(): World {
     { ...recordBase(), bookId: book.id, name: 'Timeline and places', note: 'Dates, travel times, who is where: clear the Warnings page for this book.', done: chs.slice(0, 2).map((c) => c.id), order: 1 },
     { ...recordBase(), bookId: book.id, name: 'Dialogue', note: 'Cut small talk, check tags and beats, read it aloud.', done: [chs[0].id], order: 2 },
   );
+
+  // Phase 5a: the realm's own calendar, shown beside the date (TL-2).
+  w.settings.calendars = [{ ...calendarTemplate('thirteen', 'cal-reckoning', toDayNumber({ year: 724, month: 3, day: 1 })), name: 'Varnish reckoning' }];
 
   // Phase 8b: book two is outlined (so the "Previously on" recap has something to come before), and book one has gone out to agents (RV-9).
   const book2: Book = { ...recordBase(), title: 'The Glass Mere', order: 2, notes: 'Kaela takes the ring north.' };
