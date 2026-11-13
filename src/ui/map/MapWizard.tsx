@@ -21,7 +21,7 @@ export const WIZARD_STEPS: Step[] = [
   { title: 'Found the settlements', text: 'Place villages, towns, cities and a capital, then link them with roads.', tools: [{ tool: 'settlement', label: 'Settlement' }, { tool: 'line', label: 'Road' }] },
 ];
 
-export function MapWizard({ onTool, onUpload, onClose }: { onTool: (t: DrawTool) => void; onUpload: (f: File) => void; onClose: () => void }) {
+export function MapWizard({ onTool, onUpload, onTrace, onClose }: { onTool: (t: DrawTool) => void; onUpload: (f: File) => void; onTrace?: () => void; onClose: () => void }) {
   const { world, store, go } = useApp();
   const wz = world.settings.mapWizard ?? { step: 0, done: [] };
   const step = Math.min(wz.step, WIZARD_STEPS.length - 1);
@@ -72,6 +72,7 @@ export function MapWizard({ onTool, onUpload, onClose }: { onTool: (t: DrawTool)
           <button className="link" onClick={() => go('settings')}>More world settings</button>
         </div>
       )}
+      {step === 2 && onTrace && <p className="small"><button className="small" onClick={onTrace}>Find it in my sketch…</button> The app looks for the coastline in your sketch and offers it as land to accept, fix or redraw.</p>}
       {s.tools.length > 0 && (
         <div className="row wrap">
           {s.tools.map((t) => <button key={t.tool} className="small" onClick={() => onTool(t.tool)}>{t.label}</button>)}

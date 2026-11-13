@@ -27,6 +27,7 @@ import { KIND_NAME, RIVER_COLOR, ScreenShape, drawFeatures, hitFeature, projectL
 import { FeatureCard } from './FeatureCard';
 import { RouteCard } from './RouteCard';
 import { MapWizard } from './MapWizard';
+import { SketchTraceDialog } from './SketchTrace';
 import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
 import { drawRegionLayers } from './regionRender';
 import { mapToSvg } from './exportSvg';
@@ -134,6 +135,7 @@ export function MapView() {
   const layerFree = (id?: Id) => !id || (!hiddenLayers.has(id) && !lockedLayers.has(id));
   const drawLayer = activeLayer && world.mapLayers.some((l) => l.id === activeLayer) ? activeLayer : undefined;
   /** MK-16: the first-map guide opens by itself on a world with nothing drawn yet. */
+  const [traceFor, setTraceFor] = useState<Id | undefined>();
   const [wizardOpen, setWizardOpen] = useState(() => !world.settings.mapWizard?.closed && !hasTerrain(world.terrain));
   /** EU-2: a character marker being dragged to a new place. */
   const charDrag = useRef<{ id: Id; x: number; y: number } | null>(null);
@@ -1725,7 +1727,7 @@ export function MapView() {
             onClear={() => setRouteDraft((r) => ({ pts: r.pts.slice(0, 1), marks: [] }))}
           />
         )}
-        {mode === 'draw' && wizardOpen && <MapWizard onTool={(t) => setDraw((d) => ({ ...d, tool: t }))} onUpload={(f) => void addImage(f)} onClose={() => setWizardOpen(false)} />}
+        {mode === 'draw' && wizardOpen && <MapWizard onTool={(t) => setDraw((d) => ({ ...d, tool: t }))} onUpload={(f) => void addImage(f)} onTrace={world.mapImages.length ? () => setTraceFor(world.mapImages.find((m) => m.visible)?.id ?? world.mapImages[0].id) : undefined} onClose={() => setWizardOpen(false)} />}
         {mode === 'draw' && (
           <DrawOptions state={draw} onChange={setDraw} biomes={world.settings.biomes} polygonPoints={poly.length} onFinishPolygon={() => finishPolygon()} onCancelPolygon={() => setPoly([])}
             draftPoints={draft.pts.length} onFinishDraft={() => finishDraft()} onCancelDraft={() => setDraft({ pts: [], stops: [] })} />
@@ -1919,6 +1921,7 @@ export function MapView() {
             <div className="row wrap">
               <label className="checkbox"><input type="checkbox" checked={img.locked} onChange={(e) => store.upsert('mapImages', { ...img, locked: e.target.checked })} /> Lock</label>
               <button className="small" disabled={img.locked} onClick={() => { setCalib({ imageId: img.id, points: [] }); setMode('calibrate'); }}>Calibrate</button>
+              <button className="small" onClick={() => setTraceFor(img.id)} title="MK-17: find the coastline in this sketch and lay it on the map as land and sea">Find coastline…</button>
               <button className="small" onClick={() => {
                 const east = img.east < img.west ? img.east + 360 : img.east;
                 setView(clampView({ centerLat: (img.north + img.south) / 2, centerLng: (img.west + east) / 2, scale: Math.min(size.w / (east - img.west), size.h / (img.north - img.south)) * 0.9 }));
@@ -1927,6 +1930,7 @@ export function MapView() {
             </div>
           </div>
         ))}
+        {traceFor && world.mapImages.some((m) => m.id === traceFor) && <SketchTraceDialog image={world.mapImages.find((m) => m.id === traceFor)!} onClose={() => setTraceFor(undefined)} />}
         <label className="button">
           + Upload sketch
           <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void addImage(f); e.target.value = ''; }} />
