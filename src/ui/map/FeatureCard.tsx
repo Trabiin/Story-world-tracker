@@ -6,7 +6,7 @@ import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
 import { KIND_NAME } from './featureRender';
 
-export function FeatureCard({ feature: f, onClose }: { feature: MapFeature; onClose: () => void }) {
+export function FeatureCard({ feature: f, onClose, onZoom }: { feature: MapFeature; onClose: () => void; onZoom?: () => void }) {
   const { world, store, go } = useApp();
   const R = world.settings.radiusKm;
   const set = (patch: Partial<MapFeature>) => {
@@ -50,7 +50,10 @@ export function FeatureCard({ feature: f, onClose }: { feature: MapFeature; onCl
     <div className="card feature-card">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h3>{KIND_NAME[f.kind] ?? f.kind}</h3>
-        <button className="small" onClick={onClose} aria-label="Close">✕</button>
+        <div className="row">
+          {onZoom && <button className="small" onClick={onZoom} title="Frame it on the map">Zoom to</button>}
+          <button className="small" onClick={onClose} aria-label="Close">✕</button>
+        </div>
       </div>
       <label className="field"><span className="label">Name</span>
         <input value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="Unnamed" />
