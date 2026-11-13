@@ -164,7 +164,7 @@ Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
 
 1. Turn on Linux once: **Settings → About ChromeOS → Developers → Linux development environment → Set up**.
 2. Which processor? **Settings → About ChromeOS → Diagnostics** shows it (Intel, AMD, or MediaTek/Snapdragon for ARM). Download the matching `.deb`.
-3. In the Files app, double-click the `.deb` and choose **Install**. The app then sits in the launcher under **Linux apps**.
+3. The download is a `.zip`: open it and drag the `.deb` into **Linux files**. Newer ChromeOS versions no longer install a `.deb` by double-clicking, so open the **Terminal** app, choose **penguin**, and type `sudo apt install ./Story*.deb` (answer Y). The app then sits in the launcher under **Linux apps**.
 4. Keep `.world` files in **Linux files**, or share a folder (such as Google Drive) with Linux: right-click it → **Share with Linux**. The same `.world` file opens on Windows and on the Chromebook; just don't have it open on both at once.
 
 Spell checking and the Claude Code features work as on Windows once the Linux tools are installed (Claude Code is installed in the Linux terminal).
