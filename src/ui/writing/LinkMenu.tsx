@@ -99,3 +99,51 @@ export function NameCardBox({ card, left, top, linked, onOpen, onLink, onUnlink,
     </div>
   );
 }
+
+/** RV-7: who speaks the quote? The scene's point of view and cast come first. */
+export function SpeakerPicker({ left, top, quote, current, first, onPick, onClose }: {
+  left: number; top: number; quote: string; current?: string; first: string[];
+  onPick: (id: string | undefined) => void; onClose: () => void;
+}) {
+  const { world } = useApp();
+  const [q, setQ] = useState('');
+  const [index, setIndex] = useState(0);
+  const items = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const rank = (id: string) => { const i = first.indexOf(id); return i < 0 ? 99 : i; };
+    return world.characters
+      .filter((c) => !c.archived && (!needle || c.name.toLowerCase().includes(needle) || c.aliases.some((a) => a.toLowerCase().includes(needle))))
+      .sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name))
+      .slice(0, 10);
+  }, [world.characters, q, first]);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => setIndex(0), [q]);
+  const pos = place(left, top, 320, 110 + items.length * 30);
+  return (
+    <>
+      <div className="link-backdrop" onMouseDown={onClose} />
+      <div className="link-menu picker speaker-picker" style={pos}>
+        <div className="link-head muted small" title={quote}>Who says {quote.length > 46 ? `${quote.slice(0, 44)}…` : quote}</div>
+        <input ref={ref} value={q} placeholder="Character" aria-label="Find the character who speaks"
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setIndex((i) => Math.min(items.length - 1, i + 1)); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setIndex((i) => Math.max(0, i - 1)); }
+            else if (e.key === 'Enter') { e.preventDefault(); if (items[index]) onPick(items[index].id); }
+            else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+          }} />
+        <ul className="link-items" role="listbox">
+          {items.map((c, i) => (
+            <li key={c.id} role="option" aria-selected={i === index} className={i === index ? 'active' : ''}
+              onMouseDown={(e) => { e.preventDefault(); onPick(c.id); }} onMouseEnter={() => setIndex(i)}>
+              <span className="char-dot" style={{ background: c.color }} /> <span>{c.name}</span> {c.id === current && <small className="muted">speaks it now</small>}
+              {c.id !== current && first.includes(c.id) && <small className="muted">in this scene</small>}
+            </li>
+          ))}
+        </ul>
+        {current && <button className="link small speaker-clear" onMouseDown={(e) => { e.preventDefault(); onPick(undefined); }}>Take the speaker off</button>}
+      </div>
+    </>
+  );
+}

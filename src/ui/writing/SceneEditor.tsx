@@ -11,7 +11,7 @@ import { Node as PMNode } from 'prosemirror-model';
 import { EditorState, Plugin, PluginKey, Selection, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import { useEffect, useRef } from 'react';
-import { Id, LinkTargetKind, StyleRuleId, STYLE_RULES, styleHits, NameIndex, SceneText, TextComment, TextNode, World, addVersion, docWords, emptyDoc, logWords, makeVersion, nameMatches, nameRanges, packDoc, versionsOf, wantsAutoVersion, WRITING_VERSION_EVERY_MS } from '../../core';
+import { Id, LinkTargetKind, StyleRuleId, STYLE_RULES, styleHits, NameIndex, SceneText, TextComment, TextNode, World, addVersion, docWords, emptyDoc, quoteAt, logWords, makeVersion, nameMatches, nameRanges, packDoc, versionsOf, wantsAutoVersion, WRITING_VERSION_EVERY_MS } from '../../core';
 import { nowIso, newId, recordBase } from '../../storage';
 import type { WorldStore } from '../store';
 import { schema } from './schema';
@@ -184,6 +184,42 @@ export function linkText(view: EditorView, from: number, to: number, target: { k
   view.focus();
 }
 
+/**
+ * RV-7: the words a speaker tag goes on: the selection, else the quote around the cursor, else the
+ * tagged line the cursor is in (to change or remove its speaker). Null: nothing to tag.
+ */
+export function speakerRange(state: EditorState): { from: number; to: number; current?: Id } | null {
+  const { from, to, empty, $from } = state.selection;
+  const currentAt = (a: number, b: number) => {
+    let id: Id | undefined;
+    state.doc.nodesBetween(a, b, (n) => { const m = n.marks.find((x) => x.type === schema.marks.speaker); if (m) id = m.attrs.id; });
+    return id;
+  };
+  if (!empty) return { from, to, current: currentAt(from, to) };
+  const parent = $from.parent;
+  if (!parent.isTextblock) return null;
+  const start = $from.start();
+  // One character per position: text as is, a line break as "\n".
+  const text = parent.textBetween(0, parent.content.size, undefined, '\n');
+  const q = quoteAt(text, from - start);
+  if (q) return { from: start + q[0], to: start + q[1], current: currentAt(start + q[0], start + q[1]) };
+  let found: { from: number; to: number; current?: Id } | null = null;
+  parent.forEach((child, offset) => {
+    const m = child.marks.find((x) => x.type === schema.marks.speaker);
+    const a = start + offset, b = a + child.nodeSize;
+    if (m && a <= from && from <= b) found = { from: a, to: b, current: m.attrs.id };
+  });
+  return found;
+}
+
+/** RV-7: tag the words with a speaker, or take the tag off (id undefined). */
+export function setSpeaker(view: EditorView, from: number, to: number, id: Id | undefined) {
+  let tr = view.state.tr.removeMark(from, to, schema.marks.speaker);
+  if (id) tr = tr.addMark(from, to, schema.marks.speaker.create({ id }));
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
 /** WR-11: the extent of the link at a position (the run of text carrying the same link). */
 export function linkRangeAt(state: EditorState, pos: number): { from: number; to: number } | null {
   const $p = state.doc.resolve(pos);
@@ -258,6 +294,8 @@ interface Props {
   onLinkKey?: (sceneId: Id, view: EditorView) => void;
   /** NT-1: Ctrl+Alt+M, comment on the selected words. */
   onCommentKey?: (sceneId: Id, view: EditorView) => void;
+  /** RV-7: Ctrl+Alt+S, say who speaks the quote at the cursor (or the selected words). */
+  onSpeakerKey?: (sceneId: Id, view: EditorView) => void;
 }
 
 /**
@@ -339,6 +377,7 @@ export function SceneEditor(p: Props) {
           'Mod-Enter': commands.sceneBreak,
           'Mod-l': (_s, _d, v) => { if (v && props.current.onLinkKey) props.current.onLinkKey(props.current.sceneId, v); return true; },
           'Mod-Alt-m': (_s, _d, v) => { if (v && props.current.onCommentKey) props.current.onCommentKey(props.current.sceneId, v); return true; },
+          'Mod-Alt-s': (_s, _d, v) => { if (v && props.current.onSpeakerKey) props.current.onSpeakerKey(props.current.sceneId, v); return true; },
           'Shift-Enter': (s, d) => { d?.(s.tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView()); return true; },
           ArrowDown: (s, _d, v) => atEdge(s, v, 'end', 'down') && nav('next'),
           ArrowRight: (s) => s.selection.empty && s.selection.head === Selection.atEnd(s.doc).head && nav('next'),

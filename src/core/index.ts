@@ -19,3 +19,4 @@ export * from './claude';
 export * from './notes';
 export * from './plan';
 export * from './revise';
+export * from './publish';

@@ -1,6 +1,6 @@
 /**
  * WR-1: the editor's document schema. It must match the description in core/writing/doc.ts:
- * doc > (paragraph | heading | scene_break)+, inline text and hard breaks, marks strong, em, comment, link.
+ * doc > (paragraph | heading | scene_break)+, inline text and hard breaks, marks strong, em, comment, speaker, link.
  */
 import { Schema } from 'prosemirror-model';
 
@@ -37,6 +37,12 @@ export const schema = new Schema({
       excludes: '',
       parseDOM: [{ tag: 'span[data-comment]', getAttrs: (n) => ({ id: (n as HTMLElement).dataset.comment }) }],
       toDOM: (m) => ['span', { class: 'text-comment', 'data-comment': m.attrs.id }, 0],
+    },
+    speaker: {
+      attrs: { id: {} },
+      inclusive: false,
+      parseDOM: [{ tag: 'span[data-speaker]', getAttrs: (n) => ({ id: (n as HTMLElement).dataset.speaker }) }],
+      toDOM: (m) => ['span', { class: 'text-speaker', 'data-speaker': m.attrs.id }, 0],
     },
     link: {
       attrs: { kind: {}, id: {}, note: { default: '' } },

@@ -510,6 +510,20 @@ export interface Setup extends RecordBase {
   payoffSceneId?: Id;
 }
 
+/** RV-9: one submission of a book: to an agent, publisher, contest or magazine, when, and the answer. Dates are real-world "YYYY-MM-DD". */
+export interface Submission extends RecordBase {
+  bookId: Id;
+  /** Who it went to ("Jane Doe, Doe Literary"). */
+  to: string;
+  kind: 'agent' | 'publisher' | 'contest' | 'magazine' | 'other';
+  /** What was sent. */
+  sent: 'query' | 'partial' | 'full' | 'other';
+  sentOn: string;
+  answer: 'waiting' | 'requested' | 'rejected' | 'offer' | 'withdrawn' | 'no-answer';
+  answeredOn?: string;
+  notes: string;
+}
+
 /** RV-5: a named revision pass over a book ("dialogue", "timeline fixes"), ticked off chapter by chapter. */
 export interface RevisionPass extends RecordBase {
   bookId: Id;
@@ -797,6 +811,8 @@ export interface World {
   arcs: CharacterArc[];
   /** RV-5: revision passes over a book, with a checklist per chapter. Shared by every scenario. */
   passes: RevisionPass[];
+  /** RV-9: where each book was sent and the answer. Shared by every scenario. */
+  submissions: Submission[];
   /** NT-4: research files (images and PDFs) attached to notes and records. The bytes are stored once in the world file, by fileKey. */
   attachments: Attachment[];
   /** AI-3: changes Claude proposed, waiting to be accepted or rejected. Shared by every scenario. */
