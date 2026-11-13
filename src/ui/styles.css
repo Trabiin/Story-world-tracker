@@ -966,3 +966,21 @@ div.file-view-body img { max-width: 100%; max-height: 100%; }
 
 /* Lighter drawing (slow computers, Chromebook Linux): no shadows, blur or animated transitions. */
 html.light-drawing *, html.light-drawing *::before, html.light-drawing *::after { transition: none !important; animation: none !important; box-shadow: none !important; backdrop-filter: none !important; text-shadow: none !important; }
+
+/* EU-19 spreadsheet */
+.grid-page { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.grid-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.grid-tools input[type=search] { width: 240px; }
+.grid-wrap { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 6px; min-height: 200px; }
+table.sheet { border-collapse: collapse; table-layout: fixed; min-width: 100%; font-size: 13px; }
+table.sheet th { position: sticky; top: 0; z-index: 1; background: var(--panel, var(--bg)); text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 5px 6px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.sheet th.req::after { content: ' *'; color: var(--danger); }
+table.sheet td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; height: 28px; }
+table.sheet td input:not([type=checkbox]) { width: 100%; box-sizing: border-box; border: 0; border-radius: 0; background: transparent; padding: 4px 6px; height: 28px; font: inherit; color: inherit; }
+table.sheet td input:not([type=checkbox]):focus { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--bg); }
+table.sheet td input.invalid { background: color-mix(in srgb, var(--danger) 14%, transparent); outline: 1px solid var(--danger); outline-offset: -1px; }
+table.sheet td.pick { text-align: center; color: var(--muted); }
+table.sheet td.row-end { padding: 0 6px; white-space: nowrap; font-size: 12px; }
+table.sheet tr.draft td input { font-style: italic; }
+table.sheet tr.new-row td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+table.sheet .warn-dot { color: var(--warn, #b7791f); margin-right: 6px; cursor: help; }
