@@ -4,3 +4,4 @@ src-tauri/target/
 *.log
 src-tauri/gen/
 dist-preview/
+dist-web/

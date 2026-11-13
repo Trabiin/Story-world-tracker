@@ -3,10 +3,12 @@
  * Zoom from decades to days; fuzzy dates show as faded edges. Click the axis to set the current moment.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { canvasRatio } from '../perf';
 import { EARTH_MOON, Id, MOON_ICON, OPEN_END, Segment, TerrainReader, eventIcon, fromDayNumber, formatDayNumber, hasTerrain, moonPhases, occurrences, seasonBands, toDayNumber } from '../../core';
 import { useApp } from '../context';
 import { ShiftDatesModal } from '../components/ShiftDates';
-import { worldDayRange } from '../util';
+import { canvasBytes, worldDayRange } from '../util';
+import { imagePdf } from '../../core';
 
 const ROW_H = 30;
 const AXIS_H = 40;
@@ -41,7 +43,7 @@ function cssVar(name: string) {
 }
 
 export function Timeline() {
-  const { world, ix, moment, store, edit, warnings, go } = useApp();
+  const { world, ix, moment, store, edit, warnings, go, platform } = useApp();
   const [shifting, setShifting] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -101,7 +103,7 @@ export function Timeline() {
 
   useEffect(() => {
     const cv = canvasRef.current!;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = canvasRatio();
     cv.width = size.w * dpr;
     cv.height = size.h * dpr;
     const g = cv.getContext('2d')!;
@@ -374,6 +376,14 @@ export function Timeline() {
     setStart(moment - (size.w - LABEL_W) / 2 / next);
   };
 
+  // PL-5: save the timeline as it is on screen.
+  const saveView = async (kind: 'png' | 'pdf') => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const name = (world.settings.name.replace(/[^\w\- ]+/g, '') || 'world') + ' timeline';
+    if (kind === 'png') await platform.saveBinaryFile(`${name}.png`, await canvasBytes(cv, 'image/png'));
+    else await platform.saveBinaryFile(`${name}.pdf`, imagePdf(await canvasBytes(cv, 'image/jpeg'), { title: `${world.settings.name}: timeline`, caption: `${formatDayNumber(start)} to ${formatDayNumber(start + (size.w - LABEL_W) / pxPerDay)}`, page: world.settings.writing?.spelling === 'en-US' ? 'letter' : 'a4' }));
+  };
   return (
     <div className="timeline-page">
       <div className="page-head pad">
@@ -393,6 +403,9 @@ export function Timeline() {
           <label className="checkbox" title="TL-5"><input type="checkbox" checked={sky.events} onChange={(e) => setSky({ events: e.target.checked })} /> Events</label>
           {sky.events && world.events.some((x) => x.yearly) && <label className="checkbox" title="TL-6: yearly festivals and holidays, every year"><input type="checkbox" checked={sky.holidays} onChange={(e) => setSky({ holidays: e.target.checked })} /> Holidays</label>}
           <label className="checkbox" title="TL-6"><input type="checkbox" checked={sky.moon} onChange={(e) => setSky({ moon: e.target.checked })} /> Moon</label>
+          <span className="muted">Save:</span>
+          <button className="small" title="PL-5: the timeline as shown, as a picture" onClick={() => void saveView('png')}>PNG</button>
+          <button className="small" title="PL-5: the timeline as shown, on one page" onClick={() => void saveView('pdf')}>PDF</button>
           <label className="checkbox" title="TL-6"><input type="checkbox" checked={sky.seasons} onChange={(e) => setSky({ seasons: e.target.checked })} /> Seasons</label>
           {sky.seasons && (
             <select value={sky.seasonsAt ?? ''} onChange={(e) => setSky({ seasonsAt: e.target.value || undefined })} title="TL-6: season lengths follow this place's latitude and height (RC-10)">

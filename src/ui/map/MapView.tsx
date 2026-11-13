@@ -3,6 +3,7 @@
  * (MK-4..MK-7, MK-18, MK-24, MK-26, MK-27). Equirectangular, wraps east–west.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { canvasRatio, lightDrawing } from '../perf';
 import { ask } from '../components/Dialogs';
 import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
@@ -29,6 +30,8 @@ import { MapWizard } from './MapWizard';
 import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
 import { drawRegionLayers } from './regionRender';
 import { mapToSvg } from './exportSvg';
+import { imagePdf, formatDayNumber as fmtDay } from '../../core';
+import { canvasBytes } from '../util';
 import { DEFAULT_REGION_TOOLS, REGION_TOOL_KEYS, RegionCard, RegionLayerList, RegionList, RegionToolState, WhatsHere, hereLine, sortedLayers } from './RegionsPanel';
 
 /** A path with long legs broken into great-circle pieces, so it curves correctly on the flat map. */
@@ -198,6 +201,8 @@ export function MapView() {
   }, [moment, lix]);
   useEffect(() => {
     if (!flash) return;
+    // Lighter drawing: no fade animation (each frame redraws the whole map), just show and clear.
+    if (lightDrawing()) { const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t); }
     let raf = 0;
     const tick = () => {
       if (performance.now() - flash.t0 > 3000) { setFlash(null); return; }
@@ -781,7 +786,7 @@ export function MapView() {
   paintRef.current = paint;
   useEffect(() => {
     const cv = canvasRef.current!;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = canvasRatio();
     cv.width = size.w * dpr;
     cv.height = size.h * dpr;
     const g = cv.getContext('2d')!;
@@ -793,7 +798,7 @@ export function MapView() {
   useEffect(() => {
     const cv = overlayRef.current;
     if (!cv) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = canvasRatio();
     cv.width = size.w * dpr;
     cv.height = size.h * dpr;
     const g = cv.getContext('2d')!;
@@ -1556,6 +1561,12 @@ export function MapView() {
     const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/png'));
     if (blob) await platform.saveBinaryFile(`${fileBase}.png`, new Uint8Array(await blob.arrayBuffer()));
   };
+  // PL-5: the view as a one-page PDF, with the world's name and the date it shows.
+  const exportPdf = async () => {
+    const jpeg = await canvasBytes(await renderExport(3), 'image/jpeg');
+    const pdf = imagePdf(jpeg, { title: world.settings.name + (currentMap ? ` · ${world.detailMaps.find((m) => m.id === currentMap)?.name ?? ''}` : ''), caption: `As of ${fmtDay(moment)}`, page: world.settings.writing?.spelling === 'en-US' ? 'letter' : 'a4' });
+    await platform.saveBinaryFile(`${fileBase}.pdf`, pdf);
+  };
   const exportSvg = async () => {
     const base = (await renderExport(2, true)).toDataURL('image/png');
     const offsets = wrapOffsets(view, size.w);
@@ -1853,6 +1864,7 @@ export function MapView() {
             <button className="small" onClick={() => void exportPng(2)} title="MK-14: a sharp picture of what is on screen">PNG</button>
             <button className="small" onClick={() => void exportPng(4)} title="Four times the screen resolution, for printing">PNG for print</button>
             <button className="small" onClick={() => void exportSvg()} title="Rivers, roads, borders, places and labels as vectors over the painted map">SVG</button>
+            <button className="small" onClick={() => void exportPdf()} title="PL-5: the view on one page (A4 or Letter), with the date it shows">PDF</button>
           </div>
         </div>
         <h3>Show</h3>

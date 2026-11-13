@@ -4,3 +4,4 @@ export * from './epub';
 export * from './docx';
 export * from './books';
 export * from './submissions';
+export * from './imagePdf';

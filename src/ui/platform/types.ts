@@ -7,11 +7,12 @@ export interface WorldHandle {
 }
 
 export interface Platform {
-  kind: 'desktop' | 'browser';
+  /** desktop: Tauri app; web: installed from Chrome with real .world files; browser: preview, worlds inside the browser. */
+  kind: 'desktop' | 'browser' | 'web';
   listWorlds(): Promise<WorldHandle[]>;
   /** Create a new world location. Desktop asks where to save the file. */
   createWorld(name: string, bytes: Uint8Array): Promise<WorldHandle | null>;
-  /** Desktop only: open an existing .world file from disk. */
+  /** Desktop and web: open an existing .world file from disk. */
   openWorldFile?(): Promise<WorldHandle | null>;
   load(h: WorldHandle): Promise<Uint8Array>;
   save(h: WorldHandle, bytes: Uint8Array): Promise<void>;

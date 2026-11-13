@@ -1,6 +1,6 @@
 # Story World Tracker
 
-A desktop app for novelists, for Windows and for a Chromebook (as a Linux app): where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
+A desktop app for novelists, for Windows and (as an installable Chrome app) for a Chromebook: where is everyone, what are they doing, and how did they get there, at any moment of a series. Fully offline, single user, one `.world` file per series.
 
 The full requirements live in the project's `spec/requirements.md`; the approved architecture is in `spec/architecture.md`.
 
@@ -155,19 +155,16 @@ src-tauri     desktop shell (Tauri 2)
 The **Desktop installers** workflow (Actions tab → Run workflow, and on every pull request) builds, attached to the run:
 
 - **installers-windows**: the Windows `.exe` and `.msi` installers.
-- **installers-chromebook-intel**: the `.deb` (and an `.AppImage`) for Chromebooks with an Intel or AMD processor.
-- **installers-chromebook-arm**: the `.deb` for Chromebooks with an ARM processor (MediaTek, Snapdragon, Kompanio).
 
 Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
 
-### On a Chromebook
+### On a Chromebook: the Chrome app
 
-1. Turn on Linux once: **Settings → About ChromeOS → Developers → Linux development environment → Set up**.
-2. Which processor? **Settings → About ChromeOS → Diagnostics** shows it (Intel, AMD, or MediaTek/Snapdragon for ARM). Download the matching `.deb`.
-3. In the Files app, double-click the `.deb` and choose **Install**. The app then sits in the launcher under **Linux apps**.
-4. Keep `.world` files in **Linux files**, or share a folder (such as Google Drive) with Linux: right-click it → **Share with Linux**. The same `.world` file opens on Windows and on the Chromebook; just don't have it open on both at once.
+The Chromebook uses the app in Chrome, which draws with the graphics chip (the Linux version was too slow there). Every push to main publishes it to **https://trabiin.github.io/Story-world-tracker/** (workflow "Chrome app"; once, in the repository: Settings → Pages → Source: GitHub Actions).
 
-Spell checking and the Claude Code features work as on Windows once the Linux tools are installed (Claude Code is installed in the Linux terminal).
+1. Open that address in Chrome and click the install icon at the right of the address bar (or ⋮ → Cast, save and share → Install page as app). It then opens from the launcher like any app, also offline.
+2. **Open a .world file…** or create a world: you choose where the file goes. Google Drive works, so the same file opens in the Windows app too (just not on both at once). Chrome asks once per visit to allow the file; an installed app can be allowed "on every visit".
+3. Backups stay inside Chrome on that computer; Google Drive also keeps its own versions of the file. Claude Code features are only in the Windows app.
 
 ## Phase 6a: write here
 
@@ -250,3 +247,8 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - The date bar shows the current day in your calendar ("Sixthday, 11 Seedtime 319 AR"); hover for all of them.
 - **Convert a date**: type "3/5/1042" or "3 Thaw 318 AR" and see it in every calendar.
 - Claude's `world.md` lists the calendars and today in each.
+
+## Phase 5b: pictures and spreadsheets
+
+- **Pictures** (PL-5): the map's **Export this view** gains **PDF** (one page, A4 or Letter, with the date it shows), next to PNG and SVG. The Timeline gets **Save: PNG / PDF** for what is on screen.
+- **Import from a spreadsheet** (PL-6): **Import CSV…** on the Characters and Places pages. Save the sheet as "CSV UTF-8"; columns are matched by their headings (name, aliases, born, died, importance, tags, notes; for places kind, inside, latitude, longitude). Each row shows what will happen before you import; names that already exist are skipped or only have their empty fields filled in. One undo takes it back.

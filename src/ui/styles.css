@@ -957,3 +957,12 @@ div.file-view-body img { max-width: 100%; max-height: 100%; }
 .calendar-months input[type="number"] { width: 70px; }
 .calendar-months input:not([type]) { width: 180px; }
 .calendar-converter { margin-top: 12px; max-width: 520px; }
+
+/* Phase 5b: PL-6 CSV import, PL-5 picture export */
+.csv-import { display: flex; flex-direction: column; gap: 10px; }
+.csv-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 14px; }
+.csv-cols label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+.csv-preview { max-height: 40vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* Lighter drawing (slow computers, Chromebook Linux): no shadows, blur or animated transitions. */
+html.light-drawing *, html.light-drawing *::before, html.light-drawing *::after { transition: none !important; animation: none !important; box-shadow: none !important; backdrop-filter: none !important; text-shadow: none !important; }

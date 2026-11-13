@@ -8,6 +8,7 @@ import { DateInput } from '../components/DateInput';
 import { Field } from '../components/Modal';
 import { PlaceSelect, placeOptions } from '../components/Pickers';
 import { useApp } from '../context';
+import { CsvImportButton } from '../components/CsvImport';
 import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
 import { Pictures } from '../components/Pictures';
@@ -41,6 +42,7 @@ export function Places() {
         <div className="master-tools">
           <input placeholder="Search places" value={q} onChange={(e) => setQ(e.target.value)} />
           <button className="primary" onClick={() => add()}>+ New place</button>
+          <CsvImportButton kind="places" />
         </div>
         <ul className="list">
           {filtered.map((o) => {
