@@ -25,12 +25,13 @@ import { FindEntry, boundsOf, boundsOfArea, viewForEntry } from './findOnMap';
 import { MapInset } from './MapInset';
 import { SideSection } from './SideSection';
 import { claudeOpts, acceptInStore } from '../claude/actions';
-import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
+import { DEFAULT_DRAW, DrawOptions, DrawState, DrawTool, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
 import { GlobePreview } from './GlobePreview';
 import { Overview, Relief, RenderStyle, SYMBOL_BLOCK, TileImageCache, autoSymbols, hexToRgb, paletteFor, styleKey } from './terrainRender';
 import { drawCompass, drawSymbol, paintParchment } from './symbols';
 import { KIND_NAME, RIVER_COLOR, ScreenShape, drawFeatures, hitFeature, projectLine } from './featureRender';
-import { FeatureCard } from './FeatureCard';
+import { FeatureCard, deleteFeature } from './FeatureCard';
+import { MapMenu, MenuItem } from './MapMenu';
 import { RouteCard } from './RouteCard';
 import { MapWizard } from './MapWizard';
 import { SketchTraceDialog } from './SketchTrace';
@@ -167,6 +168,7 @@ export function MapView() {
   const freehand = useRef<{ lastX: number; lastY: number; started: boolean } | null>(null);
   const [globe, setGlobe] = useState(false);
   const [focus, setFocus] = useState<LatLng | null>(null);
+  const [hoverHit, setHoverHit] = useState<{ kind: 'place' | 'character' | 'feature'; id: Id; name: string; note: string; x: number; y: number; mx: number; my: number; r: number } | null>(null);
   const [overviewVersion, setOverviewVersion] = useState(0);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const tileCache = useRef(new TileImageCache());
@@ -383,11 +385,30 @@ export function MapView() {
             const tx = ((txu % tg.tilesX) + tg.tilesX) % tg.tilesX;
             if (!reader.tile(tx, ty)) continue;
             const o = (txu - tx) / tg.tilesX * 360;
-            const c = tileCache.current.get(reader, tx, ty, res, style, sk);
             visibleTiles.push([tx, ty]);
-            if (!c) continue;
             const p = toScreen(view, w, h, { lat: 90 - ty * tg.tileDeg, lng: -180 + tx * tg.tileDeg }, o);
-            g.drawImage(c, p.x, p.y, tilePx + 0.6, tilePx + 0.6);
+            // MK-37: close up, a tile is drawn in parts at full sharpness instead of one stretched picture
+            const n = devPx > 2400 ? 8 : devPx > 1200 ? 4 : devPx > 600 ? 2 : 1;
+            if (n === 1) {
+              const c = tileCache.current.get(reader, tx, ty, res, style, sk);
+              if (c) g.drawImage(c, p.x, p.y, tilePx + 0.6, tilePx + 0.6);
+              continue;
+            }
+            const partPx = tilePx / n;
+            for (let py = 0; py < n; py++) {
+              const y = p.y + py * partPx;
+              if (y > h || y + partPx < 0) continue;
+              for (let px = 0; px < n; px++) {
+                const x = p.x + px * partPx;
+                if (x > w || x + partPx < 0) continue;
+                const c = tileCache.current.get(reader, tx, ty, 480, style, sk, { x: px, y: py, n });
+                if (c) g.drawImage(c, x, y, partPx + 0.6, partPx + 0.6);
+                else { // the whole tile, stretched, until the sharp part is ready
+                  const whole = tileCache.current.get(reader, tx, ty, 480, style, sk);
+                  if (whole) g.drawImage(whole, px * 480 / n, py * 480 / n, 480 / n, 480 / n, x, y, partPx + 0.6, partPx + 0.6);
+                }
+              }
+            }
           }
         }
         if (tileCache.current.pending) requestAnimationFrame(() => setTick((t) => t + 1));
@@ -836,6 +857,23 @@ export function MapView() {
         for (const p of sp.slice(0, pts.length)) { g.fillRect(p.x - 3.5, p.y - 3.5, 7, 7); g.strokeRect(p.x - 3.5, p.y - 3.5, 7, 7); }
       }
     }
+    // MK-34: what the pointer is over in Move mode
+    if (hoverHit && !(selected && selected.id === hoverHit.id)) {
+      g.lineJoin = 'round';
+      if (hoverHit.kind === 'feature') {
+        const sh = shapes.current.find((q) => q.id === hoverHit.id);
+        if (sh && sh.pts.length > 1) {
+          const path = () => { g.beginPath(); sh.pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); if (sh.shape === 'area') g.closePath(); };
+          if (sh.shape === 'area') { path(); g.fillStyle = 'rgba(255,255,255,0.18)'; g.fill(); }
+          path(); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 7; g.stroke();
+          path(); g.strokeStyle = '#b5562c'; g.lineWidth = 2.5; g.stroke();
+        }
+      } else {
+        g.beginPath(); g.arc(hoverHit.mx, hoverHit.my, hoverHit.r + 4, 0, Math.PI * 2);
+        g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 5; g.stroke();
+        g.strokeStyle = '#b5562c'; g.lineWidth = 2; g.stroke();
+      }
+    }
     if (mode === 'route' && routeDraft.pts.length) {
       const col = routeJourney ? (ix.characters.get(routeJourney.subject.id)?.color ?? '#b5562c') : '#b5562c';
       const pts = densify(hover ? [...routeDraft.pts, { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }] : routeDraft.pts, world.settings.radiusKm);
@@ -964,7 +1002,7 @@ export function MapView() {
         }
       }
     }
-  }, [hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix, regionDraft, strokePreview, regionTools, selRegion, regionEditable]);
+  }, [hoverHit, hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix, regionDraft, strokePreview, regionTools, selRegion, regionEditable]);
 
   // ---- interaction ----
   const drag = useRef<{ x: number; y: number; moved: boolean; v: ViewState } | null>(null);
@@ -1022,8 +1060,25 @@ export function MapView() {
     return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, dist: Math.hypot(a.x - b.x, a.y - b.y) };
   };
   // Shift-drag in Move mode zooms to the box; the middle mouse button moves the map in every mode.
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => { if (!picked) return; const t = setTimeout(() => setPicked(null), 4000); return () => clearTimeout(t); }, [picked]);
+  useEffect(() => { if (draw.tool !== 'eyedropper') toolBeforePick.current = draw.tool; }, [draw.tool]);
   const [zoomBox, setZoomBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const panDrag = useRef(false);
+  // MK-34: the place, character or feature under the pointer in Move mode
+  const hoverAt = (x: number, y: number) => {
+    const m = hit(x, y);
+    if (m) {
+      const rec = m.kind === 'place' ? ix.places.get(m.id) : ix.characters.get(m.id);
+      if (rec) return { kind: m.kind, id: m.id, name: rec.name, note: m.kind === 'place' ? (rec as Place).kind : 'character', x, y, mx: m.x, my: m.y, r: m.r };
+    }
+    const fid = hitFeature(shapes.current, x, y);
+    const f = fid ? world.mapFeatures.find((q) => q.id === fid) : undefined;
+    if (f && layerFree(f.layerId)) return { kind: 'feature' as const, id: f.id, name: f.name || (KIND_NAME[f.kind] ?? f.kind), note: (KIND_NAME[f.kind] ?? f.kind).toLowerCase(), x, y, mx: x, my: y, r: 0 };
+    return null;
+  };
+  // MK-35: the eyedropper goes back to the tool used before it
+  const toolBeforePick = useRef<DrawTool>('biome');
 
   // ---- MK-29: room for the map; MK-30: find on the map ----
   const layoutRef = useRef<HTMLDivElement>(null);
@@ -1428,6 +1483,25 @@ export function MapView() {
       places: f.placeId && at ? w.places.map((p) => (p.id === f.placeId ? { ...p, location: at } : p)) : w.places,
     }));
   };
+  const addPlaceAt = async (ll: LatLng) => {
+    const name = await ask.prompt('Name of the new place?');
+    if (!name) return;
+    const p: Place = { ...recordBase(), name, aliases: [], kind: 'city', location: ll, notes: '', isPlaceholder: false };
+    store.upsert('places', p);
+    setSelected({ kind: 'place', id: p.id });
+  };
+  // ---- MK-33: the menu for a spot (right-click, or press and hold) ----
+  const [menu, setMenu] = useState<{ x: number; y: number; ll: LatLng; marker: Marker | null; featureId: Id | null } | null>(null);
+  const rightBtn = useRef(false);
+  const hold = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const cancelHold = () => { if (hold.current) { clearTimeout(hold.current.timer); hold.current = null; } };
+  const openMenu = (x: number, y: number) => {
+    const marker = hit(x, y);
+    const fid = marker ? null : hitFeature(shapes.current, x, y);
+    const featureId = fid && layerFree(world.mapFeatures.find((q) => q.id === fid)?.layerId) ? fid : null;
+    setHoverHit(null);
+    setMenu({ x, y, ll: llAt(x, y), marker, featureId });
+  };
   /** Drop whatever a pointer had started (a second finger turned it into a pinch). Nothing is saved. */
   const abandonGesture = () => {
     const st = stroke.current;
@@ -1443,11 +1517,16 @@ export function MapView() {
     const { x, y } = local(e);
     if (e.pointerType === 'touch') {
       touches.current.set(e.pointerId, { x, y });
-      if (touches.current.size === 2 && !pinchLeft.current) { abandonGesture(); stopGlide(); pinch.current = { view, ...pinchNow() }; return; }
+      if (touches.current.size === 2 && !pinchLeft.current) { cancelHold(); abandonGesture(); stopGlide(); pinch.current = { view, ...pinchNow() }; return; }
       if (touches.current.size > 1 || pinchLeft.current) return;
     }
     stopGlide();
-    if (e.button === 1) { panDrag.current = true; drag.current = { x, y, moved: false, v: view }; return; }
+    if (menu) setMenu(null);
+    if (e.button === 1 || e.button === 2) { panDrag.current = true; rightBtn.current = e.button === 2; drag.current = { x, y, moved: false, v: view }; return; }
+    if (e.pointerType === 'touch') {
+      cancelHold();
+      hold.current = { x, y, timer: window.setTimeout(() => { hold.current = null; abandonGesture(); pinchLeft.current = true; openMenu(x, y); }, 550) };
+    }
     const hv = e.button === 0 && !space.current ? handleAt(x, y) : null;
     if (hv) {
       const { f, idx } = hv;
@@ -1484,10 +1563,15 @@ export function MapView() {
     const { x, y } = local(e);
     if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
       touches.current.set(e.pointerId, { x, y });
+      if (hold.current && Math.hypot(x - hold.current.x, y - hold.current.y) > 8) cancelHold();
       if (pinch.current && touches.current.size >= 2) { const n = pinchNow(); setView(pinchView(pinch.current, size, n.mid, n.dist)); return; }
       if (pinchLeft.current) return;
     }
     setHover(toLatLng(view, size.w, size.h, x, y));
+    if (mode === 'browse' && !drag.current && e.pointerType !== 'touch') {
+      const hh = hoverAt(x, y);
+      setHoverHit((old) => (old?.id === hh?.id && (!hh || hh.kind !== 'feature') ? old : hh ? hh : null));
+    } else if (hoverHit) setHoverHit(null);
     if (zoomBox) { setZoomBox({ ...zoomBox, x1: x, y1: y }); return; }
     if (stroke.current) { continueStroke(e, llAt(x, y)); return; }
     const rs = regionStroke.current;
@@ -1527,6 +1611,7 @@ export function MapView() {
   /** A finger lifted: ends a pinch, and true while the rest of that gesture should be ignored. */
   const endTouch = (e: React.PointerEvent) => {
     if (e.pointerType !== 'touch') return false;
+    cancelHold();
     touches.current.delete(e.pointerId);
     if (!pinch.current && !pinchLeft.current) return false;
     pinch.current = null;
@@ -1541,7 +1626,12 @@ export function MapView() {
       if (v) glideTo(v);
       return;
     }
-    if (panDrag.current) { panDrag.current = false; drag.current = null; return; }
+    if (panDrag.current) {
+      const click = rightBtn.current && !drag.current?.moved;
+      panDrag.current = false; rightBtn.current = false; drag.current = null;
+      if (click) { const p = local(e); openMenu(p.x, p.y); }
+      return;
+    }
     if (stroke.current) { endStroke(); return; }
     const rs = regionStroke.current;
     if (rs) {
@@ -1576,6 +1666,14 @@ export function MapView() {
     const ll = { lat: clampLat(raw.lat), lng: wrapLng(raw.lng) };
     setFocus(null);
     if (mode === 'draw') {
+      if (draw.tool === 'eyedropper') {
+        const height = Math.round(reader.elevation(ll) / 10) * 10;
+        const biome = reader.isLand(ll) ? reader.biome(ll) : 0;
+        setDraw((d) => ({ ...d, tool: toolBeforePick.current, height, biome: biome || d.biome }));
+        const bname = world.settings.biomes.find((b) => b.id === biome)?.name;
+        setPicked(`${bname ? `${bname}, ` : ''}${height.toLocaleString()} m`);
+        return;
+      }
       if (draw.tool === 'polygon') setPoly((p) => [...p, ll]);
       if (draw.tool === 'auto-river') autoRiver(ll);
       if (draw.tool === 'settlement') void addSettlement(ll);
@@ -1613,15 +1711,7 @@ export function MapView() {
       setMode('browse');
       return;
     }
-    if (mode === 'add-place') {
-      const name = await ask.prompt('Name of the new place?');
-      if (name) {
-        const p: Place = { ...recordBase(), name, aliases: [], kind: 'city', location: ll, notes: '', isPlaceholder: false };
-        store.upsert('places', p);
-        setSelected({ kind: 'place', id: p.id });
-      }
-      return;
-    }
+    if (mode === 'add-place') { await addPlaceAt(ll); return; }
     if (mode === 'measure') {
       if (measureFollow && measure.length) {
         const leg = routeAlongFeatures(world, measure[measure.length - 1], ll, 'land', (f) => existsOn((dd) => ix.win(dd), f, moment));
@@ -1814,15 +1904,15 @@ export function MapView() {
       <div className="map-canvas" ref={wrapRef}>
         <canvas
           ref={canvasRef}
-          style={{ width: size.w, height: size.h, cursor: mode === 'browse' || (mode === 'draw' && draw.tool === 'pan') || (mode === 'layers' && regionTools.tool === 'select') ? 'grab' : (mode === 'draw' && isBrush(draw.tool)) || (mode === 'layers' && regionTools.tool === 'brush' && regionEditable) ? 'none' : 'crosshair' }}
+          style={{ width: size.w, height: size.h, cursor: mode === 'browse' && hoverHit ? 'pointer' : mode === 'draw' && draw.tool === 'eyedropper' ? 'copy' : mode === 'browse' || (mode === 'draw' && draw.tool === 'pan') || (mode === 'layers' && regionTools.tool === 'select') ? 'grab' : (mode === 'draw' && isBrush(draw.tool)) || (mode === 'layers' && regionTools.tool === 'brush' && regionEditable) ? 'none' : 'crosshair' }}
           onMouseDown={(e) => e.button === 1 && e.preventDefault() /* no autoscroll: the middle button moves the map */}
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={(e) => { if (!endTouch(e)) endStroke(); drag.current = null; panDrag.current = false; setZoomBox(null); }}
-          onPointerLeave={() => setHover(null)}
+          onPointerLeave={() => { setHover(null); setHoverHit(null); }}
           onDoubleClick={onDouble}
-          onContextMenu={(e) => mode === 'draw' && e.preventDefault()}
+          onContextMenu={(e) => e.preventDefault() /* the right button opens the map's own menu (MK-33) */}
         />
         <canvas ref={overlayRef} className="map-overlay" style={{ width: size.w, height: size.h }} />
         <div className="map-toolbar">
@@ -1867,6 +1957,37 @@ export function MapView() {
             paintBase={(g, w, h, v) => { paintRef.current?.(g, w, h, v, { pxRatio: 1, base: true }); }}
             onCenter={(p) => { stopGlide(); setView((v) => clampView({ ...v, centerLat: p.lat, centerLng: p.lng })); }} />
         )}
+        {menu && (() => {
+          const m = menu.marker, place = m?.kind === 'place' ? ix.places.get(m.id) : undefined, ch = m?.kind === 'character' ? ix.characters.get(m.id) : undefined;
+          const feat = menu.featureId ? world.mapFeatures.find((f) => f.id === menu.featureId) : undefined;
+          const coords = `${menu.ll.lat.toFixed(4)}, ${menu.ll.lng.toFixed(4)}`;
+          const first: MenuItem[] = place ? [
+            { label: 'Open', onClick: () => go('places', place.id) },
+            { label: 'Zoom to', onClick: () => zoomToRecord('place', place.id) },
+            { label: '+ Stay here', onClick: () => edit({ kind: 'stay', preset: { placeId: place.id } }) },
+            { label: 'Move it', onClick: () => startPick(place.id) },
+          ] : ch ? [
+            { label: 'Open', onClick: () => go('characters', ch.id) },
+            { label: 'Zoom to', onClick: () => zoomToRecord('character', ch.id) },
+            { label: tracks.includes(ch.id) ? 'Hide track' : 'Show track', onClick: () => setTracks((t) => (t.includes(ch.id) ? t.filter((x) => x !== ch.id) : [...t, ch.id])) },
+          ] : feat ? [
+            { label: 'Edit', onClick: () => setSelected({ kind: 'feature', id: feat.id }) },
+            { label: 'Zoom to', onClick: () => zoomToRecord('feature', feat.id) },
+            { label: 'Delete…', danger: true, onClick: () => void deleteFeature(world, store, feat).then((ok) => ok && selected?.id === feat.id && setSelected(null)) },
+          ] : [];
+          const here: MenuItem[] = [
+            { label: '+ Place here', onClick: () => void addPlaceAt(menu.ll) },
+            { label: "What's here", onClick: () => setWhatsHere(menu.ll) },
+            { label: 'Measure from here', onClick: () => { setMode('measure'); setMeasure([menu.ll]); } },
+            { label: 'Centre here', onClick: () => glideTo({ ...view, centerLat: menu.ll.lat, centerLng: menu.ll.lng }) },
+            { label: 'Zoom in here', onClick: () => zoomBy(2, menu.x, menu.y) },
+            { label: `Copy ${coords}`, onClick: () => void navigator.clipboard?.writeText(coords).catch(() => undefined) },
+          ];
+          return <MapMenu x={menu.x} y={menu.y} bounds={size} title={place?.name ?? ch?.name ?? (feat ? feat.name || KIND_NAME[feat.kind] : undefined)} groups={[first, here]} onClose={() => setMenu(null)} />;
+        })()}
+        {hoverHit && mode === 'browse' && !(selected && selected.id === hoverHit.id) && (
+          <div className="map-hover-tip" style={{ left: Math.min(hoverHit.x + 14, size.w - 220), top: hoverHit.y + 16 }}>{hoverHit.name} <span className="muted small">{hoverHit.note}</span></div>
+        )}
         {zoomBox && <div className="map-zoombox" style={{ left: Math.min(zoomBox.x0, zoomBox.x1), top: Math.min(zoomBox.y0, zoomBox.y1), width: Math.abs(zoomBox.x1 - zoomBox.x0), height: Math.abs(zoomBox.y1 - zoomBox.y0) }} />}
         {mode === 'draw' && <ToolPalette state={draw} onChange={(d) => { setDraw(d); if (d.tool !== 'polygon') setPoly([]); }} />}
         {globe && (
@@ -1890,6 +2011,9 @@ export function MapView() {
           {mode === 'layers' && selRegion && regionTools.tool === 'shape' && regionEditable && <b>{regionDraft.length === 0 ? `Click the first corner to ${regionTools.op === 'add' ? 'add land to' : 'cut land from'} ${selRegion.name}. ` : `${regionDraft.length} corner(s): double-click or Enter to finish. `}</b>}
           {mode === 'layers' && selRegion && regionTools.tool === 'brush' && regionEditable && <b>Paint to {regionTools.op === 'add' ? 'add land to' : 'cut land from'} {selRegion.name}; Alt swaps. </b>}
           {mode === 'calibrate' && calib && <b>Calibrating: click known spot {calib.points.length + 1} of 2 on the sketch. </b>}
+          {mode === 'draw' && <span className="map-tool-name">{toolInfo(draw.tool).icon} {toolInfo(draw.tool).name} ({toolInfo(draw.tool).key}) · </span>}
+          {mode === 'draw' && draw.tool === 'eyedropper' && <b>Click the map to pick up its terrain type and height. </b>}
+          {picked && <b>Picked up {picked}. </b>}
           {mode === 'draw' && draw.tool === 'polygon' && <b>{poly.length === 0 ? 'Click the first corner. ' : `${poly.length} corner(s): double-click or Enter to fill. `}</b>}
           {mode === 'measure' && (
             <b>

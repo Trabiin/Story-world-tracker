@@ -277,3 +277,11 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Find on map** (MK-30): the box in the map toolbar (or press /) finds places, rivers, roads and other features, realms and characters by name or alias, on the date shown. Pick one and the map glides there and selects it. Place, character and feature cards have **Zoom to**.
 - **Overview** (MK-31): when zoomed in, the main map (or the whole world) shows small in the bottom-left corner with the part on screen outlined; click or drag in it to move there. It can be switched off under Show.
 - **A tidier side panel** (MK-32): Show is grouped into background, land and story, and Show, Main map and Sketches fold away and stay as you left them. Export moved to the **Export…** menu in the toolbar.
+
+## Phase 9c: drawing comfort
+
+- **Right-click** (or press and hold on a touchscreen) anywhere on the map (MK-33): add a place there, what's here, measure from there, centre or zoom in there, copy the coordinates; on a place: open, zoom to, add a stay, move it; on a character: open, zoom to, show the track; on a river, road or area: edit, zoom to, delete. Dragging with the right button moves the map, like the middle button.
+- **Hover** over a place, character, river, road or area in Move mode (MK-34): it lights up and its name shows.
+- **Eyedropper** (MK-35), key I: click the map to pick up its terrain type and height for the brushes; you are back on the tool you had.
+- **Tool names** (MK-36): the » button at the bottom of the tool palette shows names and shortcut keys next to the icons; the chosen tool always shows in the status line.
+- **Smoother land close up** (MK-37): zoomed in far, the painted land is drawn in sharper parts instead of one stretched picture, and terrain-type edges get a finer, natural ragged line instead of squares. The stored map doesn't change.

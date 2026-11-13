@@ -6,6 +6,29 @@ import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
 import { KIND_NAME } from './featureRender';
 
+type Store = ReturnType<typeof useApp>['store'];
+type World = ReturnType<typeof useApp>['world'];
+
+/** Delete a feature after asking; its place goes too unless stays or journeys use it. True when deleted. */
+export async function deleteFeature(world: World, store: Store, f: MapFeature): Promise<boolean> {
+  const used = f.placeId
+    ? world.stays.filter((s) => s.placeId === f.placeId).length +
+      world.journeys.filter((j) => j.originId === f.placeId || j.destinationId === f.placeId || j.waypointIds.includes(f.placeId!)).length
+    : 0;
+  const msg = used
+    ? `Delete ${f.name || 'this feature'}? Its place is used by ${used} stay(s) or journey(s), so the place is kept.`
+    : `Delete ${f.name || 'this feature'}?`;
+  if (!(await ask.confirm(msg, { okLabel: 'Delete', danger: true }))) return false;
+  store.update((w) => ({
+    ...w,
+    mapFeatures: w.mapFeatures
+      .filter((x) => x.id !== f.id)
+      .map((x) => (x.joinsId === f.id ? { ...x, joinsId: undefined } : x.outletId === f.id ? { ...x, outletId: undefined } : x)),
+    places: used || !f.placeId ? w.places : w.places.filter((p) => p.id !== f.placeId),
+  }));
+  return true;
+}
+
 export function FeatureCard({ feature: f, onClose, onZoom }: { feature: MapFeature; onClose: () => void; onZoom?: () => void }) {
   const { world, store, go } = useApp();
   const R = world.settings.radiusKm;
@@ -27,24 +50,7 @@ export function FeatureCard({ feature: f, onClose, onZoom }: { feature: MapFeatu
   const rivers = world.mapFeatures.filter((x) => x.kind === 'river' && x.id !== f.id);
   const km = f.shape === 'line' ? polylineKm(f.points, R) : polylineKm([...f.points, f.points[0]], R);
 
-  const remove = async () => {
-    const used = f.placeId
-      ? world.stays.filter((s) => s.placeId === f.placeId).length +
-        world.journeys.filter((j) => j.originId === f.placeId || j.destinationId === f.placeId || j.waypointIds.includes(f.placeId!)).length
-      : 0;
-    const msg = used
-      ? `Delete ${f.name || 'this feature'}? Its place is used by ${used} stay(s) or journey(s), so the place is kept.`
-      : `Delete ${f.name || 'this feature'}?`;
-    if (!(await ask.confirm(msg, { okLabel: 'Delete', danger: true }))) return;
-    store.update((w) => ({
-      ...w,
-      mapFeatures: w.mapFeatures
-        .filter((x) => x.id !== f.id)
-        .map((x) => (x.joinsId === f.id ? { ...x, joinsId: undefined } : x.outletId === f.id ? { ...x, outletId: undefined } : x)),
-      places: used || !f.placeId ? w.places : w.places.filter((p) => p.id !== f.placeId),
-    }));
-    onClose();
-  };
+  const remove = async () => { if (await deleteFeature(world, store, f)) onClose(); };
 
   return (
     <div className="card feature-card">
