@@ -142,6 +142,13 @@ fn claude_command() -> Command {
     }
     #[cfg(not(windows))]
     {
+        // Claude Code's own installer puts it in ~/.local/bin, which a desktop app's PATH often lacks.
+        if let Ok(home) = std::env::var("HOME") {
+            let bin = std::path::Path::new(&home).join(".local").join("bin").join("claude");
+            if bin.exists() {
+                return Command::new(bin);
+            }
+        }
         Command::new("claude")
     }
 }
@@ -246,7 +253,19 @@ pub fn open_claude_terminal(folder: String) -> Result<(), String> {
     }
     #[cfg(not(windows))]
     {
-        let _ = folder;
-        Err("Opening a terminal is only set up for Windows.".into())
+        // Linux (also a Chromebook's Linux): the first terminal program that is installed.
+        let script = "claude; exec bash";
+        let tries: [(&str, &[&str]); 4] = [
+            ("x-terminal-emulator", &["-e", "bash", "-c"]),
+            ("gnome-terminal", &["--", "bash", "-c"]),
+            ("konsole", &["-e", "bash", "-c"]),
+            ("xterm", &["-e", "bash", "-c"]),
+        ];
+        for (prog, args) in tries {
+            if Command::new(prog).args(args).arg(script).current_dir(&folder).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        Err(format!("No terminal program was found. Open the Terminal app, then type: cd \"{folder}\" && claude"))
     }
 }

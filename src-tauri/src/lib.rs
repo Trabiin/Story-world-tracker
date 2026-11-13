@@ -12,6 +12,26 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .manage(claude::Shared::default())
+        .setup(|app| {
+            #[cfg(target_os = "linux")]
+            {
+                use tauri::Manager;
+                use webkit2gtk::{WebContextExt, WebViewExt};
+                // WebKitGTK leaves spell checking off; Windows' WebView2 has it on. Turn it on, British
+                // and American English (the dictionaries come with the .deb's dependencies).
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.with_webview(|wv| {
+                        if let Some(ctx) = wv.inner().context() {
+                            ctx.set_spell_checking_enabled(true);
+                            ctx.set_spell_checking_languages(&["en_GB", "en_US"]);
+                        }
+                    });
+                }
+            }
+            #[cfg(not(target_os = "linux"))]
+            let _ = app;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             claude::claude_bridge_start,
             claude::claude_bridge_reply,
