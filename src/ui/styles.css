@@ -947,3 +947,13 @@ div.file-view-body img { max-width: 100%; max-height: 100%; }
 .submissions-table select.answer-offer { color: #2f7d4a; font-weight: 600; }
 .submissions-table select.answer-rejected, .submissions-table select.answer-no-answer { color: var(--muted); }
 .submissions-table select.answer-requested { color: #b36b00; font-weight: 600; }
+
+/* Phase 5a: TL-2 calendars */
+.moment-cal { white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+.calendar-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 8px; }
+.calendar-card > .row, .calendar-editor .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.calendar-card .spacer { flex: 1; }
+.calendar-editor { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.calendar-months input[type="number"] { width: 70px; }
+.calendar-months input:not([type]) { width: 180px; }
+.calendar-converter { margin-top: 12px; max-width: 520px; }

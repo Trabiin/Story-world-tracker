@@ -4,7 +4,7 @@
  * event and realm, the timeline, the story's threads and secrets, the map and the open warnings,
  * plus the guide (CLAUDE.md, guide/data-model.md) and the whole world as JSON.
  */
-import { formatFuzzy, fromDay, toWindow, type FuzzyDate } from '../dates';
+import { customDayLabel, formatFuzzy, fromDay, toWindow, type FuzzyDate } from '../dates';
 import { describeRelative } from '../events';
 import { polylineKm } from '../features';
 import { LAYER_TYPES, LayerIndex, describeChain } from '../layers';
@@ -79,7 +79,7 @@ export function claudeFolderFiles(stored: World, warnings: Warning[], opts: { di
   const moment = s.currentMoment !== undefined ? formatFuzzy(fromDay(Math.round(s.currentMoment))) : '';
   files.push({
     path: 'world.md',
-    text: `# ${s.name}\n\n${line('Planet radius', `${s.radiusKm} km`)}${line('Axial tilt', `${s.axialTiltDeg}°`)}${line('Seasons follow the', `${s.hemisphereForSeasons}ern hemisphere when no place is known`)}${line('Current moment in the app', moment)}${line('Travel modes', s.travelModes.map((m) => `${m.name} \`${m.id}\` ${m.speedKmPerDay} km/day`))}${line('Default detour factor', s.defaultDetourFactor)}${line('Terrain types', s.biomes.map((b) => b.name))}
+    text: `# ${s.name}\n\n${line('Planet radius', `${s.radiusKm} km`)}${line('Axial tilt', `${s.axialTiltDeg}°`)}${line('Seasons follow the', `${s.hemisphereForSeasons}ern hemisphere when no place is known`)}${line('Current moment in the app', moment)}${line('The world\'s own calendars (TL-2; dates are still written day/month/year)', (s.calendars ?? []).map((c) => `${c.name}: ${c.months.map((m) => `${m.name} ${m.days}${m.leapDays ? `+${m.leapDays}` : ''}`).join(', ')}; year 1 starts ${formatFuzzy(fromDay(c.epoch))}${s.currentMoment !== undefined ? `; the current moment is ${customDayLabel(c, Math.round(s.currentMoment))}` : ''}`))}${line('Travel modes', s.travelModes.map((m) => `${m.name} \`${m.id}\` ${m.speedKmPerDay} km/day`))}${line('Default detour factor', s.defaultDetourFactor)}${line('Terrain types', s.biomes.map((b) => b.name))}
 ## Counts
 
 ${line('Characters', world.characters.length)}${line('Places', world.places.length)}${line('Groups', world.groups.length)}${line('Stays and journeys', world.stays.length + world.journeys.length)}${line('Events', world.events.length)}${line('Books, chapters, scenes', `${world.books.length}, ${world.chapters.length}, ${world.scenes.length}`)}${line('Words in scene text', world.sceneTexts.filter((t) => t.scenarioId === CANON).reduce((n, t) => n + t.words, 0).toLocaleString('en-GB'))}${line('Map features', world.mapFeatures.length)}${line('Regions', world.regions.length)}

@@ -228,3 +228,10 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Series bible** (EU-16): **Finish → Series bible**: characters (dates, titles, groups, relationships, description), places by region, groups and their members, and one timeline of events, births and deaths and dated scenes. Either everything (your copy, with notes) or only what the reader knows by the end of a chosen book. Save as PDF or Word.
 - Claude's folder gains `story/dialogue.md` and `story/submissions.md`; Claude can propose submissions.
 - World file format 16 (submissions). Older files open as before.
+
+## Phase 5a: calendars
+
+- **Your world's own calendars** (TL-2): **Settings → Calendars**. Add as many as you like, starting from 12 months, 13 months of 28 days, or 10 months, and set month names and lengths, leap days and the leap rule, the days of the week, the eras and the day year 1 begins. Dates everywhere stay day/month/year (D-16).
+- The date bar shows the current day in your calendar ("Sixthday, 11 Seedtime 319 AR"); hover for all of them.
+- **Convert a date**: type "3/5/1042" or "3 Thaw 318 AR" and see it in every calendar.
+- Claude's `world.md` lists the calendars and today in each.

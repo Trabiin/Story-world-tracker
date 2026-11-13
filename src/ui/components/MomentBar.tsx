@@ -1,6 +1,6 @@
 /** TL-7: the global "current moment". Every view follows it. VW-2: play it forward at a chosen speed. */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatDayNumber, fromDayNumber, parseFuzzyDate, toWindow } from '../../core';
+import { dayInCalendars, formatDayNumber, fromDayNumber, parseFuzzyDate, toWindow } from '../../core';
 import { useApp } from '../context';
 import { worldDayRange } from '../util';
 
@@ -58,6 +58,11 @@ export function MomentBar() {
       <button className="icon" title="Previous month" onClick={() => store.setMoment(moment - 30)}>«</button>
       <button className="icon" title="Previous day" onClick={() => store.setMoment(moment - 1)}>‹</button>
       <input className="moment-date" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} title="Current moment (day/month/year)" />
+      {(() => {
+        // TL-2: the same day in the world's own calendars (the first one shown, all of them on hover).
+        const other = dayInCalendars(world.settings.calendars, moment);
+        return other.length ? <span className="moment-cal muted small" title={other.map((o) => `${o.name}: ${o.label}`).join('\n')}>{other[0].label}</span> : null;
+      })()}
       <button className="icon" title="Next day" onClick={() => store.setMoment(moment + 1)}>›</button>
       <button className="icon" title="Next month" onClick={() => store.setMoment(moment + 30)}>»</button>
       <button className={`icon${playing ? ' on' : ''}`} title={playing ? 'Pause' : 'Play: watch characters travel and borders change'} onClick={() => setPlaying(!playing)}>{playing ? '❚❚' : '▶'}</button>
