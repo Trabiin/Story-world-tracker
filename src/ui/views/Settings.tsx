@@ -1,5 +1,6 @@
 /** World settings, travel speeds (WH-7), backups (EU-17) and open exports (PL-4). */
 import { useMemo, useState } from 'react';
+import { LightSetting, lightSetting, setLightSetting, softwareRendering } from '../perf';
 import { EARTH_MOON, MOON_ICON, fromDay, moonPhases, toWindow, BAND_INFO, CELL_SIZES, CLIMATE_BANDS, ClimateBand, EARTH_TILT, TravelMode, biomeUsage, clearBiome, hasTerrain, nextBiomeId, resampleTerrain, seasonStrength, windName, SETTLEMENT_WATER_KM, NO_MODIFIERS } from '../../core';
 import { ask } from '../components/Dialogs';
 import { placesToGeoJson, worldToBytes, worldToJson } from '../../storage';
@@ -234,6 +235,7 @@ function MapSettings() {
             {CELL_SIZES.map((c) => <option key={c} value={c}>{c === 0.1 ? 'Coarse' : c === 0.05 ? 'Standard' : 'Fine'}: {c}° (~{Math.round(c * Math.PI * s.radiusKm / 180)} km)</option>)}
           </select>
         </Field>
+        <LightDrawingField />
         <Field label="Map style" hint="MK-12: a clean flat look, or a hand-drawn parchment look. Also used for exported maps.">
           <select value={s.mapStyle ?? 'flat'} onChange={(e) => store.setSettings({ mapStyle: e.target.value as 'flat' | 'parchment' })}>
             <option value="flat">Clean and flat</option>
@@ -301,5 +303,20 @@ function MoonSettings() {
         {world.settings.moon && <div><button className="small" onClick={() => store.setSettings({ moon: undefined })}>Use Earth's moon</button></div>}
       </div>
     </>
+  );
+}
+
+/** Lighter drawing for slow computers; kept per computer, not in the world. */
+function LightDrawingField() {
+  const [v, setV] = useState<LightSetting>(lightSetting);
+  const soft = softwareRendering();
+  return (
+    <Field label="Drawing on this computer" hint={`For slower computers and Chromebooks: sharp-screen detail, animations and shadows are dropped so the map and timeline move faster. ${soft ? 'This computer draws without graphics acceleration, so Automatic uses lighter drawing.' : 'This computer has graphics acceleration, so Automatic uses full detail.'} Kept on this computer only.`}>
+      <select value={v} onChange={(e) => { const n = e.target.value as LightSetting; setLightSetting(n); setV(n); window.dispatchEvent(new Event('resize')); }}>
+        <option value="auto">Automatic ({soft ? 'lighter' : 'full detail'})</option>
+        <option value="on">Lighter (faster)</option>
+        <option value="off">Full detail</option>
+      </select>
+    </Field>
   );
 }

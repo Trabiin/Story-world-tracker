@@ -3,6 +3,7 @@
  * Zoom from decades to days; fuzzy dates show as faded edges. Click the axis to set the current moment.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { canvasRatio } from '../perf';
 import { EARTH_MOON, Id, MOON_ICON, OPEN_END, Segment, TerrainReader, eventIcon, fromDayNumber, formatDayNumber, hasTerrain, moonPhases, occurrences, seasonBands, toDayNumber } from '../../core';
 import { useApp } from '../context';
 import { ShiftDatesModal } from '../components/ShiftDates';
@@ -102,7 +103,7 @@ export function Timeline() {
 
   useEffect(() => {
     const cv = canvasRef.current!;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = canvasRatio();
     cv.width = size.w * dpr;
     cv.height = size.h * dpr;
     const g = cv.getContext('2d')!;

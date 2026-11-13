@@ -3,6 +3,7 @@
  * (MK-4..MK-7, MK-18, MK-24, MK-26, MK-27). Equirectangular, wraps east–west.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { canvasRatio, lightDrawing } from '../perf';
 import { ask } from '../components/Dialogs';
 import {
   BAND_INFO, BrushParams, CLIMATE_BANDS, DetailMap, Id, LatLng, MapImage, MapSymbol, Place, Terrain, TerrainEditor, TerrainReader,
@@ -200,6 +201,8 @@ export function MapView() {
   }, [moment, lix]);
   useEffect(() => {
     if (!flash) return;
+    // Lighter drawing: no fade animation (each frame redraws the whole map), just show and clear.
+    if (lightDrawing()) { const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t); }
     let raf = 0;
     const tick = () => {
       if (performance.now() - flash.t0 > 3000) { setFlash(null); return; }
@@ -783,7 +786,7 @@ export function MapView() {
   paintRef.current = paint;
   useEffect(() => {
     const cv = canvasRef.current!;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = canvasRatio();
     cv.width = size.w * dpr;
     cv.height = size.h * dpr;
     const g = cv.getContext('2d')!;
@@ -795,7 +798,7 @@ export function MapView() {
   useEffect(() => {
     const cv = overlayRef.current;
     if (!cv) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = canvasRatio();
     cv.width = size.w * dpr;
     cv.height = size.h * dpr;
     const g = cv.getContext('2d')!;

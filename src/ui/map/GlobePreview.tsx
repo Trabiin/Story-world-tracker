@@ -1,5 +1,6 @@
 /** MK-27: the world as a sphere. Drag to turn it; it can also spin on its own. */
 import { useEffect, useRef, useState } from 'react';
+import { canvasRatio } from '../perf';
 import type { LatLng } from '../../core';
 import type { Overview } from './terrainRender';
 
@@ -38,7 +39,7 @@ export function GlobePreview({ overview, version, start, points, onClose, onPick
 
   useEffect(() => {
     const cv = ref.current!;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(2, canvasRatio());
     const n = Math.round(SIZE * dpr);
     cv.width = n; cv.height = n;
     const g = cv.getContext('2d')!;

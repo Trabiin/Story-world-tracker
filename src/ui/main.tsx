@@ -1,4 +1,5 @@
 import { StrictMode, useEffect, useState } from 'react';
+import { applyLightClass } from './perf';
 import { createRoot } from 'react-dom/client';
 import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { initSql, loadWorldFile } from '../storage';
@@ -45,4 +46,5 @@ function Root() {
   return <App key={store.handle.id} store={store} platform={platform} onClose={() => { try { localStorage.removeItem(LAST_KEY); } catch { /* ignore */ } setStore(null); }} />;
 }
 
+applyLightClass();
 createRoot(document.getElementById('root')!).render(<StrictMode><Root /><DialogHost /></StrictMode>);

@@ -167,6 +167,8 @@ Pushing a tag such as `v0.1.0` also creates a draft GitHub release with them.
 3. The download is a `.zip`: open it and drag the `.deb` into **Linux files**. Newer ChromeOS versions no longer install a `.deb` by double-clicking, so open the **Terminal** app, choose **penguin**, and type `sudo apt install ./Story*.deb` (answer Y). The app then sits in the launcher under **Linux apps**.
 4. Keep `.world` files in **Linux files**, or share a folder (such as Google Drive) with Linux: right-click it → **Share with Linux**. The same `.world` file opens on Windows and on the Chromebook; just don't have it open on both at once.
 
+If the app feels slow (Linux on a Chromebook usually has no graphics acceleration), check **Settings → Map → Drawing on this computer**: Automatic switches to lighter drawing when there is no acceleration (canvases at normal rather than full sharpness, no animations or shadows), and Lighter forces it. Turning on `chrome://flags/#crostini-gpu-support` in Chrome, where the Chromebook offers it, gives Linux apps acceleration. The app also turns off WebKit's emulated accelerated drawing when there is no graphics device.
+
 Spell checking and the Claude Code features work as on Windows once the Linux tools are installed (Claude Code is installed in the Linux terminal).
 
 ## Phase 6a: write here
