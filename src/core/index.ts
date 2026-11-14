@@ -20,3 +20,4 @@ export * from './notes';
 export * from './plan';
 export * from './revise';
 export * from './publish';
+export * from './eclipse';

@@ -28,6 +28,9 @@ export interface AppCtx {
   /** WH-6: the journey whose route is being drawn on the map. */
   routeFor: Id | undefined;
   startRoute: (journeyId: Id | undefined) => void;
+  /** EC-1: the eclipse whose shadow path is being drawn on the map. */
+  eclipseFor: Id | undefined;
+  startEclipse: (eventId: Id | undefined) => void;
   /** Open the manuscript reader at a linked passage (ST-10). */
   openPassage: (manuscriptId: Id, linkId?: Id) => void;
   /** Passage to scroll to when the reader opens. */

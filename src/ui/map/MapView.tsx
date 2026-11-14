@@ -37,6 +37,9 @@ import { MapWizard } from './MapWizard';
 import { SketchTraceDialog } from './SketchTrace';
 import { DetailMapsCard, LayersCard, sortedMaps } from './MapsPanel';
 import { drawRegionLayers } from './regionRender';
+import { EffectShade, drawEclipses, drawEffectGrid } from './eclipseRender';
+import { EclipseCard } from './EclipseCard';
+import { effectGrid, eclipseRules, newShadow, shadowEvents } from '../../core';
 import { mapToSvg } from './exportSvg';
 import { imagePdf, formatDayNumber as fmtDay } from '../../core';
 import { canvasBytes } from '../util';
@@ -57,20 +60,20 @@ function densify(pts: LatLng[], R: number): LatLng[] {
 const FEATURE_PLACE_KINDS = new Set(['river', 'lake', 'road', 'area']);
 const SETTLEMENT_SIZE: Record<string, number> = { capital: 18, city: 16, town: 13, village: 11 };
 
-type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw' | 'route' | 'layers';
+type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw' | 'route' | 'layers' | 'eclipse';
 const DRAW_KEY = 'swt.draw';
 const LAYERS_KEY = 'swt.mapLayers';
-const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, regions: true, places: true, characters: true, routes: true, labels: true, inset: true };
+const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, regions: true, eclipses: true, eclipseEffects: false, places: true, characters: true, routes: true, labels: true, inset: true };
 type Layers = typeof DEFAULT_LAYERS;
 const LAYER_NAMES: Record<keyof Layers, string> = {
   grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols', features: 'Rivers, lakes, roads and areas', maps: 'Detail map frames',
-  climate: 'Climate zones', regions: 'Realms, cultures and other layers', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels', inset: 'Overview when zoomed in',
+  climate: 'Climate zones', regions: 'Realms, cultures and other layers', eclipses: 'Eclipse paths', eclipseEffects: 'Eclipse effects (cooling, forests)', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels', inset: 'Overview when zoomed in',
 };
 /** MK-32: the Show list in three groups. */
 const LAYER_GROUPS: { name: string; keys: (keyof Layers)[] }[] = [
   { name: 'Background', keys: ['grid', 'compass', 'scale', 'inset'] },
   { name: 'Land', keys: ['mountains', 'symbols', 'features', 'maps', 'climate'] },
-  { name: 'Story', keys: ['regions', 'places', 'characters', 'routes', 'labels'] },
+  { name: 'Story', keys: ['regions', 'eclipses', 'eclipseEffects', 'places', 'characters', 'routes', 'labels'] },
 ];
 const PANEL_KEY = 'swt.mapPanel';
 
@@ -123,7 +126,7 @@ function cssVar(name: string) {
 }
 
 export function MapView() {
-  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, go, edit, mapFocus, trackRequest, fixPreview, previewFix, platform, claudePreview, previewSuggestion } = useApp();
+  const { world, store, ix, moment, pickFor, startPick, routeFor, startRoute, eclipseFor, startEclipse, go, edit, mapFocus, trackRequest, fixPreview, previewFix, platform, claudePreview, previewSuggestion } = useApp();
   const viewKey = `${VIEW_KEY}.${store.handle.id}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -238,6 +241,35 @@ export function MapView() {
   const trackData = useMemo(() => tracks.filter((id) => ix.characters.has(id)).map((id) => ({ id, ...characterTrack(ix, id) })), [tracks, ix]);
 
   useEffect(() => setMode(pickFor ? 'pick' : 'browse'), [pickFor]);
+  // EC-1: drawing an eclipse's shadow path
+  const [eclipseDraft, setEclipseDraft] = useState<LatLng[]>([]);
+  const eclipseEvent = eclipseFor ? world.events.find((e) => e.id === eclipseFor) : undefined;
+  useEffect(() => {
+    if (!eclipseFor) { setMode((m) => (m === 'eclipse' ? 'browse' : m)); return; }
+    const e = store.world.events.find((q) => q.id === eclipseFor);
+    if (!e) { startEclipse(undefined); return; }
+    if (!e.shadow) store.upsert('events', { ...e, shadow: newShadow() });
+    setMode('eclipse');
+    setEclipseDraft(e.shadow?.track ?? []);
+    setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eclipseFor]);
+  const finishEclipse = () => {
+    const e = eclipseEvent;
+    if (e) store.upsert('events', { ...e, shadow: { ...(e.shadow ?? newShadow()), track: eclipseDraft } });
+    startEclipse(undefined);
+    setMode('browse');
+  };
+  const cancelEclipse = () => { startEclipse(undefined); setMode('browse'); };
+  // EC-6: shading for cooling or forest health on the date shown
+  const [effectShade, setEffectShade] = useState<EffectShade>(() => { try { return (localStorage.getItem('swt.eclipseShade') as EffectShade) || 'cooling'; } catch { return 'cooling'; } });
+  useEffect(() => { try { localStorage.setItem('swt.eclipseShade', effectShade); } catch { /* ignore */ } }, [effectShade]);
+  const hasShadows = useMemo(() => shadowEvents(world).length > 0, [world]);
+  const gridDay = Math.floor(moment);
+  const effects = useMemo(() => (layers.eclipseEffects && hasShadows ? effectGrid(world, gridDay) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layers.eclipseEffects, hasShadows, world.events, world.settings.eclipseRules, world.settings.sky, world.settings.radiusKm, world.settings.hemisphereForSeasons, gridDay]);
+  const maxCooling = eclipseRules(world).coolingC * 0.4;
   const routeJourney = routeFor ? world.journeys.find((j) => j.id === routeFor) : undefined;
   useEffect(() => {
     if (!routeFor) { setMode((m) => (m === 'route' ? 'browse' : m)); return; }
@@ -462,6 +494,15 @@ export function MapView() {
         reader: showTerrain ? reader : undefined, labels: layers.labels && !opts.base, selected: mode === 'layers' && !opts.exporting ? regionSel : undefined,
         flash: flash && !opts.exporting ? { ids: flash.ids, strength: flashStrength } : undefined,
         activeLayer: mode === 'layers' ? regionLayer?.id : undefined, fg: cssVar('--fg'), bg: cssVar('--bg'),
+      });
+    }
+
+    // EC-6: eclipse effects, then the bands of the eclipses going on (and the one being drawn)
+    if (effects && layers.eclipseEffects) drawEffectGrid(g, effects, effectShade, maxCooling, offsets, (p, o) => toScreen(view, w, h, p, o));
+    if (layers.eclipses || mode === 'eclipse') {
+      drawEclipses(g, {
+        world, day: moment, offsets, project: (p, o) => toScreen(view, w, h, p, o), w, h, labels: layers.labels && !opts.base,
+        draft: mode === 'eclipse' && eclipseFor ? { eventId: eclipseFor, track: eclipseDraft } : undefined, fg: cssVar('--fg'), bg: cssVar('--bg'),
       });
     }
 
@@ -828,7 +869,7 @@ export function MapView() {
     const g = cv.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     markers.current = paint(g, size.w, size.h, view, { pxRatio: dpr });
-  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick, fixDiff, claudeGhost]);
+  }, [view, size, world, ix, characterPositions, layers, measure, selected, pickFor, tick, reader, showTerrain, style, sk, overview, focus, flows, moment, hiddenLayers, currentMap, lix, regionSel, regionLayer, mode, trackData, flashTick, fixDiff, claudeGhost, effects, effectShade, eclipseDraft, eclipseFor]);
 
   // ---- brush cursor and shape being drawn (separate layer, so hovering doesn't redraw the map) ----
   useEffect(() => {
@@ -872,6 +913,13 @@ export function MapView() {
         g.beginPath(); g.arc(hoverHit.mx, hoverHit.my, hoverHit.r + 4, 0, Math.PI * 2);
         g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 5; g.stroke();
         g.strokeStyle = '#b5562c'; g.lineWidth = 2; g.stroke();
+      }
+    }
+    if (mode === 'eclipse' && eclipseDraft.length && hover) {
+      for (const o of offsets) {
+        const sp = projectLine(densify([eclipseDraft[eclipseDraft.length - 1], { lat: clampLat(hover.lat), lng: wrapLng(hover.lng) }], world.settings.radiusKm), (p, oo) => toScreen(view, w, h, p, oo), o);
+        g.setLineDash([6, 4]); g.strokeStyle = '#f0a33a'; g.lineWidth = 2;
+        g.beginPath(); sp.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke(); g.setLineDash([]);
       }
     }
     if (mode === 'route' && routeDraft.pts.length) {
@@ -1002,7 +1050,7 @@ export function MapView() {
         }
       }
     }
-  }, [hoverHit, hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix, regionDraft, strokePreview, regionTools, selRegion, regionEditable]);
+  }, [hoverHit, hover, draw, poly, draft, mode, view, size, world.settings.radiusKm, world.terrain, world.mapFeatures, selected, editPts, routeDraft, charDragAt, routeJourney, ix, regionDraft, strokePreview, regionTools, selRegion, regionEditable, eclipseDraft]);
 
   // ---- interaction ----
   const drag = useRef<{ x: number; y: number; moved: boolean; v: ViewState } | null>(null);
@@ -1352,6 +1400,19 @@ export function MapView() {
     }
     return raw;
   };
+
+  // Eclipse path keys: Enter finishes, Esc cancels, Backspace takes back the last click.
+  useEffect(() => {
+    if (mode !== 'eclipse') return;
+    const down = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === 'Enter') { e.preventDefault(); finishEclipse(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelEclipse(); }
+      else if (e.key === 'Backspace') { e.preventDefault(); setEclipseDraft((d) => d.slice(0, -1)); }
+    };
+    window.addEventListener('keydown', down);
+    return () => window.removeEventListener('keydown', down);
+  });
 
   // Route drawing keys: Enter finishes, Esc cancels, Backspace takes back the last click.
   useEffect(() => {
@@ -1723,6 +1784,10 @@ export function MapView() {
       addRoutePoint(snapToPlace(x, y)?.ll ?? ll);
       return;
     }
+    if (mode === 'eclipse' && eclipseEvent) {
+      setEclipseDraft((d) => [...d, snapToPlace(x, y)?.ll ?? ll]);
+      return;
+    }
     if (mode === 'calibrate' && calib) {
       const img = world.mapImages.find((i) => i.id === calib.imageId);
       const t = tiled.current.get(calib.imageId)?.t;
@@ -1753,6 +1818,13 @@ export function MapView() {
     setWhatsHere(!m && !f && layers.regions && world.regions.length ? ll : null);
   };
   const onDouble = (e: React.MouseEvent) => {
+    if (mode === 'eclipse') {
+      // the double-click's second click added a duplicate point; leave it out
+      const pts = eclipseDraft.slice(0, -1);
+      if (eclipseEvent) store.upsert('events', { ...eclipseEvent, shadow: { ...(eclipseEvent.shadow ?? newShadow()), track: pts } });
+      startEclipse(undefined); setMode('browse');
+      return;
+    }
     if (mode === 'layers') {
       // the double-click's second click added a duplicate corner; leave it out
       if (regionTools.tool === 'shape') finishRegionShape(regionDraft.slice(0, -1));
@@ -1917,7 +1989,7 @@ export function MapView() {
         <canvas ref={overlayRef} className="map-overlay" style={{ width: size.w, height: size.h }} />
         <div className="map-toolbar">
           {(['browse', 'add-place', 'measure', 'draw', 'layers'] as Mode[]).map((m) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); if (m !== 'measure') setMeasure([]); setPoly([]); setRegionDraft([]); startPick(undefined); if (routeFor) startRoute(undefined); }}
+            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); if (m !== 'measure') setMeasure([]); setPoly([]); setRegionDraft([]); startPick(undefined); if (routeFor) startRoute(undefined); if (eclipseFor) startEclipse(undefined); }}
               title={m === 'draw' ? 'Draw the world: land, heights, terrain and symbols' : m === 'layers' ? 'Realms, cultures, religions and other layers, and how their borders change over time' : undefined}>
               {m === 'browse' ? 'Move' : m === 'add-place' ? '+ Place' : m === 'measure' ? 'Measure' : m === 'draw' ? '✎ Draw map' : '▦ Layers'}
             </button>
@@ -2000,12 +2072,23 @@ export function MapView() {
             onPick={(p) => setView((v) => ({ ...v, centerLat: p.lat, centerLng: p.lng }))}
           />
         )}
+        {layers.eclipseEffects && effects && (
+          <div className="map-legend eclipse-legend">
+            <div className="seg small">
+              <button className={effectShade === 'cooling' ? 'on' : ''} onClick={() => setEffectShade('cooling')}>Cooling</button>
+              <button className={effectShade === 'forest' ? 'on' : ''} onClick={() => setEffectShade('forest')}>Forests</button>
+            </div>
+            <div className={`legend-bar ${effectShade}`} />
+            <div className="legend-ends small">{effectShade === 'cooling' ? <><span>0 °C</span><span>−{Math.round(maxCooling)} °C or colder</span></> : <><span>healthy</span><span>dead</span></>}</div>
+          </div>
+        )}
         {flash && <div className="map-banner" style={{ opacity: Math.min(1, flashStrength * 2) }}>{formatDayNumber(flash.day)}: {flash.text}</div>}
         <div className="map-status">
           {mode === 'pick' && pickPlace && <b>Click the map to place {pickPlace.name}. </b>}
           {mode === 'add-place' && <b>Click the map where the new place is. </b>}
           {shownMap && <span className="map-crumb"><button className="link" onClick={() => openMap(undefined)}>World</button> › <b>{shownMap.name}</b> · </span>}
           {mode === 'route' && <b>Click along the way; Enter finishes at the destination. </b>}
+          {mode === 'eclipse' && <b>Click along the middle of the shadow's path; Enter or double-click finishes. </b>}
           {mode === 'browse' && charDragAt && <b>Drop on a place to start a journey there. </b>}
           {mode === 'layers' && !selRegion && <b>Pick a region on the map or in the list, or add one. </b>}
           {mode === 'layers' && selRegion && regionTools.tool === 'shape' && regionEditable && <b>{regionDraft.length === 0 ? `Click the first corner to ${regionTools.op === 'add' ? 'add land to' : 'cut land from'} ${selRegion.name}. ` : `${regionDraft.length} corner(s): double-click or Enter to finish. `}</b>}
@@ -2029,6 +2112,9 @@ export function MapView() {
         </div>
       </div>
       <aside className="map-side">
+        {mode === 'eclipse' && eclipseEvent && (
+          <EclipseCard event={eclipseEvent} points={eclipseDraft} onUndo={() => setEclipseDraft((d) => d.slice(0, -1))} onFinish={finishEclipse} onCancel={cancelEclipse} onClear={() => setEclipseDraft([])} />
+        )}
         {mode === 'route' && routeJourney && (
           <RouteCard
             journey={routeJourney}

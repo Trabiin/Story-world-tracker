@@ -291,6 +291,7 @@ const events: Spec<WorldEvent> = {
   placeId: { t: 'ref', to: ['places'], desc: 'Where.' },
   characterIds: { t: 'refs', to: ['characters'], desc: 'Who takes part. They should be at the place on the date (warning otherwise).' },
   yearly: { t: 'boolean', desc: 'TL-6: a holiday held every year on the start date\'s day and month.' },
+  shadow: { t: 'app', desc: 'EC-1, EC-2 (eclipses only): the shadow path drawn by the writer: { kind: "annular" | "total", track: centre line [{lat,lng}], bandKm, partialKm (full width of the partial zone), coverage (0-100, optional), hours (daily eclipse length at the centre line from the start date), steps: [{ id, from: date, hours }] later changes, gradual }. Effects on temperature and forests are worked out from it (EC-5).' },
   description: { t: 'string', desc: 'What happens.' },
   images: PICTURES,
 };

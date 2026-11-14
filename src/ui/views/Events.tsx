@@ -16,6 +16,7 @@ import { TodosFor } from '../components/Refs';
 import { Research } from '../components/Research';
 import { placeName } from '../util';
 import { RenameButton } from '../components/Rename';
+import { EclipsePanel } from './EclipsePanel';
 
 export function Events() {
   const { world, store, selected, select } = useApp();
@@ -128,6 +129,7 @@ function EventDetail({ e }: { e: WorldEvent }) {
           <label className="checkbox"><input type="checkbox" checked={e.status === 'draft'} onChange={(x) => set({ status: x.target.checked ? 'draft' : 'canon' })} /> Draft (not yet canon)</label>
         </div>
         <div>
+          {e.kind === 'eclipse' && <EclipsePanel e={e} />}
           {hanging > 0 && <p className="muted">{hanging} {hanging === 1 ? 'record has a date' : 'records have dates'} tied to this event. They move when it moves.</p>}
           {e.placeId && <p>At <button className="link" onClick={() => go('places', e.placeId)}>{placeName(world, e.placeId)}</button></p>}
           {e.characterIds.length > 0 && (

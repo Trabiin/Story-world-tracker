@@ -114,6 +114,7 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
   const [command, setCommand] = useState(false);
   const [pickFor, setPickFor] = useState<Id | undefined>();
   const [routeFor, setRouteFor] = useState<Id | undefined>();
+  const [eclipseFor, setEclipseFor] = useState<Id | undefined>();
   const [quick, setQuick] = useState(false);
   const [capture, setCapture] = useState(false);
   const [focusLink, setFocusLink] = useState<Id | undefined>();
@@ -170,6 +171,8 @@ export function App({ store, platform, onClose }: { store: WorldStore; platform:
     startPick: setPickFor,
     routeFor,
     startRoute: setRouteFor,
+    eclipseFor,
+    startEclipse: setEclipseFor,
     focusLink,
     mapFocus,
     trackRequest,

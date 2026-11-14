@@ -1,4 +1,5 @@
 /** Places (WH-4, MP-5, DM-2): nest physically, positioned in lat/long on the globe. */
+import { EclipseHere } from './EclipsePanel';
 import { useMemo, useState } from 'react';
 import { ask } from '../components/Dialogs';
 import { RevealField } from '../components/RevealField';
@@ -119,6 +120,7 @@ function PlaceDetail({ p, onAddChild }: { p: Place; onAddChild: () => void }) {
         <div>
           <RealmHistory p={p} />
           <SeasonsHere p={p} />
+          <EclipseHere p={p} />
           {children.length > 0 && (
             <>
               <h2>Inside {p.name}</h2>
