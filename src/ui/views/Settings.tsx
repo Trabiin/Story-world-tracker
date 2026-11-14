@@ -11,6 +11,7 @@ import { Field } from '../components/Modal';
 import { DateInput } from '../components/DateInput';
 import { useApp } from '../context';
 import { CalendarSettings } from './CalendarSettings';
+import { SkySettings } from './SkySettings';
 
 export function Settings() {
   const { world, store, platform, closeWorld } = useApp();
@@ -46,6 +47,8 @@ export function Settings() {
       <MapSettings />
 
       <MoonSettings />
+
+      <SkySettings />
 
       <CalendarSettings />
 

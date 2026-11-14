@@ -68,6 +68,10 @@ export interface WorldSettings {
   writing?: WritingSettings;
   /** AI-1..AI-9: the Claude integration for this world. Absent = off (AI-6). */
   claude?: ClaudeSettings;
+  /** EC-3: sizes and distances of the sun and moons. Absent = not set (eclipses use their own coverage). */
+  sky?: SkyBodies;
+  /** EC-5: the rules for what a long eclipse does to temperature and forests. Absent = the defaults. */
+  eclipseRules?: Partial<EclipseRules>;
 }
 
 /** AI-6: Claude is off by default and switched on per world. */
@@ -674,8 +678,73 @@ export interface WorldEvent extends RecordBase, TimeSpan {
   characterIds: Id[];
   /** TL-6: a holiday or festival held every year on the start date's day and month. */
   yearly?: boolean;
+  /** EC-1: an eclipse's shadow path on the map. */
+  shadow?: EclipseShadow;
   description: string;
   images?: Picture[];
+}
+
+/** EC-2: from this date on, the daily eclipse lasts this many hours at the centre line. */
+export interface EclipseStep {
+  id: Id;
+  from: FuzzyDate;
+  hours: number;
+}
+
+/** EC-1, EC-2: where an eclipse's shadow falls each day, how wide it is and how long it lasts. */
+export interface EclipseShadow {
+  /** Annular: a ring of light stays around the moon. Total: the sun is covered completely. */
+  kind: 'annular' | 'total';
+  /** The centre line of the shadow's daily path. */
+  track: LatLng[];
+  /** Width of the annular (or total) band, km. */
+  bandKm: number;
+  /** Full width of the partial zone, edge to edge, km (at least the band's width). */
+  partialKm: number;
+  /** Share of the sun's light blocked in the band, 0–100. Absent = from the sky (EC-3), else 81 for annular and 100 for total. */
+  coverage?: number;
+  /** Hours a day the eclipse lasts at the centre line, from the event's start. */
+  hours: number;
+  /** Later changes to the daily hours (CHR-007). */
+  steps: EclipseStep[];
+  /** The hours change gradually from one step to the next instead of jumping on the step's date. */
+  gradual?: boolean;
+  /** The moon that casts it (an id in settings.sky.moons). */
+  moonId?: Id;
+}
+
+/** EC-3: a moon of the world. */
+export interface SkyMoon {
+  id: Id;
+  name: string;
+  radiusKm: number;
+  /** Distance from the planet's centre, km. */
+  distanceKm: number;
+}
+
+/** EC-3: the sun and moons, for apparent sizes and natural eclipse widths. */
+export interface SkyBodies {
+  sunRadiusKm: number;
+  sunDistanceKm: number;
+  moons: SkyMoon[];
+}
+
+/** EC-5: rules for the effects of long eclipses. */
+export interface EclipseRules {
+  /** Hours of daylight in a day (the eclipse takes its hours out of these). */
+  daylightHours: number;
+  /** How much colder it would settle if all daylight were lost, °C. */
+  coolingC: number;
+  /** Days for the temperature to move about two thirds of the way to where it is heading. */
+  settleDays: number;
+  /** Light loss forests take without harm, % of daylight. */
+  forestLightTolerance: number;
+  /** Cooling forests take without harm, °C. */
+  forestColdTolerance: number;
+  /** Forest health lost per year for every 10 % of light lost beyond the tolerance (and every 5 °C beyond the cold tolerance), %. */
+  forestDeclinePerYear: number;
+  /** Forest health regained per year once the stress is gone, %. */
+  forestRecoveryPerYear: number;
 }
 
 /** CH-4: relationship kinds. Directed ones read "a is parent of b", "a is mentor of b". */

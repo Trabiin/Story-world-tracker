@@ -207,7 +207,9 @@ export function sampleWorld(): World {
 
   const council: WorldEvent = { ...recordBase(), name: 'The Regent’s Council', kind: 'other', start: d(1042, 4, 27), placeId: hall.id, characterIds: [kaela.id], description: 'The regent decides to send the sealed letter south.' };
   const fair: WorldEvent = { ...recordBase(), name: 'Thornwick Salt Fair', kind: 'festival', start: d(1030, 5, 6), end: d(1030, 5, 12), yearly: true, placeId: thornwick.id, characterIds: [], description: 'A week of salt trading every spring.' };
-  const eclipse: WorldEvent = { ...recordBase(), name: 'Eclipse over Saltmere', kind: 'eclipse', start: d(1042, 5, 20), placeId: saltmere.id, characterIds: [kaela.id, tamsin.id], description: 'The harbour goes dark at noon. Kaela and Tamsin both see it.' };
+  const eclipse: WorldEvent = { ...recordBase(), name: 'Eclipse over Saltmere', kind: 'eclipse', start: d(1042, 5, 20), placeId: saltmere.id, characterIds: [kaela.id, tamsin.id], description: 'The harbour goes dark at noon. Kaela and Tamsin both see it.',
+    // EC-1: the shadow's path, crossing the coast at Saltmere
+    shadow: { kind: 'annular', track: [{ lat: 44.2, lng: 6.5 }, { lat: 45.3, lng: 10.5 }, { lat: 45.7, lng: 12.5 }, { lat: 46.4, lng: 17.5 }], bandKm: 120, partialKm: 900, hours: 0.1, steps: [] } };
   w.events.push(council, fair, eclipse);
   // TL-4: Kaela leaves "the day after the Regent's Council"; move the council and her departure follows.
   const after1 = { kind: 'event' as const, id: council.id, days: 1 };
