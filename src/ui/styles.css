@@ -326,6 +326,20 @@ blockquote.quote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--ac
 .tool-palette button:hover:not(:disabled) { background: var(--panel); }
 .tool-palette button.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .tool-sep { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 2px 2px; }
+.tool-palette.named { grid-template-columns: 1fr; max-height: calc(100% - 120px); overflow-y: auto; }
+.tool-palette.named button { width: auto; min-width: 168px; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 13px; text-align: left; }
+.tool-palette .tool-icon { width: 18px; text-align: center; font-size: 16px; }
+.tool-palette .tool-name { flex: 1; }
+.tool-palette .tool-key { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+.tool-palette button.on .tool-key { color: inherit; border-color: currentColor; }
+.tool-palette .tool-names-toggle { grid-column: 1 / -1; width: auto; font-size: 13px; }
+.map-menu { position: absolute; min-width: 190px; background: var(--bg); border-radius: var(--radius); box-shadow: 0 3px 14px rgba(0, 0, 0, 0.28); padding: 4px; z-index: 4; }
+.map-menu-title { font-weight: 600; padding: 4px 10px 6px; border-bottom: 1px solid var(--line); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.map-menu-group + .map-menu-group { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 2px; }
+.map-menu button { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 10px; font-size: 13px; }
+.map-menu button:hover { background: var(--panel); }
+.map-menu button.danger { color: var(--danger, #b3261e); }
+.map-hover-tip { position: absolute; pointer-events: none; background: var(--bg); padding: 3px 8px; border-radius: var(--radius); font-size: 13px; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25); white-space: nowrap; z-index: 2; }
 .swatches { display: flex; flex-wrap: wrap; gap: 4px; }
 .swatches button { font-size: 12px; padding: 2px 7px; display: inline-flex; align-items: center; gap: 5px; }
 .swatches button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }

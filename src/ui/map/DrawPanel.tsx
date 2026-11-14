@@ -5,7 +5,7 @@ import { SYMBOL_LIBRARY } from './symbols';
 
 /** Feature tools (Phase 2b): drawn lines and areas, automatic rivers, settlements. */
 export type FeatureTool = 'river' | 'auto-river' | 'line' | 'lake' | 'area' | 'settlement';
-export type DrawTool = 'pan' | 'polygon' | 'stamp' | FeatureTool | Exclude<BrushTool, 'erase-biome'>;
+export type DrawTool = 'pan' | 'polygon' | 'stamp' | 'eyedropper' | FeatureTool | Exclude<BrushTool, 'erase-biome'>;
 export type SettlementKind = Extract<PlaceKind, 'village' | 'town' | 'city' | 'capital'>;
 
 export interface DrawState {
@@ -21,6 +21,8 @@ export interface DrawState {
   lineKind: Exclude<LineKind, 'river'>;
   areaKind: Exclude<AreaKind, 'lake'>;
   settlement: SettlementKind;
+  /** MK-36: show tool names next to the icons. */
+  names?: boolean;
 }
 
 export const DEFAULT_DRAW: DrawState = {
@@ -53,6 +55,7 @@ export const TOOLS: ToolInfo[] = [
   { tool: 'mountains', name: 'Mountain range', key: 'M', icon: '⛰', group: 'height', tip: 'Smart brush: raises rugged ground; peak symbols appear where it gets high.' },
   { tool: 'hills', name: 'Hills', key: 'H', icon: '◡', group: 'height', tip: 'Smart brush: gentle rolling hills; hill symbols appear on their own.' },
   { tool: 'biome', name: 'Terrain', key: 'T', icon: '❦', group: 'paint', tip: 'Paint a terrain type (forest, desert, …) onto land. Pick "Clear" to remove it.' },
+  { tool: 'eyedropper', name: 'Eyedropper', key: 'I', icon: '⌖', group: 'paint', tip: 'Click the map to pick up the terrain type and height there for the brushes, then carry on with the tool you had.' },
   { tool: 'stamp', name: 'Symbol', key: 'Y', icon: '✱', group: 'paint', tip: 'Click to place a symbol from the library. Shift-click a symbol to remove it.' },
   { tool: 'river', name: 'River', key: 'R', icon: '〰', group: 'features', tip: 'Draw a river from its source to its mouth: click points or drag freehand, then double-click or press Enter. End it on another river to make a tributary. Stretches that climb show red as you draw.' },
   { tool: 'auto-river', name: 'Automatic river', key: 'A', icon: '⤵', group: 'features', tip: 'Click a source: the river finds its own way downhill to the sea, a lake or another river. It fills small hollows and cuts a valley through their rims, like real rivers do.' },
@@ -66,7 +69,7 @@ export const FEATURE_TOOLS: DrawTool[] = ['river', 'lake', 'line', 'area'];
 export const isDrawnFeature = (t: DrawTool) => FEATURE_TOOLS.includes(t);
 
 export const toolInfo = (t: DrawTool) => TOOLS.find((x) => x.tool === t)!;
-export const isBrush = (t: DrawTool) => !['pan', 'polygon', 'stamp', 'river', 'auto-river', 'line', 'lake', 'area', 'settlement'].includes(t);
+export const isBrush = (t: DrawTool) => !['pan', 'polygon', 'stamp', 'eyedropper', 'river', 'auto-river', 'line', 'lake', 'area', 'settlement'].includes(t);
 
 /** Brush sizes on a log scale, 2 km to 2,000 km. */
 const toSlider = (km: number) => Math.round((Math.log(km / 2) / Math.log(1000)) * 100);
@@ -74,13 +77,18 @@ const fromSlider = (v: number) => Math.round(2 * Math.pow(1000, v / 100));
 
 export function ToolPalette({ state, onChange }: { state: DrawState; onChange: (s: DrawState) => void }) {
   return (
-    <div className="tool-palette" role="toolbar" aria-label="Map drawing tools">
+    <div className={`tool-palette${state.names ? ' named' : ''}`} role="toolbar" aria-label="Map drawing tools">
       {TOOLS.flatMap((t, i) => [
         ...(i > 0 && TOOLS[i - 1].group !== t.group ? [<span key={`sep-${t.tool}`} className="tool-sep" />] : []),
         <button key={t.tool} className={state.tool === t.tool ? 'on' : ''} onClick={() => onChange({ ...state, tool: t.tool })} title={`${t.name} (${t.key}) — ${t.tip}`} aria-label={t.name}>
-          {t.icon}
+          <span className="tool-icon">{t.icon}</span>
+          {state.names && <><span className="tool-name">{t.name}</span><span className="tool-key">{t.key}</span></>}
         </button>,
       ])}
+      <span className="tool-sep" />
+      <button className="tool-names-toggle" onClick={() => onChange({ ...state, names: !state.names })} title={state.names ? 'Show icons only' : 'Show tool names'} aria-label={state.names ? 'Show icons only' : 'Show tool names'}>
+        <span className="tool-icon">{state.names ? '«' : '»'}</span>{state.names && <span className="tool-name muted">Icons only</span>}
+      </button>
     </div>
   );
 }

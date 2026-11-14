@@ -81,7 +81,11 @@ export interface Pixels {
  * Render tile (tx, ty) at `res` pixels per side. Heights are interpolated between cell centres,
  * so coastlines come out smooth rather than blocky.
  */
-export function renderTile(r: TerrainReader, tx: number, ty: number, res: number, style: RenderStyle): Pixels {
+/** One of n × n parts of a tile, for drawing close up (MK-37); the whole tile is { x: 0, y: 0, n: 1 }. */
+export interface TilePart { x: number; y: number; n: number }
+const WHOLE: TilePart = { x: 0, y: 0, n: 1 };
+
+export function renderTile(r: TerrainReader, tx: number, ty: number, res: number, style: RenderStyle, part: TilePart = WHOLE): Pixels {
   const T = TILE_CELLS, W = T + 2;
   const g = r.g;
   const pal = paletteFor(style);
@@ -137,16 +141,17 @@ export function renderTile(r: TerrainReader, tx: number, ty: number, res: number
       CR[i] = c[0]; CG[i] = c[1]; CB[i] = c[2];
     }
   }
-  const f = res / T;
+  const span = T / part.n, f = res / span;
+  const ox = part.x * span, oy = part.y * span;
   const out = new Uint8ClampedArray(res * res * 4);
   const land = new Uint8Array(res * res);
   const band = new Int16Array(res * res);
   const contours = style.relief === 'contours' || style.relief === 'both';
   for (let py = 0; py < res; py++) {
-    const v = (py + 0.5) / f - 0.5;
+    const v = oy + (py + 0.5) / f - 0.5;
     const y0 = Math.floor(v), fy = v - y0;
     for (let px = 0; px < res; px++) {
-      const u = (px + 0.5) / f - 0.5;
+      const u = ox + (px + 0.5) / f - 0.5;
       const x0 = Math.floor(u), fx = u - x0;
       const i00 = (y0 + 1) * W + (x0 + 1), i10 = i00 + 1, i01 = i00 + W, i11 = i01 + 1;
       const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
@@ -166,8 +171,10 @@ export function renderTile(r: TerrainReader, tx: number, ty: number, res: number
       if (isLand && f >= 0.9) {
         // Terrain-type edges: pick a nearby cell through a little noise, so borders look natural, not square.
         const gu = tx * T + u, gv = ty * T + v;
-        const ju = u + (valueNoise(gu * 0.8, gv * 0.8, 3) - 0.5) * 1.2 + (valueNoise(gu * 2.6, gv * 2.6, 5) - 0.5) * 0.5;
-        const jv = v + (valueNoise(gu * 0.8, gv * 0.8, 13) - 0.5) * 1.2 + (valueNoise(gu * 2.6, gv * 2.6, 15) - 0.5) * 0.5;
+        // close up (MK-37) a finer layer of noise keeps the edges ragged instead of square
+        const fine = f >= 8 ? (valueNoise(gu * 7, gv * 7, 7) - 0.5) * 0.3 : 0, fineV = f >= 8 ? (valueNoise(gu * 7, gv * 7, 17) - 0.5) * 0.3 : 0;
+        const ju = u + (valueNoise(gu * 0.8, gv * 0.8, 3) - 0.5) * 1.2 + (valueNoise(gu * 2.6, gv * 2.6, 5) - 0.5) * 0.5 + fine;
+        const jv = v + (valueNoise(gu * 0.8, gv * 0.8, 13) - 0.5) * 1.2 + (valueNoise(gu * 2.6, gv * 2.6, 15) - 0.5) * 0.5 + fineV;
         const nx = Math.max(-1, Math.min(T, Math.round(ju))), ny = Math.max(-1, Math.min(T, Math.round(jv)));
         const ci = (ny + 1) * W + (nx + 1);
         if (E[ci] > 0 && (B[ci] || B[i00] || B[i10] || B[i01] || B[i11])) { cr = CR[ci]; cg = CG[ci]; cb = CB[ci]; }
@@ -230,8 +237,8 @@ export class TileImageCache {
     this.pending = false;
   }
 
-  get(r: TerrainReader, tx: number, ty: number, res: number, style: RenderStyle, sk: string): HTMLCanvasElement | undefined {
-    const key = `${tileKey(tx, ty)}|${res}|${sk}`;
+  get(r: TerrainReader, tx: number, ty: number, res: number, style: RenderStyle, sk: string, part: TilePart = WHOLE): HTMLCanvasElement | undefined {
+    const key = `${tileKey(tx, ty)}|${res}|${part.n > 1 ? `${part.n}:${part.x},${part.y}|` : ''}${sk}`;
     const d = deps(r, tx, ty);
     const hit = this.map.get(key);
     if (hit && sameDeps(hit.deps, d)) {
@@ -243,7 +250,7 @@ export class TileImageCache {
       this.pending = true;
       return hit?.canvas; // stale picture until there is time
     }
-    const canvas = toCanvas(renderTile(r, tx, ty, res, style));
+    const canvas = toCanvas(renderTile(r, tx, ty, res, style, part));
     if (hit) { this.pixels -= hit.canvas.width * hit.canvas.height; this.map.delete(key); }
     this.map.set(key, { deps: d, canvas });
     this.pixels += res * res;
