@@ -263,3 +263,10 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 
 - **Find coastline…** (MK-17) on each sketch in the Map's **Sketches and images** list, and in step 3 of the first-map guide. The app looks for the land in the sketch: for drawn outlines, what the lines close in is land and the open area at the picture's edge is sea; for filled-in sketches, dark areas are land. Sliders set how dark a line must be, how wide a break in the coastline to close, and how small a speck or letter to ignore; the preview tints land green and sea blue. **Use as coastline** lays it where the sketch is pinned, either replacing land and sea there or only adding land, and fades the sketch so the result shows. One undo takes it back.
 - **Rough terrain to start from** (MK-15): tick it and the new land gets hills that rise inland (up to a height you choose) and seas that deepen offshore, for you to refine with the brushes, "Add detail", rivers and terrain types. Terrain types already painted are kept, and automatic rivers follow the new coast.
+
+## Phase 9a: zoom and move
+
+- **Zoom buttons** (MK-28) at the bottom right of the map: + and −, then Fit places, the whole world and the globe (these used to be in the top toolbar, which now wraps instead of running off a small screen).
+- **Pinch** with two fingers on a touchscreen or touchpad to zoom; on a touchscreen the fingers also move the map. A pinch that starts while drawing drops the half-started stroke, so nothing is painted by accident. A touchpad pinch no longer zooms the whole page.
+- **Keys:** + and − zoom, the arrow keys move the map (Shift moves further). **Double-click** empty map to zoom in there, Shift + double-click to zoom out. **Shift-drag** in Move mode draws a box and zooms to it. The **middle mouse button** moves the map in every mode. Zooms glide smoothly, or jump straight there with lighter drawing.
+- **Settings → Map → Scrolling on the map**, per computer: the wheel (or two-finger scroll) zooms, or it moves the map. Pinching always zooms, and Shift swaps the two.

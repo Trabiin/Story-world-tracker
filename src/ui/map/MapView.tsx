@@ -18,6 +18,8 @@ import { PLACE_ICON } from '../views/Places';
 import { useApp } from '../context';
 import { TiledImage, TILE } from './tiles';
 import { ViewState, boundsFromTwoPoints, toLatLng, toScreen, wrapOffsets } from './projection';
+import { Pinch, arrowPan, clampView, lerpView, panBy, pinchView, viewForBox, wheelAction, wheelPref, zoomAt } from './navigate';
+import { ZoomControls } from './ZoomControls';
 import { claudeOpts, acceptInStore } from '../claude/actions';
 import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
 import { GlobePreview } from './GlobePreview';
@@ -964,19 +966,53 @@ export function MapView() {
     for (let i = ms.length - 1; i >= 0; i--) if ((ms[i].x - x) ** 2 + (ms[i].y - y) ** 2 <= ms[i].r ** 2) return ms[i];
     return null;
   };
-  const clampView = useCallback((v: ViewState): ViewState => {
-    const scale = Math.max(0.5, Math.min(20000, v.scale));
-    return { scale, centerLat: clampLat(v.centerLat), centerLng: wrapLng(v.centerLng) };
-  }, []);
 
-  const onWheel = (e: React.WheelEvent) => {
-    const { x, y } = local(e);
-    const before = toLatLng(view, size.w, size.h, x, y);
-    const factor = Math.exp(-e.deltaY * 0.0015);
-    const scale = Math.max(0.5, Math.min(20000, view.scale * factor));
-    // keep the point under the cursor fixed
-    setView(clampView({ scale, centerLng: before.lng - (x - size.w / 2) / scale, centerLat: before.lat + (y - size.h / 2) / scale }));
+  // ---- MK-28: zooming and moving around ----
+  const nav = useRef({ view, size });
+  nav.current = { view, size };
+  const glideRaf = useRef(0);
+  const stopGlide = () => { if (glideRaf.current) cancelAnimationFrame(glideRaf.current); glideRaf.current = 0; };
+  /** Glide to a view (straight there with lighter drawing). */
+  const glideTo = (target: ViewState) => {
+    stopGlide();
+    const to = clampView(target);
+    if (lightDrawing()) { setView(to); return; }
+    const from = nav.current.view, t0 = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / 220);
+      setView(t >= 1 ? to : lerpView(from, to, t));
+      glideRaf.current = t >= 1 ? 0 : requestAnimationFrame(step);
+    };
+    glideRaf.current = requestAnimationFrame(step);
   };
+  const zoomBy = (factor: number, x?: number, y?: number) => glideTo(zoomAt(nav.current.view, nav.current.size, factor, x, y));
+  useEffect(() => stopGlide, []);
+  // A native listener, because React's wheel listener can't stop the page from zooming on a touchpad pinch.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      stopGlide();
+      const r = el.getBoundingClientRect();
+      const { view: v, size: sz } = nav.current;
+      const a = wheelAction(e, sz.h, wheelPref());
+      setView('zoom' in a ? zoomAt(v, sz, a.zoom, e.clientX - r.left, e.clientY - r.top) : panBy(v, -a.pan.dx, -a.pan.dy));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  // Two fingers on a touchscreen pinch to zoom and move; whatever the first finger started is dropped.
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<Pinch | null>(null);
+  const pinchLeft = useRef(false); // fingers still down after a pinch do nothing until all are lifted
+  const pinchNow = () => {
+    const [a, b] = [...touches.current.values()];
+    return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, dist: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
+  // Shift-drag in Move mode zooms to the box; the middle mouse button moves the map in every mode.
+  const [zoomBox, setZoomBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const panDrag = useRef(false);
 
   // ---- painting strokes: edits collect in a working copy and become one undo step ----
   const stroke = useRef<{ ed: TerrainEditor; last: LatLng; params: BrushParams; raf: number } | null>(null);
@@ -1248,6 +1284,21 @@ export function MapView() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   });
 
+  // MK-28: + and − zoom, arrow keys move the map (Shift: further), in every mode.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t.isContentEditable)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-backdrop')) return;
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomBy(2); return; }
+      if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomBy(0.5); return; }
+      const v = arrowPan(nav.current.view, nav.current.size, e.key, e.shiftKey);
+      if (v) { e.preventDefault(); glideTo(v); }
+    };
+    window.addEventListener('keydown', down);
+    return () => window.removeEventListener('keydown', down);
+  });
+
   // ---- journey routes (WH-6) and dragging characters (EU-2) ----
   const routeDay = routeJourney ? ix.win(routeJourney.departure).earliest : moment;
   const routeLeg = (a: LatLng, b: LatLng) =>
@@ -1305,9 +1356,26 @@ export function MapView() {
       places: f.placeId && at ? w.places.map((p) => (p.id === f.placeId ? { ...p, location: at } : p)) : w.places,
     }));
   };
+  /** Drop whatever a pointer had started (a second finger turned it into a pinch). Nothing is saved. */
+  const abandonGesture = () => {
+    const st = stroke.current;
+    if (st) { stroke.current = null; if (st.raf) cancelAnimationFrame(st.raf); setWorking(null); }
+    regionStroke.current = null; setStrokePreview([]);
+    vdrag.current = null; setEditPts(null);
+    drag.current = null; freehand.current = null;
+    charDrag.current = null; setCharDragAt(null);
+    panDrag.current = false; setZoomBox(null);
+  };
   const onDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     const { x, y } = local(e);
+    if (e.pointerType === 'touch') {
+      touches.current.set(e.pointerId, { x, y });
+      if (touches.current.size === 2 && !pinchLeft.current) { abandonGesture(); stopGlide(); pinch.current = { view, ...pinchNow() }; return; }
+      if (touches.current.size > 1 || pinchLeft.current) return;
+    }
+    stopGlide();
+    if (e.button === 1) { panDrag.current = true; drag.current = { x, y, moved: false, v: view }; return; }
     const hv = e.button === 0 && !space.current ? handleAt(x, y) : null;
     if (hv) {
       const { f, idx } = hv;
@@ -1329,6 +1397,7 @@ export function MapView() {
       setStrokePreview([ll]);
       return;
     }
+    if (mode === 'browse' && e.button === 0 && e.shiftKey && !space.current) { setZoomBox({ x0: x, y0: y, x1: x, y1: y }); return; }
     if (mode === 'browse' && e.button === 0 && !space.current) {
       const m = hit(x, y);
       if (m?.kind === 'character') { charDrag.current = { id: m.id, x: m.x, y: m.y }; drag.current = { x, y, moved: false, v: view }; return; }
@@ -1341,7 +1410,13 @@ export function MapView() {
   };
   const onMove = (e: React.PointerEvent) => {
     const { x, y } = local(e);
+    if (e.pointerType === 'touch' && touches.current.has(e.pointerId)) {
+      touches.current.set(e.pointerId, { x, y });
+      if (pinch.current && touches.current.size >= 2) { const n = pinchNow(); setView(pinchView(pinch.current, size, n.mid, n.dist)); return; }
+      if (pinchLeft.current) return;
+    }
     setHover(toLatLng(view, size.w, size.h, x, y));
+    if (zoomBox) { setZoomBox({ ...zoomBox, x1: x, y1: y }); return; }
     if (stroke.current) { continueStroke(e, llAt(x, y)); return; }
     const rs = regionStroke.current;
     if (rs) {
@@ -1375,9 +1450,26 @@ export function MapView() {
       }
       return;
     }
-    if (d.moved) setView(clampView({ ...d.v, centerLng: d.v.centerLng - (x - d.x) / d.v.scale, centerLat: d.v.centerLat + (y - d.y) / d.v.scale }));
+    if (d.moved) setView(panBy(d.v, x - d.x, y - d.y));
+  };
+  /** A finger lifted: ends a pinch, and true while the rest of that gesture should be ignored. */
+  const endTouch = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return false;
+    touches.current.delete(e.pointerId);
+    if (!pinch.current && !pinchLeft.current) return false;
+    pinch.current = null;
+    pinchLeft.current = touches.current.size > 0;
+    return true;
   };
   const onUp = async (e: React.PointerEvent) => {
+    if (endTouch(e)) return;
+    if (zoomBox) {
+      const v = viewForBox(view, size, zoomBox.x0, zoomBox.y0, zoomBox.x1, zoomBox.y1);
+      setZoomBox(null);
+      if (v) glideTo(v);
+      return;
+    }
+    if (panDrag.current) { panDrag.current = false; drag.current = null; return; }
     if (stroke.current) { endStroke(); return; }
     const rs = regionStroke.current;
     if (rs) {
@@ -1518,6 +1610,7 @@ export function MapView() {
     if (linked) openMap(linked);
     else if (m?.kind === 'place') go('places', m.id);
     else if (m?.kind === 'character') go('characters', m.id);
+    else zoomBy(e.shiftKey ? 0.5 : 2, x, y); // MK-28: double-click empty map zooms in, Shift zooms out
   };
 
   const addImage = async (file: File) => {
@@ -1626,7 +1719,7 @@ export function MapView() {
   const mainMap = world.settings.mainMap;
   const frame = (b: { north: number; south: number; west: number; east: number }) => {
     const east = b.east < b.west ? b.east + 360 : b.east;
-    setView(clampView({ centerLat: (b.north + b.south) / 2, centerLng: (b.west + east) / 2, scale: Math.min(size.w / (east - b.west), size.h / (b.north - b.south)) * 0.95 }));
+    glideTo(({ centerLat: (b.north + b.south) / 2, centerLng: (b.west + east) / 2, scale: Math.min(size.w / (east - b.west), size.h / (b.north - b.south)) * 0.95 }));
   };
   const openMap = (m: DetailMap | undefined) => {
     setCurrentMap(m?.id);
@@ -1650,11 +1743,11 @@ export function MapView() {
         <canvas
           ref={canvasRef}
           style={{ width: size.w, height: size.h, cursor: mode === 'browse' || (mode === 'draw' && draw.tool === 'pan') || (mode === 'layers' && regionTools.tool === 'select') ? 'grab' : (mode === 'draw' && isBrush(draw.tool)) || (mode === 'layers' && regionTools.tool === 'brush' && regionEditable) ? 'none' : 'crosshair' }}
-          onWheel={onWheel}
+          onMouseDown={(e) => e.button === 1 && e.preventDefault() /* no autoscroll: the middle button moves the map */}
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
-          onPointerCancel={() => { endStroke(); drag.current = null; }}
+          onPointerCancel={(e) => { if (!endTouch(e)) endStroke(); drag.current = null; panDrag.current = false; setZoomBox(null); }}
           onPointerLeave={() => setHover(null)}
           onDoubleClick={onDouble}
           onContextMenu={(e) => mode === 'draw' && e.preventDefault()}
@@ -1667,7 +1760,6 @@ export function MapView() {
               {m === 'browse' ? 'Move' : m === 'add-place' ? '+ Place' : m === 'measure' ? 'Measure' : m === 'draw' ? '✎ Draw map' : '▦ Layers'}
             </button>
           ))}
-          <button onClick={() => setView(fitPlaces(world.places, size.w, size.h))}>Fit places</button>
           {mainMap && <button onClick={() => openMap(undefined)} title="Frame the main map (World settings)">Main map</button>}
           {world.detailMaps.length > 0 && (
             <select className="map-pick" value={currentMap ?? ''} onChange={(e) => openMap(world.detailMaps.find((m) => m.id === e.target.value))} title="Open a continent, region or city map">
@@ -1675,9 +1767,15 @@ export function MapView() {
               {sortedMaps(world.detailMaps).map(({ m, depth }) => <option key={m.id} value={m.id}>{'\u00a0\u00a0'.repeat(depth)}{m.name}</option>)}
             </select>
           )}
-          <button onClick={() => setView({ centerLat: 0, centerLng: 0, scale: Math.max(0.5, size.w / 380) })}>Whole globe</button>
-          <button className={globe ? 'on' : ''} onClick={() => setGlobe(!globe)} title="Show the world as a sphere">Globe</button>
         </div>
+        <ZoomControls
+          onZoom={(f) => zoomBy(f)}
+          onFitPlaces={() => glideTo(fitPlaces(world.places, size.w, size.h))}
+          onWholeGlobe={() => glideTo({ centerLat: 0, centerLng: 0, scale: Math.max(0.5, size.w / 380) })}
+          globe={globe}
+          onGlobe={() => setGlobe(!globe)}
+        />
+        {zoomBox && <div className="map-zoombox" style={{ left: Math.min(zoomBox.x0, zoomBox.x1), top: Math.min(zoomBox.y0, zoomBox.y1), width: Math.abs(zoomBox.x1 - zoomBox.x0), height: Math.abs(zoomBox.y1 - zoomBox.y0) }} />}
         {mode === 'draw' && <ToolPalette state={draw} onChange={(d) => { setDraw(d); if (d.tool !== 'polygon') setPoly([]); }} />}
         {globe && (
           <GlobePreview
@@ -1924,7 +2022,7 @@ export function MapView() {
               <button className="small" onClick={() => setTraceFor(img.id)} title="MK-17: find the coastline in this sketch and lay it on the map as land and sea">Find coastline…</button>
               <button className="small" onClick={() => {
                 const east = img.east < img.west ? img.east + 360 : img.east;
-                setView(clampView({ centerLat: (img.north + img.south) / 2, centerLng: (img.west + east) / 2, scale: Math.min(size.w / (east - img.west), size.h / (img.north - img.south)) * 0.9 }));
+                glideTo(({ centerLat: (img.north + img.south) / 2, centerLng: (img.west + east) / 2, scale: Math.min(size.w / (east - img.west), size.h / (img.north - img.south)) * 0.9 }));
               }}>Zoom to</button>
               <button className="small danger" onClick={async () => (await ask.confirm(`Remove ${img.name}?`, { okLabel: 'Remove', danger: true })) && store.removeMany([{ c: 'mapImages', id: img.id }])}>Remove</button>
             </div>
