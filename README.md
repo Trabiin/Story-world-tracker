@@ -270,3 +270,10 @@ Off for every world until you switch it on (**Ask Claude → Setup**). Claude Co
 - **Pinch** with two fingers on a touchscreen or touchpad to zoom; on a touchscreen the fingers also move the map. A pinch that starts while drawing drops the half-started stroke, so nothing is painted by accident. A touchpad pinch no longer zooms the whole page.
 - **Keys:** + and − zoom, the arrow keys move the map (Shift moves further). **Double-click** empty map to zoom in there, Shift + double-click to zoom out. **Shift-drag** in Move mode draws a box and zooms to it. The **middle mouse button** moves the map in every mode. Zooms glide smoothly, or jump straight there with lighter drawing.
 - **Settings → Map → Scrolling on the map**, per computer: the wheel (or two-finger scroll) zooms, or it moves the map. Pinching always zooms, and Shift swaps the two.
+
+## Phase 9b: room and finding
+
+- **Hide the side panel** (MK-29) with the panel button under the zoom buttons, so the map gets the whole width; the button under it shows the map **full screen** (Esc leaves). The choice to hide the panel is remembered on this computer.
+- **Find on map** (MK-30): the box in the map toolbar (or press /) finds places, rivers, roads and other features, realms and characters by name or alias, on the date shown. Pick one and the map glides there and selects it. Place, character and feature cards have **Zoom to**.
+- **Overview** (MK-31): when zoomed in, the main map (or the whole world) shows small in the bottom-left corner with the part on screen outlined; click or drag in it to move there. It can be switched off under Show.
+- **A tidier side panel** (MK-32): Show is grouped into background, land and story, and Show, Main map and Sketches fold away and stay as you left them. Export moved to the **Export…** menu in the toolbar.

@@ -20,6 +20,10 @@ import { TiledImage, TILE } from './tiles';
 import { ViewState, boundsFromTwoPoints, toLatLng, toScreen, wrapOffsets } from './projection';
 import { Pinch, arrowPan, clampView, lerpView, panBy, pinchView, viewForBox, wheelAction, wheelPref, zoomAt } from './navigate';
 import { ZoomControls } from './ZoomControls';
+import { FindBox } from './FindBox';
+import { FindEntry, boundsOf, boundsOfArea, viewForEntry } from './findOnMap';
+import { MapInset } from './MapInset';
+import { SideSection } from './SideSection';
 import { claudeOpts, acceptInStore } from '../claude/actions';
 import { DEFAULT_DRAW, DrawOptions, DrawState, TOOLS, ToolPalette, isBrush, isDrawnFeature, toolInfo } from './DrawPanel';
 import { GlobePreview } from './GlobePreview';
@@ -55,12 +59,19 @@ const SETTLEMENT_SIZE: Record<string, number> = { capital: 18, city: 16, town: 1
 type Mode = 'browse' | 'pick' | 'measure' | 'calibrate' | 'add-place' | 'draw' | 'route' | 'layers';
 const DRAW_KEY = 'swt.draw';
 const LAYERS_KEY = 'swt.mapLayers';
-const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, regions: true, places: true, characters: true, routes: true, labels: true };
+const DEFAULT_LAYERS = { grid: true, compass: true, scale: true, mountains: true, symbols: true, features: true, maps: true, climate: false, regions: true, places: true, characters: true, routes: true, labels: true, inset: true };
 type Layers = typeof DEFAULT_LAYERS;
 const LAYER_NAMES: Record<keyof Layers, string> = {
   grid: 'Lat/long grid', compass: 'Compass rose', scale: 'Scale bar', mountains: 'Mountain symbols (automatic)', symbols: 'Placed symbols', features: 'Rivers, lakes, roads and areas', maps: 'Detail map frames',
-  climate: 'Climate zones', regions: 'Realms, cultures and other layers', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels',
+  climate: 'Climate zones', regions: 'Realms, cultures and other layers', places: 'Places', characters: 'Characters', routes: 'Routes', labels: 'Labels', inset: 'Overview when zoomed in',
 };
+/** MK-32: the Show list in three groups. */
+const LAYER_GROUPS: { name: string; keys: (keyof Layers)[] }[] = [
+  { name: 'Background', keys: ['grid', 'compass', 'scale', 'inset'] },
+  { name: 'Land', keys: ['mountains', 'symbols', 'features', 'maps', 'climate'] },
+  { name: 'Story', keys: ['regions', 'places', 'characters', 'routes', 'labels'] },
+];
+const PANEL_KEY = 'swt.mapPanel';
 
 function loadJson<T>(key: string, fallback: T): T {
   try {
@@ -1014,6 +1025,67 @@ export function MapView() {
   const [zoomBox, setZoomBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const panDrag = useRef(false);
 
+  // ---- MK-29: room for the map; MK-30: find on the map ----
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [panelHidden, setPanelHidden] = useState(() => { try { return localStorage.getItem(PANEL_KEY) === 'hidden'; } catch { return false; } });
+  const togglePanel = () => setPanelHidden((h) => { try { localStorage.setItem(PANEL_KEY, h ? 'shown' : 'hidden'); } catch { /* ignore */ } return !h; });
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const on = () => setFullscreen(document.fullscreenElement === layoutRef.current && !!layoutRef.current);
+    document.addEventListener('fullscreenchange', on);
+    return () => document.removeEventListener('fullscreenchange', on);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void layoutRef.current?.requestFullscreen?.().catch(() => undefined);
+  };
+  const findEntries = useMemo<FindEntry[]>(() => {
+    const out: FindEntry[] = [];
+    const on = (r: Parameters<typeof existsOn>[1]) => existsOn((d) => ix.win(d), r, moment);
+    for (const f of world.mapFeatures) {
+      if (!f.points.length || !on(f)) continue;
+      out.push({ kind: 'feature', id: f.id, name: f.name || (KIND_NAME[f.kind] ?? f.kind), note: (KIND_NAME[f.kind] ?? f.kind).toLowerCase(), at: featureAnchor(f) ?? f.points[0], bounds: boundsOf(f.points) });
+    }
+    for (const p of world.places) {
+      if (!p.location || p.isPlaceholder || FEATURE_PLACE_KINDS.has(p.kind) || !on(p)) continue;
+      out.push({ kind: 'place', id: p.id, name: p.name, aliases: p.aliases, note: p.kind, at: p.location });
+    }
+    for (const r of world.regions) {
+      const v = lix.versionAt(r, moment);
+      const b = v && boundsOfArea(v.area);
+      if (!b) continue;
+      out.push({ kind: 'region', id: r.id, name: r.name, note: lix.layer(r.layerId)?.name ?? 'realm', at: { lat: (b.north + b.south) / 2, lng: (b.west + b.east) / 2 }, bounds: b });
+    }
+    for (const cp of characterPositions) {
+      const c = ix.characters.get(cp.id);
+      if (c) out.push({ kind: 'character', id: c.id, name: c.name, aliases: c.aliases, note: 'character, on this date', at: cp.pos });
+    }
+    return out;
+  }, [world.mapFeatures, world.places, world.regions, characterPositions, ix, lix, moment]);
+  /** Show something found (or asked for with "Zoom to") and select it. */
+  const showEntry = (e: FindEntry) => {
+    glideTo(viewForEntry(e, nav.current.view, nav.current.size));
+    if (!e.bounds) setFocus(e.at);
+    if (e.kind === 'region') {
+      const r = world.regions.find((q) => q.id === e.id);
+      if (mode === 'layers' && r) { setRegionLayerPick(r.layerId); setRegionSel(r.id); }
+      return;
+    }
+    setSelected({ kind: e.kind, id: e.id });
+  };
+  // MK-31: the overview shows the main map, or the whole world when there is none
+  const insetExtent = useMemo(() => {
+    const m = world.settings.mainMap;
+    if (!m) return { north: 85, south: -85, west: -180, east: 180 };
+    return { ...m, east: m.east < m.west ? m.east + 360 : m.east };
+  }, [world.settings.mainMap]);
+  const insetCount = useRef(0);
+  const insetVersion = useMemo(() => String(++insetCount.current), [world.terrain, world.regions, world.mapImages, world.regionLayers, style, relief, showTerrain]); // eslint-disable-line react-hooks/exhaustive-deps
+  const zoomToRecord = (kind: FindEntry['kind'], id: Id) => {
+    const e = findEntries.find((x) => x.kind === kind && x.id === id);
+    if (e) showEntry(e);
+  };
+
   // ---- painting strokes: edits collect in a working copy and become one undo step ----
   const stroke = useRef<{ ed: TerrainEditor; last: LatLng; params: BrushParams; raf: number } | null>(null);
   const pressureOf = (e: React.PointerEvent) => (draw.pressure && e.pointerType === 'pen' ? e.pressure || 0.5 : 1);
@@ -1738,7 +1810,7 @@ export function MapView() {
   ], [world.places, characterPositions, ix]);
 
   return (
-    <div className="map-layout">
+    <div className={`map-layout${panelHidden ? ' panel-hidden' : ''}`} ref={layoutRef}>
       <div className="map-canvas" ref={wrapRef}>
         <canvas
           ref={canvasRef}
@@ -1767,14 +1839,34 @@ export function MapView() {
               {sortedMaps(world.detailMaps).map(({ m, depth }) => <option key={m.id} value={m.id}>{'\u00a0\u00a0'.repeat(depth)}{m.name}</option>)}
             </select>
           )}
+          <FindBox entries={findEntries} onPick={showEntry} />
+          <select className="map-export" value="" onChange={(e) => {
+            const v = e.target.value;
+            if (v === 'png') void exportPng(2); else if (v === 'print') void exportPng(4); else if (v === 'svg') void exportSvg(); else if (v === 'pdf') void exportPdf();
+          }} title="MK-14, PL-5: save what is on screen">
+            <option value="">Export…</option>
+            <option value="png">PNG picture</option>
+            <option value="print">PNG for print (4×)</option>
+            <option value="svg">SVG (lines and labels as vectors)</option>
+            <option value="pdf">PDF, one page</option>
+          </select>
         </div>
         <ZoomControls
           onZoom={(f) => zoomBy(f)}
+          panelHidden={panelHidden}
+          onPanel={togglePanel}
+          fullscreen={fullscreen}
+          onFullscreen={toggleFullscreen}
           onFitPlaces={() => glideTo(fitPlaces(world.places, size.w, size.h))}
           onWholeGlobe={() => glideTo({ centerLat: 0, centerLng: 0, scale: Math.max(0.5, size.w / 380) })}
           globe={globe}
           onGlobe={() => setGlobe(!globe)}
         />
+        {layers.inset && !globe && size.w / view.scale < (insetExtent.east - insetExtent.west) / 3 && (
+          <MapInset extent={insetExtent} version={insetVersion} view={view} size={size}
+            paintBase={(g, w, h, v) => { paintRef.current?.(g, w, h, v, { pxRatio: 1, base: true }); }}
+            onCenter={(p) => { stopGlide(); setView((v) => clampView({ ...v, centerLat: p.lat, centerLng: p.lng })); }} />
+        )}
         {zoomBox && <div className="map-zoombox" style={{ left: Math.min(zoomBox.x0, zoomBox.x1), top: Math.min(zoomBox.y0, zoomBox.y1), width: Math.abs(zoomBox.x1 - zoomBox.x0), height: Math.abs(zoomBox.y1 - zoomBox.y0) }} />}
         {mode === 'draw' && <ToolPalette state={draw} onChange={(d) => { setDraw(d); if (d.tool !== 'polygon') setPoly([]); }} />}
         {globe && (
@@ -1906,7 +1998,7 @@ export function MapView() {
             </div>
           </div>
         )}
-        {selFeature && <FeatureCard feature={selFeature} onClose={() => setSelected(null)} />}
+        {selFeature && <FeatureCard feature={selFeature} onClose={() => setSelected(null)} onZoom={() => zoomToRecord('feature', selFeature.id)} />}
         {selPlace && (
           <div className="card">
             <h3>{PLACE_ICON[selPlace.kind]} {selPlace.name}</h3>
@@ -1914,6 +2006,7 @@ export function MapView() {
             <p>Here now: {characterPositions.filter((cp) => { const w = whereIs(ix, cp.id, moment); return w.kind === 'stay' && (w.placeId === selPlace.id || ix.ancestors(w.placeId).includes(selPlace.id)); }).map((cp) => ix.characters.get(cp.id)!.name).join(', ') || 'nobody'}</p>
             <div className="row wrap">
               <button className="small" onClick={() => go('places', selPlace.id)}>Open</button>
+              {selPlace.location && <button className="small" onClick={() => zoomToRecord('place', selPlace.id)}>Zoom to</button>}
               <button className="small" onClick={() => edit({ kind: 'stay', preset: { placeId: selPlace.id } })}>+ Stay here</button>
               <button className="small" onClick={() => { startPick(selPlace.id); }}>Move</button>
               {world.detailMaps.filter((dm) => dm.placeId === selPlace.id).map((dm) => (
@@ -1935,6 +2028,7 @@ export function MapView() {
             </p>
             <div className="row wrap">
               <button className="small" onClick={() => go('characters', selChar.id)}>Open</button>
+              <button className="small" onClick={() => zoomToRecord('character', selChar.id)}>Zoom to</button>
               <button className={`small${tracks.includes(selChar.id) ? ' primary' : ''}`} onClick={() => setTracks((t) => (t.includes(selChar.id) ? t.filter((x) => x !== selChar.id) : [...t, selChar.id]))}>
                 {tracks.includes(selChar.id) ? 'Hide track' : 'Show track'}
               </button>
@@ -1958,18 +2052,14 @@ export function MapView() {
             <p className="muted small">Solid: travelled by the current date; dashed: still to come.</p>
           </div>
         )}
-        <div className="card">
-          <h3>Export this view</h3>
-          <div className="row wrap">
-            <button className="small" onClick={() => void exportPng(2)} title="MK-14: a sharp picture of what is on screen">PNG</button>
-            <button className="small" onClick={() => void exportPng(4)} title="Four times the screen resolution, for printing">PNG for print</button>
-            <button className="small" onClick={() => void exportSvg()} title="Rivers, roads, borders, places and labels as vectors over the painted map">SVG</button>
-            <button className="small" onClick={() => void exportPdf()} title="PL-5: the view on one page (A4 or Letter), with the date it shows">PDF</button>
+        <SideSection id="show" title="Show">
+        {LAYER_GROUPS.map((grp) => (
+          <div key={grp.name} className="show-group">
+            <div className="show-group-name">{grp.name}</div>
+            {grp.keys.map((k) => (
+              <label key={k} className="checkbox"><input type="checkbox" checked={layers[k]} onChange={(e) => setLayers({ ...layers, [k]: e.target.checked })} /> {LAYER_NAMES[k]}</label>
+            ))}
           </div>
-        </div>
-        <h3>Show</h3>
-        {(Object.keys(layers) as (keyof Layers)[]).map((k) => (
-          <label key={k} className="checkbox"><input type="checkbox" checked={layers[k]} onChange={(e) => setLayers({ ...layers, [k]: e.target.checked })} /> {LAYER_NAMES[k]}</label>
         ))}
         {mode !== 'layers' && layers.regions && world.regions.length > 0 && <RegionLayerList editing={false} />}
         <label className="field"><span className="label">Relief</span>
@@ -1991,14 +2081,16 @@ export function MapView() {
             <span className="muted small">At sea level, from the equator. Every 1,000 m of height counts as about 9° nearer a pole. Edges follow the axial tilt ({world.settings.axialTiltDeg}°).</span>
           </div>
         )}
+        </SideSection>
         <DetailMapsCard current={currentMap} openMap={openMap} currentBounds={currentBounds} selectedPlaceId={selected?.kind === 'place' ? selected.id : undefined} />
-        <h3>Main map</h3>
+        <SideSection id="main-map" title="Main map" defaultOpen={false}>
         <p className="muted small">{mainMap ? `Covers ${mainMap.north.toFixed(1)}° to ${mainMap.south.toFixed(1)}° latitude, ${mainMap.west.toFixed(1)}° to ${mainMap.east.toFixed(1)}° longitude.` : 'The main map is the whole globe.'}</p>
         <div className="row wrap">
           <button className="small" onClick={() => store.setSettings({ mainMap: currentBounds() })}>Use this view</button>
           {mainMap && <button className="small" onClick={() => store.setSettings({ mainMap: undefined })}>Whole globe</button>}
         </div>
-        <h3>Sketches and images</h3>
+        </SideSection>
+        <SideSection id="sketches" title="Sketches and images">
         <p className="muted small">Upload a map sketch and pin it to the globe by its edges, or calibrate it with two known spots.</p>
         {world.mapImages.map((img) => (
           <div className="card" key={img.id}>
@@ -2033,6 +2125,7 @@ export function MapView() {
           + Upload sketch
           <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void addImage(f); e.target.value = ''; }} />
         </label>
+        </SideSection>
       </aside>
     </div>
   );
